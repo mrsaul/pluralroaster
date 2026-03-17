@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 
 export interface Product {
   id: string;
@@ -92,9 +92,12 @@ export function useCart() {
     setItems(new Map());
   }, []);
 
-  const cartItems = Array.from(items.values());
-  const totalKg = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = cartItems.reduce((sum, item) => sum + item.quantity * item.product.pricePerKg, 0);
+  const cartItems = useMemo(() => Array.from(items.values()), [items]);
+  const totalKg = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
+  const totalPrice = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity * item.product.pricePerKg, 0), [cartItems]);
 
-  return { items: cartItems, updateQuantity, hydrateCart, getQuantity, clearCart, totalKg, totalPrice };
+  return useMemo(
+    () => ({ items: cartItems, updateQuantity, hydrateCart, getQuantity, clearCart, totalKg, totalPrice }),
+    [cartItems, updateQuantity, hydrateCart, getQuantity, clearCart, totalKg, totalPrice],
+  );
 }
