@@ -214,6 +214,8 @@ const Index = () => {
   }, [cart, loadOrders]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
+  const lastOrderDate = orders[0]?.createdAt ?? null;
+  const lastOrderTotal = orders[0]?.totalPrice ?? null;
 
   if (authLoading) {
     return (
