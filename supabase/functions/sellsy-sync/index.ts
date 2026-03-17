@@ -507,38 +507,56 @@ function extractProductPrice(product: JsonRecord) {
   for (const candidate of candidateValues) {
     const parsed = parseLocalizedNumber(candidate);
     if (parsed !== null) {
-      return parsed;
+      return { price: parsed, parseError: null };
     }
   }
 
-  console.warn("Unable to parse Sellsy product price", {
-    sellsyId: product.id ?? product.sellsy_id ?? null,
-    sku: product.sku ?? product.reference ?? null,
-    availableKeys: Object.keys(product),
-  });
+  const parseError: ProductParseError = {
+    sellsy_id: pickString(product.id) ?? pickString(product.sellsy_id) ?? pickString(product.reference),
+    sku: pickString(product.sku) ?? pickString(product.reference),
+    name: pickFirstString(product.name, product.label, product.designation),
+    message: "Unable to parse Sellsy product price",
+    available_keys: Object.keys(product),
+  };
 
-  return 0;
+  console.warn(parseError.message, parseError);
+
+  return { price: 0, parseError };
 }
 
-function normalizeProduct(product: JsonRecord): ProductRow {
+function normalizeProduct(product: JsonRecord) {
   const sellsyId = String(product.id ?? product.sellsy_id ?? product.reference ?? crypto.randomUUID());
   const description = typeof product.description === "string" ? product.description : null;
+  const { price, parseError } = extractProductPrice(product);
 
   return {
-    sellsy_id: sellsyId,
-    sku: product.sku ? String(product.sku) : product.reference ? String(product.reference) : null,
-    name: String(product.name ?? product.label ?? product.designation),
-    description,
-    origin: product.origin ? String(product.origin) : null,
-    roast_level: inferRoastLevel(product, description),
-    price_per_kg: extractProductPrice(product),
-    is_active: product.is_active === false ? false : product.active === false ? false : true,
-    synced_at: new Date().toISOString(),
+    row: {
+      sellsy_id: sellsyId,
+      sku: product.sku ? String(product.sku) : product.reference ? String(product.reference) : null,
+      name: String(product.name ?? product.label ?? product.designation),
+      description,
+      origin: product.origin ? String(product.origin) : null,
+      roast_level: inferRoastLevel(product, description),
+      price_per_kg: price,
+      is_active: product.is_active === false ? false : product.active === false ? false : true,
+      synced_at: new Date().toISOString(),
+    } satisfies ProductRow,
+    parseError,
   };
 }
 
 function normalizeProducts(products: JsonRecord[]) {
-  return products.filter(isCoffeeProduct).map(normalizeProduct);
+  return products.filter(isCoffeeProduct).reduce(
+    (acc, product) => {
+      const normalized = normalizeProduct(product);
+      acc.rows.push(normalized.row);
+      if (normalized.parseError) {
+        acc.parseErrors.push(normalized.parseError);
+      }
+      return acc;
+    },
+    { rows: [] as ProductRow[], parseErrors: [] as ProductParseError[] },
+  );
 }
 
 function normalizeClient(client: JsonRecord): AdminClientRow {
