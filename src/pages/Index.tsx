@@ -219,6 +219,7 @@ const Index = () => {
     }
 
     await loadOrders();
+    setDraftDeliveryDate(null);
     cart.clearCart();
     setView("home");
   }, [cart, loadOrders]);
