@@ -26,6 +26,8 @@ interface CatalogPageProps {
     hydrateCart: (items: { product: Product; quantity: number }[]) => void;
   };
   usualOrderItems: { product: Product; quantity: number }[];
+  lastOrderDate?: string | null;
+  lastOrderTotal?: number | null;
   mode: "home" | "shop";
   onCheckout: () => void;
   onReorderLastOrder: () => void;
@@ -73,7 +75,7 @@ function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-export default function CatalogPage({ cart, usualOrderItems, mode, onCheckout, onReorderLastOrder, onGoHome, onGoShop, onViewOrders, onLogout }: CatalogPageProps) {
+export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, lastOrderTotal, mode, onCheckout, onReorderLastOrder, onGoHome, onGoShop, onViewOrders, onLogout }: CatalogPageProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
@@ -217,6 +219,15 @@ export default function CatalogPage({ cart, usualOrderItems, mode, onCheckout, o
                 <p className="text-sm text-muted-foreground">TOTAL</p>
                 <p className="text-3xl font-medium tabular-nums text-foreground">{Math.round(usualOrderTotal)} €</p>
               </div>
+              {lastOrderDate || lastOrderTotal ? (
+                <div className="rounded-xl border border-border bg-background px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Last order</p>
+                  <div className="mt-2 flex items-center justify-between gap-4 text-sm">
+                    <span className="text-foreground">{lastOrderDate ? format(new Date(lastOrderDate), "MMMM d, yyyy") : "—"}</span>
+                    <span className="font-medium tabular-nums text-foreground">{typeof lastOrderTotal === "number" ? `${Math.round(lastOrderTotal)} €` : "—"}</span>
+                  </div>
+                </div>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Button
                   size="lg"

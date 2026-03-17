@@ -214,6 +214,8 @@ const Index = () => {
   }, [cart, loadOrders]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
+  const lastOrderDate = orders[0]?.createdAt ?? null;
+  const lastOrderTotal = orders[0]?.totalPrice ?? null;
 
   if (authLoading) {
     return (
@@ -233,6 +235,8 @@ const Index = () => {
         <CatalogPage
           cart={cart}
           usualOrderItems={usualOrderItems}
+          lastOrderDate={lastOrderDate}
+          lastOrderTotal={lastOrderTotal}
           mode="home"
           onCheckout={() => setView("checkout")}
           onReorderLastOrder={() => setView("checkout")}
@@ -247,6 +251,8 @@ const Index = () => {
         <CatalogPage
           cart={cart}
           usualOrderItems={usualOrderItems}
+          lastOrderDate={lastOrderDate}
+          lastOrderTotal={lastOrderTotal}
           mode="shop"
           onCheckout={() => setView("checkout")}
           onReorderLastOrder={() => setView("checkout")}
