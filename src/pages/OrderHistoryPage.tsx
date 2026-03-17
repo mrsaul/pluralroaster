@@ -1,23 +1,66 @@
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Order } from "@/lib/store";
 import { format, parseISO } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface OrderHistoryPageProps {
   orders: Order[];
-  onBack: () => void;
+  onGoHome: () => void;
+  onGoShop: () => void;
+  onViewOrders: () => void;
 }
 
-export default function OrderHistoryPage({ orders, onBack }: OrderHistoryPageProps) {
+export default function OrderHistoryPage({ orders, onGoHome, onGoShop, onViewOrders }: OrderHistoryPageProps) {
+  const [activeTab, setActiveTab] = useState<"in-progress" | "order-placed">("order-placed");
+
+  const groupedOrders = useMemo(() => {
+    return {
+      inProgress: orders.filter((order) => order.status === "pending" || order.status === "confirmed" || order.status === "fulfilled"),
+      orderPlaced: orders.filter((order) => order.status === "synced"),
+    };
+  }, [orders]);
+
+  const visibleOrders = activeTab === "in-progress" ? groupedOrders.inProgress : groupedOrders.orderPlaced;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          <button onClick={onBack} className="p-1 rounded-lg hover:bg-muted transition-colors">
-            <ArrowLeft className="w-5 h-5 text-foreground" />
-          </button>
-          <h1 className="text-base font-medium text-foreground">Order History</h1>
+        <div className="max-w-lg mx-auto space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-base font-medium text-foreground">Orders</h1>
+              <p className="text-xs text-muted-foreground">Track active and placed orders</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted p-1">
+            <button onClick={onGoHome} className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Home</button>
+            <button onClick={onGoShop} className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Shop</button>
+            <button onClick={onViewOrders} className="rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm">Orders</button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+            <button
+              onClick={() => setActiveTab("in-progress")}
+              className={cn(
+                "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                activeTab === "in-progress" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              In progress
+            </button>
+            <button
+              onClick={() => setActiveTab("order-placed")}
+              className={cn(
+                "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                activeTab === "order-placed" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Order placed
+            </button>
+          </div>
         </div>
       </header>
 
@@ -28,10 +71,10 @@ export default function OrderHistoryPage({ orders, onBack }: OrderHistoryPagePro
           animate="visible"
           variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
         >
-          {orders.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-12">No orders yet.</p>
+          {visibleOrders.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-12">No orders in this section yet.</p>
           )}
-          {orders.map((order) => (
+          {visibleOrders.map((order) => (
             <motion.div
               key={order.id}
               variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
