@@ -28,6 +28,19 @@ type AdminClientRow = {
   last_order_at: string | null;
 };
 
+type AdminProductRow = {
+  id: string;
+  sellsy_id: string;
+  sku: string | null;
+  name: string;
+  description: string | null;
+  origin: string | null;
+  roast_level: string | null;
+  price_per_kg: number;
+  is_active: boolean;
+  synced_at: string;
+};
+
 interface AdminDashboardProps {
   orders: Order[];
   onLogout: () => void;
@@ -66,10 +79,13 @@ function buildClientInsights(client: AdminClientRow | null) {
 }
 
 export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "clients">("clients");
+  const [activeSection, setActiveSection] = useState<"orders" | "clients" | "products">("clients");
   const [clients, setClients] = useState<AdminClientRow[]>([]);
+  const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
+  const [productError, setProductError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
 
   const allOrders = useMemo(() => [...orders, ...MOCK_ORDERS], [orders]);
@@ -99,8 +115,30 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
     }
   };
 
+  const loadProducts = async () => {
+    setLoadingProducts(true);
+    setProductError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at")
+        .order("name", { ascending: true });
+
+      if (error) {
+        throw new Error(error.message || "Sellsy product fetch failed");
+      }
+
+      setProducts((data as AdminProductRow[]) ?? []);
+    } catch (error) {
+      setProductError(error instanceof Error ? error.message : "Unknown Sellsy product error");
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
   useEffect(() => {
-    void loadClients();
+    void Promise.all([loadClients(), loadProducts()]);
   }, []);
 
   const clientSummary = useMemo(() => {
@@ -114,7 +152,22 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
     };
   }, [clients]);
 
+  const productSummary = useMemo(() => {
+    const activeProducts = products.filter((product) => product.is_active).length;
+    const averagePrice = products.length > 0
+      ? products.reduce((sum, product) => sum + product.price_per_kg, 0) / products.length
+      : 0;
+
+    return {
+      totalProducts: products.length,
+      activeProducts,
+      averagePrice,
+    };
+  }, [products]);
+
   const insights = useMemo(() => buildClientInsights(selectedClient), [selectedClient]);
+
+  const sectionLabel = activeSection === "orders" ? "Orders" : activeSection === "products" ? "Products" : "Clients";
 
   return (
     <>
@@ -142,7 +195,17 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                 activeSection === "clients" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
             >
-              <Users className="w-4 h-4" /> CLIENTS
+              <Users className="w-4 h-4" /> Clients
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection("products")}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                activeSection === "products" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+            >
+              <Coffee className="w-4 h-4" /> Products
             </button>
           </nav>
 
@@ -156,7 +219,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
             <div className="flex lg:hidden items-center justify-between mb-6">
               <div>
                 <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
-                <p className="text-xs text-muted-foreground">{activeSection === "orders" ? "Orders" : "Clients"}</p>
+                <p className="text-xs text-muted-foreground">{sectionLabel}</p>
               </div>
               <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors">
                 <LogOut className="w-5 h-5 text-muted-foreground" />
@@ -187,6 +250,74 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                   onSelectClient={setSelectedClient}
                 />
               </>
+            ) : activeSection === "products" ? (
+              <section>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Sellsy products</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{productSummary.totalProducts}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Active products</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{productSummary.activeProducts}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Average €/kg</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">€{productSummary.averagePrice.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                  {productError ? (
+                    <div className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+                      <p className="text-sm font-medium text-foreground">Product fetch failed</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{productError}</p>
+                    </div>
+                  ) : null}
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/50">
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Product</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Origin</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Roast</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">SKU</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Price</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loadingProducts ? (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Loading Sellsy products…</td>
+                          </tr>
+                        ) : products.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No Sellsy products found.</td>
+                          </tr>
+                        ) : (
+                          products.map((product) => (
+                            <tr key={product.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-3">
+                                <div>
+                                  <p className="font-medium text-foreground">{product.name}</p>
+                                  <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">{product.origin ?? "—"}</td>
+                              <td className="px-4 py-3 text-muted-foreground capitalize">{product.roast_level ?? "—"}</td>
+                              <td className="px-4 py-3 font-mono text-foreground">{product.sku ?? "—"}</td>
+                              <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">€{product.price_per_kg.toFixed(2)}/kg</td>
+                              <td className="px-4 py-3 text-right text-muted-foreground">{product.is_active ? "Active" : "Archived"}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
             ) : (
               <section>
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Orders</h2>
