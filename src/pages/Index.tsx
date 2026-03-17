@@ -228,13 +228,30 @@ const Index = () => {
   }
 
   switch (view) {
-    case "catalog":
+    case "home":
       return (
         <CatalogPage
           cart={cart}
           usualOrderItems={usualOrderItems}
+          mode="home"
           onCheckout={() => setView("checkout")}
           onReorderLastOrder={() => setView("checkout")}
+          onGoHome={() => setView("home")}
+          onGoShop={() => setView("shop")}
+          onViewOrders={() => setView("orders")}
+          onLogout={handleLogout}
+        />
+      );
+    case "shop":
+      return (
+        <CatalogPage
+          cart={cart}
+          usualOrderItems={usualOrderItems}
+          mode="shop"
+          onCheckout={() => setView("checkout")}
+          onReorderLastOrder={() => setView("checkout")}
+          onGoHome={() => setView("home")}
+          onGoShop={() => setView("shop")}
           onViewOrders={() => setView("orders")}
           onLogout={handleLogout}
         />
@@ -245,7 +262,7 @@ const Index = () => {
           items={cart.items}
           totalKg={cart.totalKg}
           totalPrice={cart.totalPrice}
-          onBack={() => setView("catalog")}
+          onBack={() => setView("home")}
           onConfirm={handleConfirmOrder}
         />
       );
@@ -253,7 +270,9 @@ const Index = () => {
       return (
         <OrderHistoryPage
           orders={role === "admin" ? [...orders, ...MOCK_ORDERS] : orders}
-          onBack={() => setView("catalog")}
+          onGoHome={() => setView("home")}
+          onGoShop={() => setView("shop")}
+          onViewOrders={() => setView("orders")}
         />
       );
     case "admin":
