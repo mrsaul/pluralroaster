@@ -19,6 +19,7 @@ type UsualOrderPreset = {
 
 interface CatalogPageProps {
   cart: {
+    items: { product: Product; quantity: number }[];
     totalKg: number;
     totalPrice: number;
     getQuantity: (id: string) => number;
