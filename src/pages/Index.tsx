@@ -173,6 +173,16 @@ const Index = () => {
     await supabase.auth.signOut();
   }, [cart]);
 
+  const handleRemoveDraftItem = useCallback((productId: string) => {
+    const draftItem = cart.items.find((item) => item.product.id === productId);
+
+    if (!draftItem) {
+      return;
+    }
+
+    cart.updateQuantity(draftItem.product, 0);
+  }, [cart]);
+
   const handleConfirmOrder = useCallback(async (deliveryDate: string) => {
     const {
       data: { user },
@@ -223,6 +233,14 @@ const Index = () => {
     cart.clearCart();
     setView("home");
   }, [cart, loadOrders]);
+
+  const handlePlaceDraftOrder = useCallback(() => {
+    if (!draftDeliveryDate || cart.items.length === 0) {
+      return;
+    }
+
+    void handleConfirmOrder(draftDeliveryDate);
+  }, [cart.items.length, draftDeliveryDate, handleConfirmOrder]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
   const lastOrderDate = orders[0]?.createdAt ?? null;
