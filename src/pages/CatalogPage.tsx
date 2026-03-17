@@ -27,6 +27,7 @@ interface CatalogPageProps {
   };
   usualOrderItems: { product: Product; quantity: number }[];
   onCheckout: () => void;
+  onReorderLastOrder: () => void;
   onViewOrders: () => void;
   onLogout: () => void;
 }
