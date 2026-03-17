@@ -322,6 +322,7 @@ const Index = () => {
           draftDeliveryDate={draftDeliveryDate}
           onDraftDeliveryDateChange={setDraftDeliveryDate}
           onRemoveDraftItem={handleRemoveDraftItem}
+          onDraftQuantityChange={handleDraftQuantityChange}
           onPlaceDraftOrder={handlePlaceDraftOrder}
           onGoHome={() => setView("home")}
           onGoShop={() => setView("shop")}

@@ -16,6 +16,7 @@ interface OrderHistoryPageProps {
   draftDeliveryDate: string | null;
   onDraftDeliveryDateChange: (date: string) => void;
   onRemoveDraftItem: (productId: string) => void;
+  onDraftQuantityChange: (productId: string, nextQuantity: number) => void;
   onPlaceDraftOrder: () => void;
   onGoHome: () => void;
   onGoShop: () => void;
@@ -51,6 +52,7 @@ export default function OrderHistoryPage({
   draftDeliveryDate,
   onDraftDeliveryDateChange,
   onRemoveDraftItem,
+  onDraftQuantityChange,
   onPlaceDraftOrder,
   onGoHome,
   onGoShop,
@@ -188,18 +190,32 @@ export default function OrderHistoryPage({
                         </div>
 
                         <div className="mt-3 grid grid-cols-[1.4fr_auto_auto_auto] overflow-hidden rounded-xl border border-primary/40 bg-background">
-                          <div className="flex items-center justify-center px-3 py-2.5 text-lg font-semibold uppercase tracking-wide text-foreground">
+                          <button
+                            type="button"
+                            onClick={() => onDraftQuantityChange(item.product.id, Math.max(0, item.quantity - 3))}
+                            className="flex items-center justify-center px-3 py-2.5 text-lg font-semibold uppercase tracking-wide text-foreground transition-colors hover:bg-secondary"
+                          >
                             Order
-                          </div>
-                          <div className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground">
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDraftQuantityChange(item.product.id, Math.max(0, item.quantity - 3))}
+                            className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground transition-colors hover:bg-secondary"
+                            aria-label={`Decrease ${item.product.name} quantity`}
+                          >
                             –
-                          </div>
+                          </button>
                           <div className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground">
                             {item.quantity}
                           </div>
-                          <div className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground">
+                          <button
+                            type="button"
+                            onClick={() => onDraftQuantityChange(item.product.id, item.quantity + 3)}
+                            className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground transition-colors hover:bg-secondary"
+                            aria-label={`Increase ${item.product.name} quantity`}
+                          >
                             +
-                          </div>
+                          </button>
                         </div>
                       </motion.article>
                     ))}
