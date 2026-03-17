@@ -188,7 +188,7 @@ async function createSellsyOrder(accessToken: string, payload: Record<string, un
 }
 
 async function fetchSellsyProducts(accessToken: string) {
-  const endpoint = new URL("/v2/products", SELLSY_API_BASE_URL ?? "https://api.sellsy.com");
+  const endpoint = new URL("/v2/products", getSellsyApiBaseUrl());
   endpoint.searchParams.set("limit", "200");
 
   const response = await fetch(endpoint.toString(), {
