@@ -25,7 +25,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [syncResult, setSyncResult] = useState<{ count: number; at: string } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
   const allOrders = [...MOCK_ORDERS, ...orders];
@@ -47,7 +47,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
       return;
     }
 
-    setProducts(data ?? []);
+    setProducts((data ?? []) as AdminProductRow[]);
     setLoadingProducts(false);
   };
 
