@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { LogOut, Users, Package } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
+import { StatusBadge } from "@/components/StatusBadge";
+import { MOCK_ORDERS, type Order } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 type AdminClientRow = {
   id: string;
@@ -18,13 +22,17 @@ type AdminClientRow = {
 };
 
 interface AdminDashboardProps {
+  orders: Order[];
   onLogout: () => void;
 }
 
-export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
+export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps) {
+  const [activeSection, setActiveSection] = useState<"orders" | "clients">("clients");
   const [clients, setClients] = useState<AdminClientRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
+
+  const allOrders = useMemo(() => [...orders, ...MOCK_ORDERS], [orders]);
 
   const loadClients = async () => {
     setLoadingClients(true);
