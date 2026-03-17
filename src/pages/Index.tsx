@@ -71,6 +71,7 @@ const Index = () => {
   const [role, setRole] = useState<AppRole | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
   const cart = useCart();
   const { clearCart } = cart;
 
