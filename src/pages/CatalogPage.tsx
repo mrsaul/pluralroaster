@@ -105,8 +105,38 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   }, []);
 
   useEffect(() => {
-    void loadProducts();
-  }, [loadProducts]);
+    let active = true;
+
+    const loadCatalog = async () => {
+      setLoadingProducts(true);
+      setProductsError(null);
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, sellsy_id, sku, name, origin, roast_level, price_per_kg, is_active")
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+
+      if (!active) return;
+
+      if (error) {
+        setProductsError(error.message);
+        setProducts(MOCK_PRODUCTS.filter((product) => product.available));
+        setLoadingProducts(false);
+        return;
+      }
+
+      const remoteProducts = (data ?? []).map(mapProductRow);
+      setProducts(remoteProducts.length > 0 ? remoteProducts : []);
+      setLoadingProducts(false);
+    };
+
+    void loadCatalog();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const visibleProducts = useMemo(() => products.filter((product) => product.available), [products]);
 
