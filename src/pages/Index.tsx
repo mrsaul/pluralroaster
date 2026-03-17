@@ -72,6 +72,7 @@ const Index = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const cart = useCart();
+  const { clearCart } = cart;
 
   const loadOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -127,6 +128,15 @@ const Index = () => {
   }, [loadOrders]);
 
   useEffect(() => {
+    const handleAuthenticatedSession = async () => {
+      setAuthLoading(true);
+      try {
+        await syncUserRole();
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -134,12 +144,11 @@ const Index = () => {
         setRole(null);
         setOrders([]);
         setAuthLoading(false);
-        cart.clearCart();
+        clearCart();
         return;
       }
 
-      setAuthLoading(true);
-      void syncUserRole().finally(() => setAuthLoading(false));
+      void handleAuthenticatedSession();
     });
 
     void supabase.auth.getSession().then(({ data: { session } }) => {
@@ -150,13 +159,13 @@ const Index = () => {
         return;
       }
 
-      void syncUserRole().finally(() => setAuthLoading(false));
+      void handleAuthenticatedSession();
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [cart, syncUserRole]);
+  }, [clearCart, syncUserRole]);
 
   const handleLogout = useCallback(async () => {
     cart.clearCart();
