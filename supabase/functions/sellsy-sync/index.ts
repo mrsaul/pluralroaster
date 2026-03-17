@@ -27,6 +27,14 @@ type ProductRow = {
   synced_at: string;
 };
 
+type ProductParseError = {
+  sellsy_id: string | null;
+  sku: string | null;
+  name: string | null;
+  message: string;
+  available_keys: string[];
+};
+
 type AdminClientRow = {
   id: string;
   name: string;
@@ -499,38 +507,56 @@ function extractProductPrice(product: JsonRecord) {
   for (const candidate of candidateValues) {
     const parsed = parseLocalizedNumber(candidate);
     if (parsed !== null) {
-      return parsed;
+      return { price: parsed, parseError: null };
     }
   }
 
-  console.warn("Unable to parse Sellsy product price", {
-    sellsyId: product.id ?? product.sellsy_id ?? null,
-    sku: product.sku ?? product.reference ?? null,
-    availableKeys: Object.keys(product),
-  });
+  const parseError: ProductParseError = {
+    sellsy_id: pickString(product.id) ?? pickString(product.sellsy_id) ?? pickString(product.reference),
+    sku: pickString(product.sku) ?? pickString(product.reference),
+    name: pickFirstString(product.name, product.label, product.designation),
+    message: "Unable to parse Sellsy product price",
+    available_keys: Object.keys(product),
+  };
 
-  return 0;
+  console.warn(parseError.message, parseError);
+
+  return { price: 0, parseError };
 }
 
-function normalizeProduct(product: JsonRecord): ProductRow {
+function normalizeProduct(product: JsonRecord) {
   const sellsyId = String(product.id ?? product.sellsy_id ?? product.reference ?? crypto.randomUUID());
   const description = typeof product.description === "string" ? product.description : null;
+  const { price, parseError } = extractProductPrice(product);
 
   return {
-    sellsy_id: sellsyId,
-    sku: product.sku ? String(product.sku) : product.reference ? String(product.reference) : null,
-    name: String(product.name ?? product.label ?? product.designation),
-    description,
-    origin: product.origin ? String(product.origin) : null,
-    roast_level: inferRoastLevel(product, description),
-    price_per_kg: extractProductPrice(product),
-    is_active: product.is_active === false ? false : product.active === false ? false : true,
-    synced_at: new Date().toISOString(),
+    row: {
+      sellsy_id: sellsyId,
+      sku: product.sku ? String(product.sku) : product.reference ? String(product.reference) : null,
+      name: String(product.name ?? product.label ?? product.designation),
+      description,
+      origin: product.origin ? String(product.origin) : null,
+      roast_level: inferRoastLevel(product, description),
+      price_per_kg: price,
+      is_active: product.is_active === false ? false : product.active === false ? false : true,
+      synced_at: new Date().toISOString(),
+    } satisfies ProductRow,
+    parseError,
   };
 }
 
 function normalizeProducts(products: JsonRecord[]) {
-  return products.filter(isCoffeeProduct).map(normalizeProduct);
+  return products.filter(isCoffeeProduct).reduce(
+    (acc, product) => {
+      const normalized = normalizeProduct(product);
+      acc.rows.push(normalized.row);
+      if (normalized.parseError) {
+        acc.parseErrors.push(normalized.parseError);
+      }
+      return acc;
+    },
+    { rows: [] as ProductRow[], parseErrors: [] as ProductParseError[] },
+  );
 }
 
 function normalizeClient(client: JsonRecord): AdminClientRow {
@@ -605,6 +631,31 @@ async function syncProductsToDatabase(rows: ProductRow[]) {
   }
 }
 
+async function logSyncRun(params: {
+  userId: string;
+  status: string;
+  syncedCount: number;
+  parseErrors: ProductParseError[];
+  startedAt: string;
+  completedAt: string;
+}) {
+  const supabase = createServiceSupabaseClient();
+  const { error } = await supabase.from("sync_runs").insert({
+    source: "sellsy",
+    sync_type: "products",
+    status: params.status,
+    synced_count: params.syncedCount,
+    parse_errors: params.parseErrors,
+    started_at: params.startedAt,
+    completed_at: params.completedAt,
+    created_by: params.userId,
+  });
+
+  if (error) {
+    console.error("Failed to log sync run:", error.message);
+  }
+}
+
 function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): JsonRecord {
   const items = Array.isArray(body.items) ? (body.items as SellsyOrderLine[]) : [];
 
@@ -637,16 +688,41 @@ function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): Jso
 }
 
 async function handleProductSync(user: AuthenticatedUser, accessToken: string) {
-  const sellsyProducts = await fetchSellsyProducts(accessToken);
-  const normalizedProducts = normalizeProducts(sellsyProducts);
-  await syncProductsToDatabase(normalizedProducts);
+  const startedAt = new Date().toISOString();
 
-  return jsonResponse({
-    success: true,
-    mode: "sync-products",
-    syncedCount: normalizedProducts.length,
-    requestedBy: user.userId,
-  });
+  try {
+    const sellsyProducts = await fetchSellsyProducts(accessToken);
+    const { rows, parseErrors } = normalizeProducts(sellsyProducts);
+    await syncProductsToDatabase(rows);
+    const completedAt = new Date().toISOString();
+    await logSyncRun({
+      userId: user.userId,
+      status: parseErrors.length > 0 ? "warning" : "success",
+      syncedCount: rows.length,
+      parseErrors,
+      startedAt,
+      completedAt,
+    });
+
+    return jsonResponse({
+      success: true,
+      mode: "sync-products",
+      syncedCount: rows.length,
+      parseErrors,
+      requestedBy: user.userId,
+    });
+  } catch (error) {
+    const completedAt = new Date().toISOString();
+    await logSyncRun({
+      userId: user.userId,
+      status: "error",
+      syncedCount: 0,
+      parseErrors: [],
+      startedAt,
+      completedAt,
+    });
+    throw error;
+  }
 }
 
 async function handleClientList(user: AuthenticatedUser, accessToken: string) {
