@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
+import { Button } from "@/components/ui/button";
 import type { Order } from "@/lib/store";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { ClipboardList, House, ShoppingBag } from "lucide-react";
+import { ClipboardList, House, ShoppingBag, X } from "lucide-react";
 
 interface OrderHistoryPageProps {
   orders: Order[];
@@ -14,9 +15,19 @@ interface OrderHistoryPageProps {
   draftTotalPrice: number;
   draftDeliveryDate: string | null;
   onDraftDeliveryDateChange: (date: string) => void;
+  onRemoveDraftItem: (productId: string) => void;
+  onPlaceDraftOrder: () => void;
   onGoHome: () => void;
   onGoShop: () => void;
   onViewOrders: () => void;
+}
+
+function getEstimatedDeliveryLabel(selectedDate: string | null) {
+  if (!selectedDate) {
+    return "Friday · 10am–2pm";
+  }
+
+  return `${format(new Date(`${selectedDate}T00:00:00`), "EEEE d MMMM")} · daytime delivery`;
 }
 
 export default function OrderHistoryPage({
@@ -26,6 +37,8 @@ export default function OrderHistoryPage({
   draftTotalPrice,
   draftDeliveryDate,
   onDraftDeliveryDateChange,
+  onRemoveDraftItem,
+  onPlaceDraftOrder,
   onGoHome,
   onGoShop,
   onViewOrders,
@@ -57,19 +70,19 @@ export default function OrderHistoryPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
-        <div className="max-w-lg mx-auto space-y-4">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto max-w-lg space-y-4">
           <div>
             <h1 className="text-base font-medium text-foreground">Orders</h1>
             <p className="text-xs text-muted-foreground">Track active and placed orders</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+          <div className="grid grid-cols-2 gap-6 border-b border-border/80 px-2">
             <button
               onClick={() => setActiveTab("in-progress")}
               className={cn(
-                "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                activeTab === "in-progress" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                "border-b-[3px] pb-2 text-left text-sm font-medium transition-colors",
+                activeTab === "in-progress" ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               In progress
@@ -77,8 +90,8 @@ export default function OrderHistoryPage({
             <button
               onClick={() => setActiveTab("order-placed")}
               className={cn(
-                "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                activeTab === "order-placed" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                "border-b-[3px] pb-2 text-left text-sm font-medium transition-colors",
+                activeTab === "order-placed" ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               Order placed
@@ -87,61 +100,136 @@ export default function OrderHistoryPage({
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-4 pb-32">
+      <main className="mx-auto max-w-lg px-4 py-4 pb-40">
         <motion.div
-          className="space-y-3"
+          className="space-y-4"
           initial="hidden"
           animate="visible"
           variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
         >
           {visibleOrders.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-12">No orders in this section yet.</p>
+            <p className="py-12 text-center text-sm text-muted-foreground">No orders in this section yet.</p>
           )}
+
           {visibleOrders.map((order) => {
             const isDraft = order.id === "Draft order";
 
+            if (isDraft) {
+              return (
+                <motion.section
+                  key="draft-order"
+                  variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-1 px-1">
+                    <p className="text-xl font-semibold tracking-tight text-foreground">
+                      Delivering: {getEstimatedDeliveryLabel(draftDeliveryDate)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">You can still edit or remove coffees before placing the order.</p>
+                  </div>
+
+                  <div className="rounded-[1.75rem] border border-border bg-card p-4 shadow-sm">
+                    <div className="space-y-3 rounded-2xl border border-border bg-background/80 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium text-foreground">Delivery date</span>
+                        <span className="text-xs text-muted-foreground">
+                          {draftDeliveryDate ? format(new Date(`${draftDeliveryDate}T00:00:00`), "EEE, MMM d") : "Select a weekday"}
+                        </span>
+                      </div>
+                      <DeliveryDatePicker selected={draftDeliveryDate} onSelect={onDraftDeliveryDateChange} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {order.items.map((item) => (
+                      <motion.article
+                        key={item.product.id}
+                        variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
+                        className="rounded-[2rem] border-2 border-foreground bg-card p-5 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <div>
+                              <h2 className="text-2xl font-semibold uppercase leading-none tracking-tight text-foreground">
+                                {item.product.name}
+                              </h2>
+                              <p className="mt-2 text-lg font-semibold text-foreground">
+                                €{item.product.pricePerKg.toFixed(0)}/kg
+                                <span className="ml-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                                  in 3kg units
+                                </span>
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                              <span className="inline-flex h-3 w-3 rounded-full bg-foreground" aria-hidden="true" />
+                              <span>{item.product.roastLevel}</span>
+                              <span className="inline-flex h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
+                              <span>{item.product.origin}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onRemoveDraftItem(item.product.id)}
+                            className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            aria-label={`Remove ${item.product.name}`}
+                          >
+                            <X className="h-7 w-7" />
+                          </button>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-[1.5fr_auto_auto_auto] overflow-hidden rounded-2xl border-2 border-primary/40 bg-background">
+                          <div className="flex items-center justify-center px-4 py-3 text-xl font-semibold uppercase tracking-wide text-foreground">
+                            Order
+                          </div>
+                          <div className="flex items-center justify-center border-l-2 border-primary/40 px-5 py-3 text-2xl font-semibold text-foreground">
+                            –
+                          </div>
+                          <div className="flex items-center justify-center border-l-2 border-primary/40 px-5 py-3 text-2xl font-semibold text-foreground">
+                            {item.quantity}
+                          </div>
+                          <div className="flex items-center justify-center border-l-2 border-primary/40 px-5 py-3 text-2xl font-semibold text-foreground">
+                            +
+                          </div>
+                        </div>
+                      </motion.article>
+                    ))}
+                  </div>
+
+                  <div className="space-y-3 px-1">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{draftTotalKg.toFixed(0)} kg total</span>
+                      <span className="font-semibold text-foreground">€{draftTotalPrice.toFixed(2)}</span>
+                    </div>
+                    <Button size="lg" onClick={onPlaceDraftOrder} className="h-16 w-full rounded-2xl text-xl font-semibold uppercase tracking-[0.16em]">
+                      Order
+                    </Button>
+                  </div>
+                </motion.section>
+              );
+            }
+
             return (
               <motion.div
-                key={`${order.id}-${isDraft ? "draft" : order.createdAt}`}
+                key={`${order.id}-${order.createdAt}`}
                 variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
-                className={cn(
-                  "border rounded-lg p-4 space-y-3",
-                  isDraft ? "bg-secondary/40 border-primary/30" : "bg-card border-border"
-                )}
+                className="space-y-3 rounded-lg border border-border bg-card p-4"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="space-y-1">
                     <span className="font-mono text-sm text-foreground">{order.id}</span>
-                    {isDraft ? (
-                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Editable draft</p>
-                    ) : null}
+                    <p className="text-xs text-muted-foreground">{format(parseISO(order.createdAt), "MMM d, yyyy")}</p>
                   </div>
                   <StatusBadge status={order.status} sellsyId={order.sellsyId} />
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    {isDraft ? "From current cart" : format(parseISO(order.createdAt), "MMM d, yyyy")}
-                  </span>
-                  <span className="tabular-nums text-foreground font-medium">
+                  <span className="text-muted-foreground">Delivery {format(parseISO(order.deliveryDate), "MMM d, yyyy")}</span>
+                  <span className="font-medium tabular-nums text-foreground">
                     {order.totalKg.toFixed(1)} kg · €{order.totalPrice.toFixed(2)}
                   </span>
                 </div>
-
-                {isDraft ? (
-                  <div className="rounded-xl border border-border bg-background/80 p-3 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-foreground">Delivery date</span>
-                      <span className="text-xs text-muted-foreground">
-                        {draftDeliveryDate ? format(new Date(`${draftDeliveryDate}T00:00:00`), "EEE, MMM d") : "Select a weekday"}
-                      </span>
-                    </div>
-                    <DeliveryDatePicker selected={draftDeliveryDate} onSelect={onDraftDeliveryDateChange} />
-                  </div>
-                ) : null}
-
                 <div className="text-xs text-muted-foreground">
                   {order.items.map((item) => (
-                    <span key={item.product.id} className="inline-block mr-3">
+                    <span key={item.product.id} className="mr-3 inline-block">
                       {item.product.name} ({item.quantity}kg)
                     </span>
                   ))}
