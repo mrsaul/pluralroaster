@@ -251,6 +251,8 @@ const Index = () => {
         <CatalogPage
           cart={cart}
           usualOrderItems={usualOrderItems}
+          lastOrderDate={lastOrderDate}
+          lastOrderTotal={lastOrderTotal}
           mode="shop"
           onCheckout={() => setView("checkout")}
           onReorderLastOrder={() => setView("checkout")}
