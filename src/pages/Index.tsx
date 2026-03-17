@@ -210,7 +210,7 @@ const Index = () => {
 
     await loadOrders();
     cart.clearCart();
-    setView("catalog");
+    setView("home");
   }, [cart, loadOrders]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
