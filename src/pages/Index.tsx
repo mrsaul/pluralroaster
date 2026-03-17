@@ -183,6 +183,16 @@ const Index = () => {
     cart.updateQuantity(draftItem.product, 0);
   }, [cart]);
 
+  const handleDraftQuantityChange = useCallback((productId: string, nextQuantity: number) => {
+    const draftItem = cart.items.find((item) => item.product.id === productId);
+
+    if (!draftItem) {
+      return;
+    }
+
+    cart.updateQuantity(draftItem.product, Math.max(0, nextQuantity));
+  }, [cart]);
+
   const handleConfirmOrder = useCallback(async (deliveryDate: string) => {
     const {
       data: { user },
@@ -312,6 +322,7 @@ const Index = () => {
           draftDeliveryDate={draftDeliveryDate}
           onDraftDeliveryDateChange={setDraftDeliveryDate}
           onRemoveDraftItem={handleRemoveDraftItem}
+          onDraftQuantityChange={handleDraftQuantityChange}
           onPlaceDraftOrder={handlePlaceDraftOrder}
           onGoHome={() => setView("home")}
           onGoShop={() => setView("shop")}
