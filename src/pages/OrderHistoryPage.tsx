@@ -95,6 +95,7 @@ export default function OrderHistoryPage({ orders, onGoHome, onGoShop, onViewOrd
             </motion.div>
           ))}
         </motion.div>
+      </main>
       <div className="fixed inset-x-0 bottom-4 z-50 px-4">
         <div className="mx-auto flex max-w-lg items-center justify-between rounded-full border border-border bg-card/95 p-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/85">
           <button
