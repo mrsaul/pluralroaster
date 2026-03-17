@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { MOCK_ORDERS, type Order } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
+import { AdminClientsSection } from "@/components/AdminClientsSection";
 
 type AdminProductRow = {
   id: string;
@@ -14,6 +15,20 @@ type AdminProductRow = {
   price_per_kg: number;
   is_active: boolean;
   synced_at: string;
+};
+
+type AdminClientRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  client_type: string | null;
+  total_orders: number | null;
+  total_spend: number | null;
+  last_order_at: string | null;
 };
 
 interface AdminDashboardProps {
@@ -27,6 +42,9 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
   const [syncError, setSyncError] = useState<string | null>(null);
   const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [clients, setClients] = useState<AdminClientRow[]>([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [clientError, setClientError] = useState<string | null>(null);
 
   const allOrders = [...MOCK_ORDERS, ...orders];
   const pendingCount = allOrders.filter((o) => o.status === "pending" || o.status === "confirmed").length;
@@ -51,8 +69,33 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
     setLoadingProducts(false);
   };
 
+  const loadClients = async () => {
+    setLoadingClients(true);
+    setClientError(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "list-clients" },
+      });
+
+      if (error) {
+        throw new Error(error.message || "Sellsy client fetch failed");
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Unable to load clients from Sellsy");
+      }
+
+      setClients(Array.isArray(data.clients) ? (data.clients as AdminClientRow[]) : []);
+    } catch (error) {
+      setClientError(error instanceof Error ? error.message : "Unknown Sellsy client error");
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
   useEffect(() => {
-    void loadProducts();
+    void Promise.all([loadProducts(), loadClients()]);
   }, []);
 
   const stats = useMemo(
@@ -88,7 +131,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
         at: new Date().toISOString(),
       });
 
-      await loadProducts();
+      await Promise.all([loadProducts(), loadClients()]);
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : "Unknown Sellsy sync error");
     } finally {
@@ -219,6 +262,8 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
               </div>
             </div>
           </section>
+
+          <AdminClientsSection clients={clients} loading={loadingClients} error={clientError} />
 
           <section className="mt-8">
             <h2 className="text-sm font-medium text-muted-foreground mb-3">Catalog ({products.length} products)</h2>

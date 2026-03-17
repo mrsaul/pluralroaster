@@ -27,6 +27,20 @@ type ProductRow = {
   synced_at: string;
 };
 
+type AdminClientRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  client_type: string | null;
+  total_orders: number | null;
+  total_spend: number | null;
+  last_order_at: string | null;
+};
+
 type AuthenticatedUser = {
   userId: string;
   email: string | null;
@@ -200,9 +214,59 @@ function extractSellsyCollection(data: unknown) {
     if (Array.isArray(objectData.items)) {
       return objectData.items as JsonRecord[];
     }
+
+    if (Array.isArray(objectData.result)) {
+      return objectData.result as JsonRecord[];
+    }
+
+    if (objectData.pagination && Array.isArray((objectData.pagination as JsonRecord).items)) {
+      return (objectData.pagination as JsonRecord).items as JsonRecord[];
+    }
   }
 
   return [];
+}
+
+function pickString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function pickNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+  return null;
+}
+
+function pickFirstString(...values: unknown[]) {
+  for (const value of values) {
+    const picked = pickString(value);
+    if (picked) return picked;
+  }
+
+  return null;
+}
+
+function pickNestedString(record: JsonRecord, paths: string[][]) {
+  for (const path of paths) {
+    let current: unknown = record;
+
+    for (const key of path) {
+      if (!current || typeof current !== "object") {
+        current = null;
+        break;
+      }
+
+      current = (current as JsonRecord)[key];
+    }
+
+    const picked = pickString(current);
+    if (picked) return picked;
+  }
+
+  return null;
 }
 
 async function getSellsyAccessToken() {
@@ -279,6 +343,53 @@ async function fetchSellsyProducts(accessToken: string) {
   );
 }
 
+async function fetchSellsyClients(accessToken: string) {
+  const endpointCandidates = [
+    { path: "/v2/companies?limit=200", method: "GET" as const },
+    { path: "/v2/contacts?limit=200", method: "GET" as const },
+  ];
+
+  const searchPayloadCandidates: JsonRecord[] = [
+    { filters: {} },
+    { filters: {}, limit: 200 },
+    { filters: {}, page: 1, limit: 200 },
+  ];
+
+  let lastError: string | null = null;
+
+  for (const candidate of endpointCandidates) {
+    const listRequest = await fetchSellsy(candidate.path, accessToken, {
+      method: candidate.method,
+    });
+
+    if (listRequest.response.ok) {
+      return extractSellsyCollection(listRequest.payload.data);
+    }
+
+    lastError = listRequest.payload.text;
+
+    const searchPath = `${candidate.path.replace(/\?.*$/, "")}/search`;
+
+    for (const searchPayload of searchPayloadCandidates) {
+      const searchRequest = await fetchSellsy(searchPath, accessToken, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(searchPayload),
+      });
+
+      if (searchRequest.response.ok) {
+        return extractSellsyCollection(searchRequest.payload.data);
+      }
+
+      lastError = searchRequest.payload.text;
+    }
+  }
+
+  throw new Error(`Sellsy client fetch failed: ${lastError || "Unknown Sellsy client error"}`);
+}
+
 async function createSellsyOrder(accessToken: string, payload: JsonRecord) {
   const request = await fetchSellsy("/v2/orders", accessToken, {
     method: "POST",
@@ -338,6 +449,67 @@ function normalizeProducts(products: JsonRecord[]) {
   return products.filter(isCoffeeProduct).map(normalizeProduct);
 }
 
+function normalizeClient(client: JsonRecord): AdminClientRow {
+  const addressRecord = (client.addresses ?? client.address ?? client.main_address ?? null) as JsonRecord | JsonRecord[] | null;
+  const primaryAddress = Array.isArray(addressRecord)
+    ? addressRecord.find((entry) => entry && typeof entry === "object") ?? null
+    : addressRecord && typeof addressRecord === "object"
+      ? addressRecord
+      : null;
+
+  const statsRecord = (client.stats ?? client.statistics ?? client.kpis ?? null) as JsonRecord | null;
+  const id = String(client.id ?? client.thirdid ?? client.reference ?? crypto.randomUUID());
+  const firstName = pickFirstString(client.firstname, client.first_name, client.given_name);
+  const lastName = pickFirstString(client.lastname, client.last_name, client.family_name);
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+  return {
+    id,
+    name: pickFirstString(client.name, client.full_name, client.label, fullName) ?? `Client ${id}`,
+    email: pickFirstString(
+      client.email,
+      client.main_email,
+      pickNestedString(client, [["contact", "email"], ["main_contact", "email"]]),
+    ),
+    phone: pickFirstString(
+      client.phone,
+      client.mobile,
+      client.tel,
+      client.main_phone,
+      pickNestedString(client, [["contact", "phone"], ["main_contact", "phone"]]),
+    ),
+    address: pickFirstString(
+      primaryAddress ? (primaryAddress as JsonRecord).address1 : null,
+      primaryAddress ? (primaryAddress as JsonRecord).line1 : null,
+      client.address1,
+      client.address,
+    ),
+    city: pickFirstString(
+      primaryAddress ? (primaryAddress as JsonRecord).city : null,
+      client.city,
+      client.town,
+    ),
+    country: pickFirstString(
+      primaryAddress ? (primaryAddress as JsonRecord).country : null,
+      primaryAddress ? (primaryAddress as JsonRecord).country_name : null,
+      client.country,
+    ),
+    client_type: pickFirstString(client.type, client.entity_type, client.kind),
+    total_orders: pickNumber(
+      statsRecord?.orders_count ?? client.orders_count ?? client.order_count ?? client.nb_orders,
+    ),
+    total_spend: pickNumber(
+      statsRecord?.turnover ?? client.turnover ?? client.total_invoiced ?? client.total_spent,
+    ),
+    last_order_at: pickFirstString(
+      statsRecord?.last_order_at,
+      client.last_order_at,
+      client.last_invoice_date,
+      client.updated_at,
+    ),
+  };
+}
+
 async function syncProductsToDatabase(rows: ProductRow[]) {
   const supabase = createServiceSupabaseClient();
   const { error } = await supabase.from("products").upsert(rows, {
@@ -393,6 +565,18 @@ async function handleProductSync(user: AuthenticatedUser, accessToken: string) {
   });
 }
 
+async function handleClientList(user: AuthenticatedUser, accessToken: string) {
+  const sellsyClients = await fetchSellsyClients(accessToken);
+  const normalizedClients = sellsyClients.map(normalizeClient);
+
+  return jsonResponse({
+    success: true,
+    mode: "list-clients",
+    clients: normalizedClients,
+    requestedBy: user.userId,
+  });
+}
+
 async function handleOrderSync(user: AuthenticatedUser, accessToken: string, body: JsonRecord) {
   const sellsyPayload = buildSellsyOrderPayload(body, user);
   const sellsyResponse = await createSellsyOrder(accessToken, sellsyPayload);
@@ -416,6 +600,10 @@ Deno.serve(async (req) => {
 
     if (body?.mode === "sync-products") {
       return await handleProductSync(user, accessToken);
+    }
+
+    if (body?.mode === "list-clients") {
+      return await handleClientList(user, accessToken);
     }
 
     return await handleOrderSync(user, accessToken, body);
