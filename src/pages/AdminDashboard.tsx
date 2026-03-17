@@ -148,6 +148,8 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
   const [productError, setProductError] = useState<string | null>(null);
+  const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
+  const [syncRunError, setSyncRunError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
 
   const allOrders = useMemo(() => [...orders, ...MOCK_ORDERS], [orders]);
