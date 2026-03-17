@@ -26,8 +26,11 @@ interface CatalogPageProps {
     hydrateCart: (items: { product: Product; quantity: number }[]) => void;
   };
   usualOrderItems: { product: Product; quantity: number }[];
+  mode: "home" | "shop";
   onCheckout: () => void;
   onReorderLastOrder: () => void;
+  onGoHome: () => void;
+  onGoShop: () => void;
   onViewOrders: () => void;
   onLogout: () => void;
 }
@@ -70,7 +73,7 @@ function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-export default function CatalogPage({ cart, usualOrderItems, onCheckout, onReorderLastOrder, onViewOrders, onLogout }: CatalogPageProps) {
+export default function CatalogPage({ cart, usualOrderItems, mode, onCheckout, onReorderLastOrder, onGoHome, onGoShop, onViewOrders, onLogout }: CatalogPageProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
@@ -144,76 +147,132 @@ export default function CatalogPage({ cart, usualOrderItems, onCheckout, onReord
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-medium tracking-tight text-foreground">PluralRoaster</h1>
-            <p className="text-xs text-muted-foreground">Catalog</p>
+        <div className="max-w-lg mx-auto space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-base font-medium tracking-tight text-foreground">PluralRoaster</h1>
+              <p className="text-xs text-muted-foreground">{mode === "home" ? "Your latest order" : "Full catalog"}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Logout">
+                <LogOut className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onViewOrders} className="p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Order history">
-              <ClipboardList className="w-5 h-5 text-muted-foreground" />
+
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted p-1">
+            <button
+              onClick={onGoHome}
+              className={mode === "home" ? "rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
+            >
+              Home
             </button>
-            <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Logout">
-              <LogOut className="w-5 h-5 text-muted-foreground" />
+            <button
+              onClick={onGoShop}
+              className={mode === "shop" ? "rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
+            >
+              Shop
+            </button>
+            <button
+              onClick={onViewOrders}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Orders
             </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-4 pb-28 space-y-6">
-        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-5">
-          <div>
-            <p className="text-sm text-muted-foreground">Client Login</p>
-            <h2 className="mt-2 text-xl font-medium tracking-tight text-foreground">Your usual order:</h2>
-          </div>
-
-          <div className="space-y-4">
-            {resolvedUsualOrderItems.map(({ product }) => (
-              <div key={product.id} className="space-y-2">
-                <p className="text-base font-medium text-foreground">{product.name}</p>
-                <QuantityStepper
-                  value={cart.getQuantity(product.id)}
-                  onChange={(qty) => cart.updateQuantity(product, qty)}
-                  className="justify-start"
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-sm text-muted-foreground">Delivery Date:</span>
-              <span className="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-foreground">{deliveryLabel}</span>
-            </div>
-            <DeliveryDatePicker selected={deliveryDate} onSelect={setDeliveryDate} />
-          </div>
-
-          <div className="space-y-4 border-t border-border pt-4">
+        {mode === "home" ? (
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-5">
             <div>
-              <p className="text-sm text-muted-foreground">TOTAL</p>
-              <p className="text-3xl font-medium tabular-nums text-foreground">{Math.round(usualOrderTotal)} €</p>
+              <p className="text-sm text-muted-foreground">Client Login</p>
+              <h2 className="mt-2 text-xl font-medium tracking-tight text-foreground">Your usual order:</h2>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button
-                size="lg"
-                variant="secondary"
-                onClick={onReorderLastOrder}
-                disabled={!usualOrderHasItems}
-                className="w-full rounded-xl"
-              >
-                Reorder last order
-              </Button>
-              <Button
-                size="lg"
-                onClick={onCheckout}
-                disabled={!usualOrderHasItems}
-                className="w-full rounded-xl"
-              >
-                Confirm Order
-              </Button>
+
+            <div className="space-y-4">
+              {resolvedUsualOrderItems.map(({ product }) => (
+                <div key={product.id} className="space-y-2">
+                  <p className="text-base font-medium text-foreground">{product.name}</p>
+                  <QuantityStepper
+                    value={cart.getQuantity(product.id)}
+                    onChange={(qty) => cart.updateQuantity(product, qty)}
+                    className="justify-start"
+                  />
+                </div>
+              ))}
             </div>
-          </div>
-        </section>
+
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm text-muted-foreground">Delivery Date:</span>
+                <span className="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-foreground">{deliveryLabel}</span>
+              </div>
+              <DeliveryDatePicker selected={deliveryDate} onSelect={setDeliveryDate} />
+            </div>
+
+            <div className="space-y-4 border-t border-border pt-4">
+              <div>
+                <p className="text-sm text-muted-foreground">TOTAL</p>
+                <p className="text-3xl font-medium tabular-nums text-foreground">{Math.round(usualOrderTotal)} €</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  onClick={onReorderLastOrder}
+                  disabled={!usualOrderHasItems}
+                  className="w-full rounded-xl"
+                >
+                  Reorder last order
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={onCheckout}
+                  disabled={!usualOrderHasItems}
+                  className="w-full rounded-xl"
+                >
+                  Confirm Order
+                </Button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {mode === "shop" ? (
+          <motion.div
+            className="flex flex-col gap-2"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              visible: { transition: { staggerChildren: 0.05 } },
+            }}
+          >
+            {visibleProducts.map((product) => (
+              <motion.div
+                key={product.id}
+                variants={{
+                  hidden: { opacity: 0, y: 10 },
+                  visible: { opacity: 1, y: 0 },
+                }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <p className="text-base font-medium text-foreground">{product.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{product.origin}</p>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium tabular-nums text-foreground">€{product.pricePerKg.toFixed(2)}/kg</span>
+                    <QuantityStepper
+                      value={cart.getQuantity(product.id)}
+                      onChange={(qty) => cart.updateQuantity(product, qty)}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : null}
 
         {loadingProducts ? (
           <div className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">

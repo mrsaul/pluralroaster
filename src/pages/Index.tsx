@@ -7,7 +7,7 @@ import OrderHistoryPage from "./OrderHistoryPage";
 import AdminDashboard from "./AdminDashboard";
 import { supabase } from "@/integrations/supabase/client";
 
-type View = "catalog" | "checkout" | "orders" | "admin";
+type View = "home" | "shop" | "checkout" | "orders" | "admin";
 type AppRole = "admin" | "user";
 
 type PersistedOrderRow = {
@@ -67,7 +67,7 @@ const mapPersistedOrder = (order: PersistedOrderRow): Order => ({
 });
 
 const Index = () => {
-  const [view, setView] = useState<View>("catalog");
+  const [view, setView] = useState<View>("home");
   const [role, setRole] = useState<AppRole | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -119,7 +119,7 @@ const Index = () => {
 
     const normalizedRole = ensuredRole === "admin" ? "admin" : "user";
     setRole(normalizedRole);
-    setView(normalizedRole === "admin" ? "admin" : "catalog");
+    setView(normalizedRole === "admin" ? "admin" : "home");
 
     if (normalizedRole === "user") {
       await loadOrders();
@@ -210,7 +210,7 @@ const Index = () => {
 
     await loadOrders();
     cart.clearCart();
-    setView("catalog");
+    setView("home");
   }, [cart, loadOrders]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
@@ -228,13 +228,30 @@ const Index = () => {
   }
 
   switch (view) {
-    case "catalog":
+    case "home":
       return (
         <CatalogPage
           cart={cart}
           usualOrderItems={usualOrderItems}
+          mode="home"
           onCheckout={() => setView("checkout")}
           onReorderLastOrder={() => setView("checkout")}
+          onGoHome={() => setView("home")}
+          onGoShop={() => setView("shop")}
+          onViewOrders={() => setView("orders")}
+          onLogout={handleLogout}
+        />
+      );
+    case "shop":
+      return (
+        <CatalogPage
+          cart={cart}
+          usualOrderItems={usualOrderItems}
+          mode="shop"
+          onCheckout={() => setView("checkout")}
+          onReorderLastOrder={() => setView("checkout")}
+          onGoHome={() => setView("home")}
+          onGoShop={() => setView("shop")}
           onViewOrders={() => setView("orders")}
           onLogout={handleLogout}
         />
@@ -245,7 +262,7 @@ const Index = () => {
           items={cart.items}
           totalKg={cart.totalKg}
           totalPrice={cart.totalPrice}
-          onBack={() => setView("catalog")}
+          onBack={() => setView("home")}
           onConfirm={handleConfirmOrder}
         />
       );
@@ -253,7 +270,9 @@ const Index = () => {
       return (
         <OrderHistoryPage
           orders={role === "admin" ? [...orders, ...MOCK_ORDERS] : orders}
-          onBack={() => setView("catalog")}
+          onGoHome={() => setView("home")}
+          onGoShop={() => setView("shop")}
+          onViewOrders={() => setView("orders")}
         />
       );
     case "admin":
