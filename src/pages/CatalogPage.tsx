@@ -80,7 +80,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
-  const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
+  
   const initializedUsualOrder = useRef(false);
 
   const loadProducts = useCallback(async () => {
