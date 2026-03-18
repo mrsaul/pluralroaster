@@ -62,15 +62,7 @@ const mapProductRow = (product: ProductRow): Product => ({
   available: product.is_active,
 });
 
-function getNextWeekdayLabel() {
-  let candidate = addDays(startOfDay(new Date()), 1);
 
-  while (isWeekend(candidate)) {
-    candidate = addDays(candidate, 1);
-  }
-
-  return format(candidate, "EEEE");
-}
 
 function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
