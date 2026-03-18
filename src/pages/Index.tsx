@@ -329,6 +329,7 @@ const Index = () => {
           onRemoveDraftItem={handleRemoveDraftItem}
           onDraftQuantityChange={handleDraftQuantityChange}
           onPlaceDraftOrder={handlePlaceDraftOrder}
+          onReorder={handleReorder}
           onGoHome={() => setView("home")}
           onGoShop={() => setView("shop")}
           onViewOrders={() => setView("orders")}
