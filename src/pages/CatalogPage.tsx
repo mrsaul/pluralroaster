@@ -60,6 +60,7 @@ const mapProductRow = (product: ProductRow): Product => ({
   pricePerKg: product.price_per_kg,
   roastLevel: normalizeRoastLevel(product.roast_level),
   available: product.is_active,
+  description: product.description ?? undefined,
 });
 
 

@@ -8,6 +8,7 @@ export interface Product {
   pricePerKg: number;
   roastLevel: "light" | "medium" | "dark" | "espresso";
   available: boolean;
+  description?: string;
 }
 
 export interface CartItem {
