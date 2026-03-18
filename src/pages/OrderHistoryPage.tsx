@@ -56,6 +56,7 @@ export default function OrderHistoryPage({
   onRemoveDraftItem,
   onDraftQuantityChange,
   onPlaceDraftOrder,
+  onReorder,
   onGoHome,
   onGoShop,
   onViewOrders,
