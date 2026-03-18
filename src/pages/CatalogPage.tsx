@@ -219,13 +219,6 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
               ))}
             </div>
 
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-sm text-muted-foreground">Delivery Date:</span>
-                <span className="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-foreground">{deliveryLabel}</span>
-              </div>
-              <DeliveryDatePicker selected={deliveryDate} onSelect={setDeliveryDate} />
-            </div>
 
             <div className="space-y-4 border-t border-border pt-4">
               <div>
