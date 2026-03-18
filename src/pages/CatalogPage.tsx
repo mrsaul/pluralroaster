@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { CartBar } from "@/components/CartBar";
-import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
+
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import { MOCK_PRODUCTS, type Product } from "@/lib/store";
