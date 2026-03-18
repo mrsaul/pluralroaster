@@ -7,6 +7,7 @@ import type { Order } from "@/lib/store";
 import { format, getDay, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ClipboardList, House, ShoppingBag, X } from "lucide-react";
+import { OrderCard } from "@/components/OrderCard";
 
 interface OrderHistoryPageProps {
   orders: Order[];
