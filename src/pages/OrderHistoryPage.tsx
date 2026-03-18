@@ -19,6 +19,7 @@ interface OrderHistoryPageProps {
   onRemoveDraftItem: (productId: string) => void;
   onDraftQuantityChange: (productId: string, nextQuantity: number) => void;
   onPlaceDraftOrder: () => void;
+  onReorder: (order: Order) => void;
   onGoHome: () => void;
   onGoShop: () => void;
   onViewOrders: () => void;
