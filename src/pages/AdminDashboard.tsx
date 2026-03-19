@@ -91,7 +91,7 @@ type AdminOrder = {
 };
 
 interface AdminDashboardProps {
-  orders: never[];
+  orders?: unknown[];
   onLogout: () => void;
 }
 
