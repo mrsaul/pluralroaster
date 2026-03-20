@@ -604,7 +604,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             >
                               <TableCell className="font-mono text-xs text-foreground">{order.id.slice(0, 8)}</TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
-                              <TableCell className="text-foreground text-xs">{order.user_id.slice(0, 8)}…</TableCell>
+                              <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || order.user_id.slice(0, 8) + "…"}</TableCell>
                               <TableCell className="text-muted-foreground">
                                 {order.items.length > 0
                                   ? order.items.map((i) => `${i.product_name} ×${i.quantity}`).join(", ").slice(0, 40) + (order.items.length > 2 ? "…" : "")
