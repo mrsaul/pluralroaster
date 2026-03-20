@@ -156,6 +156,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const loadOrders = useCallback(async () => {
     setLoadingOrders(true);
     try {
+      // Fetch orders
       const { data, error } = await supabase
         .from("orders")
         .select(`
@@ -166,23 +167,34 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       if (error) throw error;
 
-      const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => ({
-        id: o.id,
-        user_id: o.user_id,
-        user_email: null,
-        delivery_date: o.delivery_date,
-        total_kg: Number(o.total_kg),
-        total_price: Number(o.total_price),
-        status: normalizeStatus(o.status),
-        sellsy_id: o.sellsy_id,
-        created_at: o.created_at,
-        items: (o.order_items ?? []).map((i: any) => ({
-          product_name: i.product_name,
-          product_sku: i.product_sku,
-          quantity: Number(i.quantity),
-          price_per_kg: Number(i.price_per_kg),
-        })),
-      }));
+      // Fetch profiles for all user_ids
+      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id))];
+      const { data: profiles } = userIds.length > 0
+        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+        : { data: [] };
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+
+      const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
+        const profile = profileMap.get(o.user_id);
+        return {
+          id: o.id,
+          user_id: o.user_id,
+          user_email: profile?.email ?? null,
+          client_name: profile?.full_name || profile?.email || null,
+          delivery_date: o.delivery_date,
+          total_kg: Number(o.total_kg),
+          total_price: Number(o.total_price),
+          status: normalizeStatus(o.status),
+          sellsy_id: o.sellsy_id,
+          created_at: o.created_at,
+          items: (o.order_items ?? []).map((i: any) => ({
+            product_name: i.product_name,
+            product_sku: i.product_sku,
+            quantity: Number(i.quantity),
+            price_per_kg: Number(i.price_per_kg),
+          })),
+        };
+      });
 
       setAdminOrders(mapped);
     } catch (err) {
