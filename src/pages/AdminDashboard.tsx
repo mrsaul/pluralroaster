@@ -856,8 +856,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               {/* Info grid */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Client (user ID)</p>
-                  <p className="mt-1 text-sm font-mono text-foreground">{selectedOrder.user_id.slice(0, 16)}…</p>
+                  <p className="text-xs text-muted-foreground">Client</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{selectedOrder.client_name || selectedOrder.user_email || "Unknown"}</p>
+                  {selectedOrder.user_email && selectedOrder.client_name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{selectedOrder.user_email}</p>
+                  )}
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
                   <p className="text-xs text-muted-foreground">Delivery date</p>
