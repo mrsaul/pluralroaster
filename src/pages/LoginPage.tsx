@@ -93,6 +93,22 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "sign-up" && (
+            <div className="space-y-2">
+              <Label htmlFor="fullName" className="text-sm text-foreground">Full Name</Label>
+              <Input
+                id="fullName"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Jean Dupont"
+                required
+                maxLength={100}
+                className="h-11"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm text-foreground">Email</Label>
             <Input
