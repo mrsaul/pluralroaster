@@ -373,8 +373,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       result = result.filter(
         (o) =>
           o.id.toLowerCase().includes(q) ||
+          (o.client_name ?? "").toLowerCase().includes(q) ||
           (o.user_email ?? "").toLowerCase().includes(q) ||
-          o.user_id.toLowerCase().includes(q) ||
           o.items.some((i) => i.product_name.toLowerCase().includes(q)),
       );
     }
