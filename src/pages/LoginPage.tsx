@@ -9,6 +9,7 @@ type AuthMode = "sign-in" | "sign-up" | "forgot-password";
 export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function LoginPage() {
           password,
           options: {
             emailRedirectTo: window.location.origin,
+            data: { full_name: fullName.trim() },
           },
         });
 
@@ -91,6 +93,22 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "sign-up" && (
+            <div className="space-y-2">
+              <Label htmlFor="fullName" className="text-sm text-foreground">Full Name</Label>
+              <Input
+                id="fullName"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Jean Dupont"
+                required
+                maxLength={100}
+                className="h-11"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm text-foreground">Email</Label>
             <Input
