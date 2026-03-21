@@ -20,6 +20,14 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
     confirmed: "Preparing",
     fulfilled: "Delivered",
     synced: "Confirmed",
+    received: "Received",
+    approved: "Approved",
+    in_production: "In Production",
+    ready_for_packaging: "Ready for Packaging",
+    packaging: "Packaging",
+    ready_for_delivery: "Ready for Delivery",
+    shipped: "Shipped",
+    delivered: "Delivered",
   };
 
   return (

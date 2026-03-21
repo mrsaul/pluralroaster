@@ -223,7 +223,7 @@ const Index = () => {
       delivery_date: deliveryDate,
       total_kg: cart.totalKg,
       total_price: cart.totalPrice,
-      status: "draft" as const,
+      status: "received" as const,
     };
 
     const { data: createdOrder, error: orderError } = await supabase
