@@ -195,6 +195,7 @@ export type Database = {
           name: string
           origin: string | null
           price_per_kg: number
+          process: string | null
           roast_level: string | null
           sellsy_id: string
           sku: string | null
@@ -212,6 +213,7 @@ export type Database = {
           name: string
           origin?: string | null
           price_per_kg?: number
+          process?: string | null
           roast_level?: string | null
           sellsy_id: string
           sku?: string | null
@@ -229,6 +231,7 @@ export type Database = {
           name?: string
           origin?: string | null
           price_per_kg?: number
+          process?: string | null
           roast_level?: string | null
           sellsy_id?: string
           sku?: string | null
