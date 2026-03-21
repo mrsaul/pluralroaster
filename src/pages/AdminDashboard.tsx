@@ -26,19 +26,7 @@ import {
 
 /* ─── Types ─── */
 
-type AdminClientRow = {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  city: string | null;
-  country: string | null;
-  client_type: string | null;
-  total_orders: number | null;
-  total_spend: number | null;
-  last_order_at: string | null;
-};
+// AppClient type imported from AdminClientDetail
 
 type AdminProductRow = {
   id: string;
