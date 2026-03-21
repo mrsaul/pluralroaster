@@ -666,12 +666,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.totalClients}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Clients with orders</p>
+                    <p className="text-xs text-muted-foreground mb-2">Active clients</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.activeClients}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Tracked spend</p>
-                    <p className="text-2xl font-medium tabular-nums text-foreground">€{clientSummary.totalSpend.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground mb-2">Pending onboarding</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.pendingClients}</p>
                   </div>
                 </div>
                 <AdminClientsSection
