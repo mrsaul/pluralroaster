@@ -134,10 +134,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [sortAsc, setSortAsc] = useState(false);
 
   // Clients
-  const [clients, setClients] = useState<AdminClientRow[]>([]);
+  const [clients, setClients] = useState<AppClient[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
-  const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
+  const [selectedClient, setSelectedClient] = useState<AppClient | null>(null);
 
   // Products
   const [products, setProducts] = useState<AdminProductRow[]>([]);
