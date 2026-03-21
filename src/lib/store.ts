@@ -26,7 +26,7 @@ export interface Order {
   totalKg: number;
   totalPrice: number;
   deliveryDate: string;
-  status: "pending" | "confirmed" | "fulfilled" | "synced";
+  status: "pending" | "confirmed" | "fulfilled" | "synced" | "received" | "approved" | "in_production" | "ready_for_packaging" | "packaging" | "ready_for_delivery" | "shipped" | "delivered";
   sellsyId?: string;
   createdAt: string;
 }
