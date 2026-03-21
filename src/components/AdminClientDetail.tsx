@@ -128,8 +128,8 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
 
   if (!client) return null;
 
-  const resolvedCompany = isSellsyMode ? (client.company_name ?? "—") : (companyName || client.company_name ?? "—");
-  const resolvedContact = isSellsyMode ? (client.contact_name ?? "—") : (contactName || client.contact_name ?? "—");
+  const resolvedCompany = isSellsyMode ? (client.company_name ?? "—") : (companyName || (client.company_name ?? "—"));
+  const resolvedContact = isSellsyMode ? (client.contact_name ?? "—") : (contactName || (client.contact_name ?? "—"));
 
   return (
     <>
