@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { X, Upload, Plus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -25,6 +26,7 @@ export type AdminProduct = {
   image_url: string | null;
   tags: string[];
   tasting_notes: string | null;
+  process: string | null;
 };
 
 const SUGGESTED_TAGS = [
@@ -50,6 +52,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   const [tags, setTags] = useState<string[]>(product?.tags ?? []);
   const [tastingNotes, setTastingNotes] = useState(product?.tasting_notes ?? "");
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
+  const [process, setProcess] = useState(product?.process ?? "");
+  const [origin, setOrigin] = useState(product?.origin ?? "");
   const [tagInput, setTagInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -62,6 +66,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
     setTags(product.tags ?? []);
     setTastingNotes(product.tasting_notes ?? "");
     setIsActive(product.is_active);
+    setProcess(product.process ?? "");
+    setOrigin(product.origin ?? "");
     setTagInput("");
   }
 
@@ -114,6 +120,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
           tags,
           tasting_notes: tastingNotes || null,
           is_active: isActive,
+          process: process || null,
+          origin: origin || null,
         })
         .eq("id", product.id);
       if (error) throw error;
@@ -140,12 +148,36 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Editable info */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Origin</p>
+              <Input value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="e.g. Ethiopia, Yirgacheffe" />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Process</p>
+              <div className="flex gap-1.5">
+                {["washed", "natural", "honey"].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setProcess(process === p ? "" : p)}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      process === p
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                    )}
+                  >
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Sellsy info (read-only) */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Origin</p>
-              <p className="mt-1 text-sm font-medium text-foreground">{product.origin ?? "—"}</p>
-            </div>
             <div className="rounded-lg bg-muted/40 p-3">
               <p className="text-xs text-muted-foreground">Roast level</p>
               <p className="mt-1 text-sm font-medium text-foreground capitalize">{product.roast_level ?? "—"}</p>
