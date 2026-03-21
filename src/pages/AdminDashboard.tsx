@@ -7,6 +7,7 @@ import {
 import { format, formatDistanceToNow, parseISO, isToday } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
+import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
