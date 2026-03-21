@@ -56,6 +56,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const [deliveryAddress, setDeliveryAddress] = useState(client?.custom_delivery_address ?? client?.delivery_address ?? "");
   const [pricingTier, setPricingTier] = useState(client?.custom_pricing_tier ?? client?.pricing_tier ?? "standard");
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
 
   const [lastClientId, setLastClientId] = useState<string | null>(null);
