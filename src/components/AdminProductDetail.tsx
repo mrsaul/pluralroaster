@@ -119,6 +119,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
           tags,
           tasting_notes: tastingNotes || null,
           is_active: isActive,
+          process: process || null,
+          origin: origin || null,
         })
         .eq("id", product.id);
       if (error) throw error;
