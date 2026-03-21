@@ -54,6 +54,9 @@ type AdminProductRow = {
   tags: string[];
   tasting_notes: string | null;
   process: string | null;
+  data_source_mode: string;
+  custom_name: string | null;
+  custom_price_per_kg: number | null;
 };
 
 type ProductParseError = {
