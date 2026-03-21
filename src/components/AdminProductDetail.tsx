@@ -147,12 +147,36 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Editable info */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Origin</p>
+              <Input value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="e.g. Ethiopia, Yirgacheffe" />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Process</p>
+              <div className="flex gap-1.5">
+                {["washed", "natural", "honey"].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setProcess(process === p ? "" : p)}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      process === p
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                    )}
+                  >
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Sellsy info (read-only) */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Origin</p>
-              <p className="mt-1 text-sm font-medium text-foreground">{product.origin ?? "—"}</p>
-            </div>
             <div className="rounded-lg bg-muted/40 p-3">
               <p className="text-xs text-muted-foreground">Roast level</p>
               <p className="mt-1 text-sm font-medium text-foreground capitalize">{product.roast_level ?? "—"}</p>
