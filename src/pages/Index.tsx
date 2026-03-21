@@ -73,6 +73,7 @@ const Index = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
+  const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const cart = useCart();
   const { clearCart } = cart;
 
