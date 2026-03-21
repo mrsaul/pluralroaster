@@ -5,9 +5,10 @@ import CatalogPage from "./CatalogPage";
 import CheckoutPage from "./CheckoutPage";
 import OrderHistoryPage from "./OrderHistoryPage";
 import AdminDashboard from "./AdminDashboard";
+import OnboardingPage from "./OnboardingPage";
 import { supabase } from "@/integrations/supabase/client";
 
-type View = "home" | "shop" | "checkout" | "orders" | "admin";
+type View = "home" | "shop" | "checkout" | "orders" | "admin" | "onboarding";
 type AppRole = "admin" | "user";
 
 type PersistedOrderRow = {
