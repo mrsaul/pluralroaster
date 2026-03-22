@@ -1181,7 +1181,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
