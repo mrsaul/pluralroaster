@@ -503,35 +503,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 p-4 lg:p-8 overflow-auto">
+        <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8 overflow-auto">
           <div className="max-w-6xl mx-auto">
             {/* Mobile header */}
             <div className="flex lg:hidden items-center justify-between mb-6">
               <div>
                 <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
                 <p className="text-xs text-muted-foreground">{sectionLabels[activeSection]}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {navItems.map((item) => (
-                  <button
-                    key={item.key}
-                    onClick={() => setActiveSection(item.key)}
-                    className={cn(
-                      "p-2 rounded-lg transition-colors relative",
-                      activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50",
-                    )}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.badge && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                ))}
-                <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors">
-                  <LogOut className="w-5 h-5 text-muted-foreground" />
-                </button>
               </div>
             </div>
 
@@ -1092,6 +1070,38 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}
         onSaved={() => void loadProducts()}
       />
+
+      {/* ── Floating bottom dock (mobile) ── */}
+      <div className="fixed inset-x-0 bottom-4 z-50 px-4 lg:hidden">
+        <div className="mx-auto flex max-w-lg items-center justify-between rounded-full border border-border bg-card/95 p-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/85">
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setActiveSection(item.key)}
+              className={cn(
+                "relative flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-sm font-medium transition-colors",
+                activeSection === item.key
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {activeSection === item.key && <span className="hidden min-[400px]:inline">{item.label}</span>}
+              {item.badge && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          ))}
+          <button
+            onClick={onLogout}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
     </>
   );
 }
