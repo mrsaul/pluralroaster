@@ -384,7 +384,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     });
     const totalKg = adminOrders.reduce((s, o) => s + o.total_kg, 0);
     const receivedCount = adminOrders.filter((o) => o.status === "received").length;
-    const packagingCount = adminOrders.filter((o) => o.status === "ready_for_packaging" || o.status === "packaging").length;
+    const packagingCount = adminOrders.filter((o) => o.status === "packaging").length;
     const deliveryTodayCount = adminOrders.filter((o) => {
       try { return isToday(parseISO(o.delivery_date)); } catch { return false; }
     }).length;
