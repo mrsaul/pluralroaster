@@ -52,7 +52,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
   // Filter to packaging-relevant statuses
   const packagingOrders = useMemo(() =>
     orders
-      .filter((o) => o.status === "ready_for_packaging" || o.status === "packaging")
+      .filter((o) => o.status === "packaging")
       .sort((a, b) => {
         // Sort by priority (urgent first), then by delivery date
         const pa = getOrderPriority(a.delivery_date);
