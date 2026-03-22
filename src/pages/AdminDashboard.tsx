@@ -175,6 +175,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           is_packed: Boolean(o.is_packed),
           is_labeled: Boolean(o.is_labeled),
           items: (o.order_items ?? []).map((i: any) => ({
+            id: i.id,
+            product_id: i.product_id,
             product_name: i.product_name,
             product_sku: i.product_sku,
             quantity: Number(i.quantity),
