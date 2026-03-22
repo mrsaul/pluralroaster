@@ -300,6 +300,70 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [adminOrders, approveOrder]);
 
+  /* ── Order item editing (only for "received" orders) ── */
+  const recalcOrderTotals = useCallback(async (orderId: string) => {
+    const { data: items } = await supabase
+      .from("order_items")
+      .select("quantity, price_per_kg")
+      .eq("order_id", orderId);
+    const totalKg = (items ?? []).reduce((s, i) => s + Number(i.quantity), 0);
+    const totalPrice = (items ?? []).reduce((s, i) => s + Number(i.quantity) * Number(i.price_per_kg), 0);
+    await supabase.from("orders").update({ total_kg: totalKg, total_price: totalPrice }).eq("id", orderId);
+    return { totalKg, totalPrice };
+  }, []);
+
+  const removeOrderItem = useCallback(async (orderId: string, itemId: string) => {
+    const { error } = await supabase.from("order_items").delete().eq("id", itemId);
+    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
+    const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
+    setAdminOrders((prev) => prev.map((o) => {
+      if (o.id !== orderId) return o;
+      return { ...o, total_kg: totalKg, total_price: totalPrice, items: o.items.filter((i) => i.id !== itemId) };
+    }));
+    setSelectedOrder((prev) => {
+      if (!prev || prev.id !== orderId) return prev;
+      return { ...prev, total_kg: totalKg, total_price: totalPrice, items: prev.items.filter((i) => i.id !== itemId) };
+    });
+    toast({ title: "Item removed" });
+  }, [recalcOrderTotals, toast]);
+
+  const updateOrderItemQty = useCallback(async (orderId: string, itemId: string, newQty: number) => {
+    if (newQty <= 0) { await removeOrderItem(orderId, itemId); return; }
+    const { error } = await supabase.from("order_items").update({ quantity: newQty }).eq("id", itemId);
+    if (error) { toast({ title: "Update failed", description: error.message, variant: "destructive" }); return; }
+    const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
+    setAdminOrders((prev) => prev.map((o) => {
+      if (o.id !== orderId) return o;
+      return { ...o, total_kg: totalKg, total_price: totalPrice, items: o.items.map((i) => i.id === itemId ? { ...i, quantity: newQty } : i) };
+    }));
+    setSelectedOrder((prev) => {
+      if (!prev || prev.id !== orderId) return prev;
+      return { ...prev, total_kg: totalKg, total_price: totalPrice, items: prev.items.map((i) => i.id === itemId ? { ...i, quantity: newQty } : i) };
+    });
+  }, [recalcOrderTotals, removeOrderItem, toast]);
+
+  const addProductToOrder = useCallback(async (orderId: string, product: AdminProductRow) => {
+    const { data: inserted, error } = await supabase.from("order_items").insert({
+      order_id: orderId,
+      product_id: product.id,
+      product_name: product.custom_name || product.name,
+      product_sku: product.sku,
+      price_per_kg: product.custom_price_per_kg ?? product.price_per_kg,
+      quantity: 1,
+    }).select("id, product_id, product_name, product_sku, quantity, price_per_kg").single();
+    if (error || !inserted) { toast({ title: "Add failed", description: error?.message, variant: "destructive" }); return; }
+    const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
+    const newItem: AdminOrderItem = {
+      id: inserted.id, product_id: inserted.product_id, product_name: inserted.product_name,
+      product_sku: inserted.product_sku, quantity: Number(inserted.quantity), price_per_kg: Number(inserted.price_per_kg),
+    };
+    setAdminOrders((prev) => prev.map((o) => o.id !== orderId ? o : { ...o, total_kg: totalKg, total_price: totalPrice, items: [...o.items, newItem] }));
+    setSelectedOrder((prev) => !prev || prev.id !== orderId ? prev : { ...prev, total_kg: totalKg, total_price: totalPrice, items: [...prev.items, newItem] });
+    toast({ title: `${newItem.product_name} added` });
+  }, [recalcOrderTotals, toast]);
+
+  const [showAddProduct, setShowAddProduct] = useState(false);
+
   /* ── Load clients ── */
   const loadClients = async () => {
     setLoadingClients(true);
