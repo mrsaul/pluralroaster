@@ -384,7 +384,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     });
     const totalKg = adminOrders.reduce((s, o) => s + o.total_kg, 0);
     const receivedCount = adminOrders.filter((o) => o.status === "received").length;
-    const packagingCount = adminOrders.filter((o) => o.status === "ready_for_packaging" || o.status === "packaging").length;
+    const packagingCount = adminOrders.filter((o) => o.status === "packaging").length;
     const deliveryTodayCount = adminOrders.filter((o) => {
       try { return isToday(parseISO(o.delivery_date)); } catch { return false; }
     }).length;
@@ -416,7 +416,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   }, [adminOrders, statusFilter, searchQuery, sortField, sortAsc]);
 
   const receivedCount = adminOrders.filter((o) => o.status === "received").length;
-  const packagingBadge = adminOrders.filter((o) => o.status === "ready_for_packaging" || o.status === "packaging").length;
+  const packagingBadge = adminOrders.filter((o) => o.status === "packaging").length;
 
   const clientSummary = useMemo(() => ({
     totalClients: clients.length,

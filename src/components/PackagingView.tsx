@@ -52,7 +52,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
   // Filter to packaging-relevant statuses
   const packagingOrders = useMemo(() =>
     orders
-      .filter((o) => o.status === "ready_for_packaging" || o.status === "packaging")
+      .filter((o) => o.status === "packaging")
       .sort((a, b) => {
         // Sort by priority (urgent first), then by delivery date
         const pa = getOrderPriority(a.delivery_date);
@@ -228,11 +228,6 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
 
                     {/* Quick actions */}
                     <div className="flex gap-2">
-                      {order.status === "ready_for_packaging" && (
-                        <Button size="sm" onClick={() => onStatusChange(order.id, "packaging")} className="gap-1.5">
-                          <Package className="w-3.5 h-3.5" /> Mark as Packaging
-                        </Button>
-                      )}
                       {order.status === "packaging" && (
                         <Button size="sm" onClick={() => onStatusChange(order.id, "ready_for_delivery")} className="gap-1.5">
                           <CheckSquare className="w-3.5 h-3.5" /> Mark as Ready for Delivery
