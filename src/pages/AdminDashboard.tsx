@@ -11,6 +11,7 @@ import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
 import { AdminClientDetail, type AppClient } from "@/components/AdminClientDetail";
 import { PackagingView, type PackagingOrder } from "@/components/PackagingView";
+import { RoasterView, type RoasterOrder } from "@/components/RoasterView";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ORDER_STATUSES, ORDER_STATUS_LABEL, ORDER_STATUS_CLASS,
