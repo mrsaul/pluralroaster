@@ -783,6 +783,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </section>
             )}
 
+            {/* ═══════════ ROASTER ═══════════ */}
+            {activeSection === "roaster" && (
+              <RoasterView
+                orders={roasterOrders}
+                onMarkRoasted={(orderId, value) => void updateChecklist(orderId, "is_roasted", value)}
+              />
+            )}
+
             {/* ═══════════ PACKAGING ═══════════ */}
             {activeSection === "packaging" && (
               <PackagingView
