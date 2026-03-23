@@ -339,17 +339,29 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                         {remainingKg > 0 ? (
                           <>
                             <span className="font-medium text-foreground">{remainingKg.toFixed(0)} kg remaining</span>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="gap-1.5 h-7 text-xs"
-                              onClick={() => {
-                                const unroasted = group.orders.filter((o) => !o.isRoasted);
-                                unroasted.forEach((o) => onMarkRoasted(o.orderId, true));
-                              }}
-                            >
-                              <Flame className="w-3 h-3" /> Mark All Roasted
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="default" className="gap-1.5 h-7 text-xs">
+                                  <Flame className="w-3 h-3" /> Mark All Roasted
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Mark all as roasted?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will mark {group.orders.filter((o) => !o.isRoasted).length} order{group.orders.filter((o) => !o.isRoasted).length !== 1 ? "s" : ""} of <span className="font-medium">{group.productName}</span> ({remainingKg.toFixed(0)} kg) as roasted.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => {
+                                    group.orders.filter((o) => !o.isRoasted).forEach((o) => onMarkRoasted(o.orderId, true));
+                                  }}>
+                                    Confirm
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </>
                         ) : (
                           <span className="font-medium text-success flex items-center gap-1">
