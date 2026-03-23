@@ -331,14 +331,28 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                       <span className="text-muted-foreground">
                         {group.roastedKg.toFixed(0)} / {group.totalKg.toFixed(0)} kg roasted
                       </span>
-                      {remainingKg > 0 && (
-                        <span className="font-medium text-foreground">{remainingKg.toFixed(0)} kg remaining</span>
-                      )}
-                      {remainingKg <= 0 && (
-                        <span className="font-medium text-success flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" /> All roasted
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {remainingKg > 0 ? (
+                          <>
+                            <span className="font-medium text-foreground">{remainingKg.toFixed(0)} kg remaining</span>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="gap-1.5 h-7 text-xs"
+                              onClick={() => {
+                                const unroasted = group.orders.filter((o) => !o.isRoasted);
+                                unroasted.forEach((o) => onMarkRoasted(o.orderId, true));
+                              }}
+                            >
+                              <Flame className="w-3 h-3" /> Mark All Roasted
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="font-medium text-success flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> All roasted
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
