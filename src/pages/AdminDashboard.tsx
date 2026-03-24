@@ -635,6 +635,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     [adminOrders],
   );
 
+  /* ── Invoicing orders mapped ── */
+  const invoicingOrders: InvoicingOrder[] = useMemo(() =>
+    adminOrders.map((o) => ({
+      id: o.id,
+      user_id: o.user_id,
+      client_name: o.client_name,
+      user_email: o.user_email,
+      delivery_date: o.delivery_date,
+      total_kg: o.total_kg,
+      total_price: o.total_price,
+      status: o.status,
+      sellsy_id: o.sellsy_id,
+      invoicing_status: o.invoicing_status,
+      last_invoice_sync: o.last_invoice_sync,
+      items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
+    })),
+    [adminOrders],
+  );
+
   return (
     <>
       <div className="min-h-screen bg-background flex">
