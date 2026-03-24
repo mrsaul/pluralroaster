@@ -180,6 +180,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           is_roasted: Boolean(o.is_roasted),
           is_packed: Boolean(o.is_packed),
           is_labeled: Boolean(o.is_labeled),
+          invoicing_status: (o.invoicing_status as InvoicingStatus) ?? "not_sent",
+          last_invoice_sync: o.last_invoice_sync ?? null,
           items: (o.order_items ?? []).map((i: any) => ({
             id: i.id,
             product_id: i.product_id,
