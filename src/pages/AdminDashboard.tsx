@@ -95,6 +95,8 @@ type AdminOrder = {
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
+  invoicing_status: InvoicingStatus;
+  last_invoice_sync: string | null;
   items: AdminOrderItem[];
 };
 
