@@ -391,17 +391,26 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
+          invited_at: string | null
+          invited_by: string | null
           role: Database["public"]["Enums"]["app_role"]
+          status: string
           user_id: string
         }
         Insert: {
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           role: Database["public"]["Enums"]["app_role"]
+          status?: string
           user_id: string
         }
         Update: {
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          status?: string
           user_id?: string
         }
         Relationships: []
