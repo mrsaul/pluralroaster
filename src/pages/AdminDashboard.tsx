@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
+import { UserManagementView } from "@/components/UserManagementView";
 import {
   LogOut, Users, Package, Coffee, BadgeEuro,
   RefreshCw, AlertCircle, CheckCircle2, Clock3,
   Calendar, Search, X, Check, Send, RotateCcw, Truck,
-  Plus, Minus, Trash2, Flame, FileText,
+  Plus, Minus, Trash2, Flame, FileText, Shield,
 } from "lucide-react";
 import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -115,7 +116,7 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team">("orders");
   const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -591,6 +592,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     invoicing: "Invoicing",
     clients: "Clients",
     products: "Products",
+    team: "Team",
   };
 
   /* ── Sidebar nav items ── */
@@ -603,6 +605,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
+    { key: "team" as const, icon: Shield, label: "Team", badge: null },
   ];
 
   /* ── Packaging orders mapped ── */
@@ -1113,6 +1116,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               </section>
             )}
+
+            {/* ═══════════ TEAM ═══════════ */}
+            {activeSection === "team" && <UserManagementView />}
           </div>
         </main>
       </div>
