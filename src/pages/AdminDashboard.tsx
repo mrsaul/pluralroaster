@@ -1149,6 +1149,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
           {selectedOrder && (() => {
             const isEditable = selectedOrder.status === "received";
+            const canEdit = !["delivered"].includes(selectedOrder.status);
+            const hasSellsyWarning = canEdit && !isEditable && selectedOrder.sellsy_id;
             return (
             <div className="space-y-5">
               {/* Info grid */}
