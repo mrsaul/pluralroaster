@@ -1246,7 +1246,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <TableRow key={item.id}>
                           <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
                           <TableCell className="text-right">
-                            {isEditable ? (
+                            {canEdit ? (
                               <div className="inline-flex items-center gap-1">
                                 <button
                                   className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
