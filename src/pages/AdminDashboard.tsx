@@ -1366,6 +1366,31 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         onSaved={() => void loadProducts()}
       />
 
+      {/* ── Create order dialog ── */}
+      <CreateOrderDialog
+        open={showCreateOrder}
+        onOpenChange={setShowCreateOrder}
+        clients={clients.map((c) => ({
+          user_id: c.user_id,
+          company_name: c.company_name ?? null,
+          contact_name: c.contact_name ?? null,
+          email: c.email ?? null,
+          custom_company_name: c.custom_company_name ?? null,
+          client_data_mode: c.client_data_mode ?? "custom",
+        }))}
+        products={products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          custom_name: p.custom_name,
+          sku: p.sku,
+          price_per_kg: p.price_per_kg,
+          custom_price_per_kg: p.custom_price_per_kg,
+          data_source_mode: p.data_source_mode,
+          is_active: p.is_active,
+        }))}
+        onCreated={() => void loadOrders()}
+      />
+
       {/* ── Floating bottom dock (mobile) ── */}
       <div className="fixed inset-x-0 bottom-4 z-50 px-4 lg:hidden">
         <div className="mx-auto flex max-w-lg items-center justify-between rounded-full border border-border bg-card/95 p-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/85">
