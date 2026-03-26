@@ -33,6 +33,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { CreateOrderDialog, type SimpleClient, type SimpleProduct } from "@/components/CreateOrderDialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /* ─── Types ─── */
 
@@ -441,6 +446,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   }, [recalcOrderTotals, toast]);
 
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [showCreateOrder, setShowCreateOrder] = useState(false);
 
   /* ── Load clients ── */
   const loadClients = async () => {
@@ -765,6 +771,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
 
                   <div className="flex gap-2">
+                    <Button size="sm" className="gap-2" onClick={() => setShowCreateOrder(true)}>
+                      <Plus className="w-4 h-4" /> New Order
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => void loadOrders()} className="gap-2">
                       <RefreshCw className="w-4 h-4" /> Refresh
                     </Button>
@@ -1140,6 +1149,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
           {selectedOrder && (() => {
             const isEditable = selectedOrder.status === "received";
+            const canEdit = !["delivered"].includes(selectedOrder.status);
+            const hasSellsyWarning = canEdit && !isEditable && selectedOrder.sellsy_id;
             return (
             <div className="space-y-5">
               {/* Info grid */}
@@ -1224,18 +1235,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <TableHead className="text-right">Qty (kg)</TableHead>
                       <TableHead className="text-right">€/kg</TableHead>
                       <TableHead className="text-right">Subtotal</TableHead>
-                      {isEditable && <TableHead className="w-[80px]" />}
+                      {canEdit && <TableHead className="w-[80px]" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedOrder.items.length === 0 ? (
-                      <TableRow><TableCell colSpan={isEditable ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
                     ) : (
                       selectedOrder.items.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
                           <TableCell className="text-right">
-                            {isEditable ? (
+                            {canEdit ? (
                               <div className="inline-flex items-center gap-1">
                                 <button
                                   className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
@@ -1257,7 +1268,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
                           <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
-                          {isEditable && (
+                          {canEdit && (
                             <TableCell className="text-right">
                               <button
                                 className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
@@ -1274,8 +1285,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </Table>
               </div>
 
-              {/* Add product (only for received orders) */}
-              {isEditable && (
+              {/* Add product (editable orders) */}
+              {canEdit && (
                 <div>
                   {showAddProduct ? (
                     <div className="rounded-lg border border-border p-3 space-y-2">
@@ -1301,6 +1312,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <Plus className="w-3.5 h-3.5" /> Add product
                     </Button>
                   )}
+                </div>
+              )}
+
+              {/* Sellsy warning */}
+              {hasSellsyWarning && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">⚠️ This order has been sent to Sellsy</p>
+                  <p className="text-xs text-muted-foreground mt-1">Changes will not update the existing invoice.</p>
                 </div>
               )}
 
@@ -1345,6 +1364,31 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         open={Boolean(selectedProduct)}
         onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}
         onSaved={() => void loadProducts()}
+      />
+
+      {/* ── Create order dialog ── */}
+      <CreateOrderDialog
+        open={showCreateOrder}
+        onOpenChange={setShowCreateOrder}
+        clients={clients.map((c) => ({
+          user_id: c.user_id,
+          company_name: c.company_name ?? null,
+          contact_name: c.contact_name ?? null,
+          email: c.email ?? null,
+          custom_company_name: c.custom_company_name ?? null,
+          client_data_mode: c.client_data_mode ?? "custom",
+        }))}
+        products={products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          custom_name: p.custom_name,
+          sku: p.sku,
+          price_per_kg: p.price_per_kg,
+          custom_price_per_kg: p.custom_price_per_kg,
+          data_source_mode: p.data_source_mode,
+          is_active: p.is_active,
+        }))}
+        onCreated={() => void loadOrders()}
       />
 
       {/* ── Floating bottom dock (mobile) ── */}
