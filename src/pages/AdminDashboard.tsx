@@ -1285,8 +1285,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </Table>
               </div>
 
-              {/* Add product (only for received orders) */}
-              {isEditable && (
+              {/* Add product (editable orders) */}
+              {canEdit && (
                 <div>
                   {showAddProduct ? (
                     <div className="rounded-lg border border-border p-3 space-y-2">
