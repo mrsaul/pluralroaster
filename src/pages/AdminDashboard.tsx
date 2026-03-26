@@ -1315,6 +1315,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               )}
 
+              {/* Sellsy warning */}
+              {hasSellsyWarning && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">⚠️ This order has been sent to Sellsy</p>
+                  <p className="text-xs text-muted-foreground mt-1">Changes will not update the existing invoice.</p>
+                </div>
+              )}
+
               {/* Totals */}
               <div className="flex items-center justify-between border-t border-border pt-3">
                 <span className="text-sm text-muted-foreground">{selectedOrder.total_kg.toFixed(0)} kg total</span>
