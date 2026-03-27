@@ -978,10 +978,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         Import or update client records from Sellsy.
                       </p>
                     </div>
-                    <Button size="sm" className="gap-2" onClick={() => void runClientSync()} disabled={runningClientSync}>
-                      <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
-                      {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowAddClient(true)}>
+                        <Plus className="h-4 w-4" /> Add New Client
+                      </Button>
+                      <Button size="sm" className="gap-2" onClick={() => void runClientSync()} disabled={runningClientSync}>
+                        <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
+                        {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
