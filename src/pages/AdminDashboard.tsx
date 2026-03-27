@@ -137,6 +137,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<AppClient | null>(null);
+  const [runningClientSync, setRunningClientSync] = useState(false);
 
   // Products
   const [products, setProducts] = useState<AdminProductRow[]>([]);
