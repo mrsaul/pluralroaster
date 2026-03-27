@@ -891,6 +891,10 @@ Deno.serve(async (req) => {
       return await handleClientList(user, accessToken);
     }
 
+    if (body?.mode === "sync-all-clients") {
+      return await handleBulkClientSync(user, accessToken);
+    }
+
     if (body?.mode === "sync-client") {
       return await handleClientSync(user, accessToken, body);
     }
