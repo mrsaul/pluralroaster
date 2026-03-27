@@ -523,6 +523,26 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
+  const runClientSync = async () => {
+    setRunningClientSync(true);
+    setClientError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "sync-all-clients" },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Sync failed");
+      await loadClients();
+      toast({ title: "Client sync completed", description: `${data.syncedCount ?? 0} clients synced from Sellsy.` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setClientError(msg);
+      toast({ title: "Client sync failed", description: msg, variant: "destructive" });
+    } finally {
+      setRunningClientSync(false);
+    }
+  };
+
   /* ── Init ── */
   useEffect(() => {
     void loadOrders();
