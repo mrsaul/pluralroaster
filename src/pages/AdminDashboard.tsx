@@ -949,7 +949,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             {/* ═══════════ CLIENTS ═══════════ */}
             {activeSection === "clients" && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   <div className="bg-card border border-border rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-2">Total clients</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.totalClients}</p>
@@ -963,6 +963,26 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.pendingClients}</p>
                   </div>
                 </div>
+
+                {/* Sellsy Client Sync */}
+                <div className="mb-6 rounded-lg border border-border bg-card p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <h2 className="text-sm font-medium text-foreground">Sellsy client sync</h2>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Import or update client records from Sellsy.
+                      </p>
+                    </div>
+                    <Button size="sm" className="gap-2" onClick={() => void runClientSync()} disabled={runningClientSync}>
+                      <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
+                      {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
+                    </Button>
+                  </div>
+                </div>
+
                 <AdminClientsSection
                   clients={clients}
                   loading={loadingClients}
