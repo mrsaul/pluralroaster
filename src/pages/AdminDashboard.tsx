@@ -707,7 +707,30 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
 
           <nav className="space-y-1 flex-1">
-            {navItems.map((item) => (
+            {primaryNavItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setActiveSection(item.key)}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                )}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+                {item.badge && (
+                  <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0">{item.badge}</Badge>
+                )}
+              </button>
+            ))}
+
+            {/* Menu separator */}
+            <div className="pt-3 pb-1">
+              <p className="px-3 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">More</p>
+            </div>
+
+            {menuSubItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
