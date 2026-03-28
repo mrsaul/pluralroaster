@@ -1523,7 +1523,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 )}
               >
                 <Menu className="h-5 w-5" />
-                {(menuSectionActive || menuOpen) && <span className="hidden min-[400px]:inline">Menu</span>}
+                <span className="text-[10px] leading-none">Menu</span>
                 {menuTotalBadge > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                     {menuTotalBadge}
