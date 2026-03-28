@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import { UserManagementView } from "@/components/UserManagementView";
 import {
-  LogOut, Users, Package, Coffee, BadgeEuro,
-  RefreshCw, AlertCircle, CheckCircle2, Clock3,
-  Calendar, Search, X, Check, Send, RotateCcw, Truck,
-  Plus, Minus, Trash2, Flame, FileText, Shield,
-  Menu, User, Settings,
+   LogOut, Users, Package, Coffee, BadgeEuro,
+   RefreshCw, AlertCircle, CheckCircle2, Clock3,
+   Calendar, Search, X, Check, Send, RotateCcw, Bike,
+   Plus, Minus, Trash2, Flame, FileText, Shield,
+   Menu, User, Settings,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
