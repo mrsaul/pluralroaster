@@ -6,7 +6,11 @@ import {
   RefreshCw, AlertCircle, CheckCircle2, Clock3,
   Calendar, Search, X, Check, Send, RotateCcw, Truck,
   Plus, Minus, Trash2, Flame, FileText, Shield,
+  Menu, User, Settings,
 } from "lucide-react";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
@@ -625,17 +629,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   /* ── Sidebar nav items ── */
+  const [menuOpen, setMenuOpen] = useState(false);
   const roasterBadge = adminOrders.filter((o) => ["approved", "packaging"].includes(o.status) && !o.is_roasted).length;
   const invoicingBadge = adminOrders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status) && o.invoicing_status === "not_sent").length;
-  const navItems = [
+
+  const primaryNavItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
     { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
     { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
+  ];
+
+  const menuSubItems = [
     { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
   ];
+
+  const menuSectionActive = menuSubItems.some((item) => activeSection === item.key);
+  const menuTotalBadge = menuSubItems.reduce((sum, item) => sum + (item.badge ?? 0), 0);
 
   /* ── Packaging orders mapped ── */
   const packagingOrders: PackagingOrder[] = useMemo(() =>
@@ -695,7 +707,30 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
 
           <nav className="space-y-1 flex-1">
-            {navItems.map((item) => (
+            {primaryNavItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setActiveSection(item.key)}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                )}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+                {item.badge && (
+                  <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0">{item.badge}</Badge>
+                )}
+              </button>
+            ))}
+
+            {/* Menu separator */}
+            <div className="pt-3 pb-1">
+              <p className="px-3 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">More</p>
+            </div>
+
+            {menuSubItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
@@ -1449,19 +1484,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       {/* ── Floating bottom dock (mobile) ── */}
       <div className="fixed inset-x-0 bottom-4 z-50 px-4 lg:hidden">
         <div className="mx-auto flex max-w-lg items-center justify-between rounded-full border border-border bg-card/95 p-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/85">
-          {navItems.map((item) => (
+          {primaryNavItems.map((item) => (
             <button
               key={item.key}
-              onClick={() => setActiveSection(item.key)}
+              onClick={() => { setActiveSection(item.key); setMenuOpen(false); }}
               className={cn(
                 "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
-                activeSection === item.key
+                activeSection === item.key && !menuOpen
                   ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
               <item.icon className="h-5 w-5" />
-              {activeSection === item.key && <span className="hidden min-[400px]:inline">{item.label}</span>}
+              {activeSection === item.key && !menuOpen && <span className="hidden min-[400px]:inline">{item.label}</span>}
               {item.badge && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                   {item.badge}
@@ -1469,6 +1504,56 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               )}
             </button>
           ))}
+
+          {/* Menu button with popover */}
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={cn(
+                  "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
+                  menuSectionActive || menuOpen
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Menu className="h-5 w-5" />
+                {(menuSectionActive || menuOpen) && <span className="hidden min-[400px]:inline">Menu</span>}
+                {menuTotalBadge > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
+                    {menuTotalBadge}
+                  </span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-52 p-1.5 rounded-xl mb-2" sideOffset={8}>
+              <div className="space-y-0.5">
+                {menuSubItems.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => { setActiveSection(item.key); setMenuOpen(false); }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                    {item.badge && (
+                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0">{item.badge}</Badge>
+                    )}
+                  </button>
+                ))}
+                <div className="border-t border-border my-1" />
+                <button
+                  onClick={() => { setMenuOpen(false); onLogout(); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </>
