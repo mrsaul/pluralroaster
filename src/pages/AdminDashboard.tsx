@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import { UserManagementView } from "@/components/UserManagementView";
 import {
-  LogOut, Users, Package, Coffee, BadgeEuro,
-  RefreshCw, AlertCircle, CheckCircle2, Clock3,
-  Calendar, Search, X, Check, Send, RotateCcw, Truck,
-  Plus, Minus, Trash2, Flame, FileText, Shield,
-  Menu, User, Settings,
+   LogOut, Users, Package, Coffee, BadgeEuro,
+   RefreshCw, AlertCircle, CheckCircle2, Clock3,
+   Calendar, Search, X, Check, Send, RotateCcw, Bike,
+   Plus, Minus, Trash2, Flame, FileText, Shield,
+   Menu, User, Settings,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -638,7 +638,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const primaryNavItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
     { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
-    { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
+    { key: "packaging" as const, icon: Bike, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
   ];
 
   const menuSubItems = [
@@ -1495,14 +1495,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               key={item.key}
               onClick={() => { setActiveSection(item.key); setMenuOpen(false); }}
               className={cn(
-                "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
+                "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
                 activeSection === item.key && !menuOpen
                   ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
               <item.icon className="h-5 w-5" />
-              {activeSection === item.key && !menuOpen && <span className="hidden min-[400px]:inline">{item.label}</span>}
+              <span className="text-[10px] leading-none">{item.label}</span>
               {item.badge && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                   {item.badge}
@@ -1516,14 +1516,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <PopoverTrigger asChild>
               <button
                 className={cn(
-                  "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
+                  "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
                   menuSectionActive || menuOpen
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Menu className="h-5 w-5" />
-                {(menuSectionActive || menuOpen) && <span className="hidden min-[400px]:inline">Menu</span>}
+                <span className="text-[10px] leading-none">Menu</span>
                 {menuTotalBadge > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                     {menuTotalBadge}
