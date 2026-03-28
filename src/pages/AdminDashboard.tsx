@@ -644,6 +644,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
+    { key: "profile" as const, icon: Settings, label: "Profile Settings", badge: null },
   ];
 
   const menuSectionActive = menuSubItems.some((item) => activeSection === item.key);
