@@ -1516,7 +1516,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <PopoverTrigger asChild>
               <button
                 className={cn(
-                  "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
+                  "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
                   menuSectionActive || menuOpen
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground",
