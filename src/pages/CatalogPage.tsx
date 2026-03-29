@@ -502,7 +502,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
       </div>
 
       {cart.items.length > 0 && mode === "shop" && (
-        <CartBar itemCount={cart.items.length} totalKg={cart.totalKg} totalPrice={cart.totalPrice} onCheckout={onCheckout} />
+        <CartBar totalKg={cart.totalKg} totalPrice={cart.totalPrice} onCheckout={onCheckout} />
       )}
     </div>
   );
