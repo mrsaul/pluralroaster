@@ -159,7 +159,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
       variantsByProduct.set(v.product_id, list);
     });
 
-    const remoteProducts = (data ?? []).map((p) => mapProductRow(p, variantsByProduct.get(p.id)));
+    const remoteProducts = (data ?? []).map((p) => mapProductRow(p as unknown as ProductRow, variantsByProduct.get(p.id)));
     setProducts(remoteProducts.length > 0 ? remoteProducts : []);
     setLoadingProducts(false);
   }, []);
