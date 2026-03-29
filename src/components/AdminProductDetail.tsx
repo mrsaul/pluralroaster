@@ -421,6 +421,13 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               />
             </div>
 
+            {/* Bag Size Variants */}
+            <ProductVariantsEditor
+              productId={product.id}
+              productName={displayName}
+              basePricePerKg={displayPrice}
+            />
+
             {/* Active toggle */}
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
