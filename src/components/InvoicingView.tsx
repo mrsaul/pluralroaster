@@ -248,7 +248,16 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                           />
                         </TableCell>
                         <TableCell className="font-mono text-xs text-foreground">{order.id.slice(0, 8)}</TableCell>
-                        <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || "—"}</TableCell>
+                        <TableCell className="text-foreground text-sm">
+                          <span className="flex items-center gap-1.5">
+                            {order.client_name || order.user_email || "—"}
+                            {!order.has_sellsy_client_id && (
+                              <span title="No Sellsy Client ID — cannot invoice">
+                                <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
+                              </span>
+                            )}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "MMM d, yyyy")}</TableCell>
                         <TableCell className="text-right tabular-nums text-foreground font-medium">€{order.total_price.toFixed(2)}</TableCell>
                         <TableCell>
