@@ -35,6 +35,7 @@ export interface InvoicingOrder {
   sellsy_id: string | null;
   invoicing_status: InvoicingStatus;
   last_invoice_sync: string | null;
+  has_sellsy_client_id: boolean;
   items: { product_name: string; quantity: number; price_per_kg: number }[];
 }
 
