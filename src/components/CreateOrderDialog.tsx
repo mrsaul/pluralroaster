@@ -61,11 +61,14 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [clientTier, setClientTier] = useState<{ name: string; product_discount_percent: number; delivery_discount_percent: number } | null>(null);
 
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
 
   const totalKg = useMemo(() => lineItems.reduce((s, i) => s + i.quantity, 0), [lineItems]);
-  const totalPrice = useMemo(() => lineItems.reduce((s, i) => s + i.quantity * i.price_per_kg, 0), [lineItems]);
+  const subtotal = useMemo(() => lineItems.reduce((s, i) => s + i.quantity * i.price_per_kg, 0), [lineItems]);
+  const discountAmount = clientTier ? subtotal * clientTier.product_discount_percent / 100 : 0;
+  const totalPrice = subtotal - discountAmount;
 
   const addProduct = useCallback((product: SimpleProduct) => {
     if (lineItems.some((i) => i.product.id === product.id)) return;
