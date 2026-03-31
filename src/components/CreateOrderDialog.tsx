@@ -26,6 +26,7 @@ export type SimpleClient = {
   email: string | null;
   custom_company_name: string | null;
   client_data_mode: string;
+  pricing_tier_id: string | null;
 };
 
 export type SimpleProduct = {
