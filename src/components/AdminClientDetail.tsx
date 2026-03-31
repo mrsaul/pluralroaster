@@ -63,9 +63,18 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const [phone, setPhone] = useState(client?.custom_phone ?? client?.phone ?? "");
   const [deliveryAddress, setDeliveryAddress] = useState(client?.custom_delivery_address ?? client?.delivery_address ?? "");
   const [pricingTier, setPricingTier] = useState(client?.custom_pricing_tier ?? client?.pricing_tier ?? "standard");
+  const [pricingTierId, setPricingTierId] = useState<string | null>(client?.pricing_tier_id ?? null);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
+  const [tierOptions, setTierOptions] = useState<PricingTierOption[]>([]);
+  const [pendingTierChange, setPendingTierChange] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    supabase.from("pricing_tiers").select("id, name, product_discount_percent, delivery_discount_percent").eq("is_active", true).order("name")
+      .then(({ data }) => setTierOptions((data ?? []) as PricingTierOption[]));
+  }, [open]);
 
   const [lastClientId, setLastClientId] = useState<string | null>(null);
   if (client && client.id !== lastClientId) {
