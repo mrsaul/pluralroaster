@@ -196,7 +196,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           {/* Client */}
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Client</label>
-            <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+            <Select value={selectedClientId} onValueChange={handleClientChange}>
               <SelectTrigger><SelectValue placeholder="Select a client…" /></SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
