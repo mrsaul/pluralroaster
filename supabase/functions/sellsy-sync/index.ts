@@ -551,8 +551,12 @@ function normalizeProduct(product: JsonRecord) {
 }
 
 function normalizeProducts(products: JsonRecord[]) {
-  return products.filter(isCoffeeProduct).reduce(
+  return products.reduce(
     (acc, product) => {
+      // Skip items with no usable name
+      const rawName = product.name ?? product.label ?? product.designation;
+      if (!rawName) return acc;
+
       const normalized = normalizeProduct(product);
       acc.rows.push(normalized.row);
       if (normalized.parseError) {
