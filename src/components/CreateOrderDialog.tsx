@@ -171,7 +171,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     } finally {
       setSaving(false);
     }
-  }, [selectedClientId, deliveryDate, lineItems, totalKg, totalPrice, toast, resetForm, onOpenChange, onCreated]);
+  }, [selectedClientId, deliveryDate, lineItems, totalKg, totalPrice, subtotal, clientTier, toast, resetForm, onOpenChange, onCreated]);
 
   const getClientLabel = (c: SimpleClient) => {
     const name = c.client_data_mode === "custom" && c.custom_company_name
