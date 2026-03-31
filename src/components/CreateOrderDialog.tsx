@@ -132,7 +132,10 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
         total_price: totalPrice,
         status: "received",
         invoicing_status: "not_sent",
-      }).select("id").single();
+        discount_percent: clientTier?.product_discount_percent ?? 0,
+        delivery_discount_percent: clientTier?.delivery_discount_percent ?? 0,
+        pricing_tier_name: clientTier?.name ?? null,
+      } as any).select("id").single();
 
       if (orderErr || !order) throw orderErr || new Error("Failed to create order");
 
