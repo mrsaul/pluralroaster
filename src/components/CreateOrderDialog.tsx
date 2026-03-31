@@ -346,9 +346,27 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
           {/* Totals */}
           {lineItems.length > 0 && (
-            <div className="flex items-center justify-between border-t border-border pt-3">
-              <span className="text-sm text-muted-foreground">{totalKg} kg total</span>
-              <span className="text-lg font-semibold tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
+            <div className="border-t border-border pt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>{totalKg} kg total</span>
+                <span className="tabular-nums">Subtotal: €{subtotal.toFixed(2)}</span>
+              </div>
+              {clientTier && clientTier.product_discount_percent > 0 && (
+                <div className="flex items-center justify-between text-sm text-primary">
+                  <span>Discount ({clientTier.name} — {clientTier.product_discount_percent}%)</span>
+                  <span className="tabular-nums">−€{discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {clientTier && clientTier.delivery_discount_percent > 0 && (
+                <div className="flex items-center justify-between text-sm text-primary">
+                  <span>Delivery</span>
+                  <span>{clientTier.delivery_discount_percent === 100 ? "Free" : `${clientTier.delivery_discount_percent}% off`}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-sm font-medium text-foreground">Total</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
+              </div>
             </div>
           )}
 
