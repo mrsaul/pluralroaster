@@ -278,30 +278,67 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                   <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Full delivery address" />
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Pricing Tier</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm text-foreground capitalize">{client.pricing_tier ?? "standard"}</p>
                   </div>
-                ) : (
-                  <div className="flex gap-1.5">
-                    {["standard", "premium", "wholesale"].map((tier) => (
+                ) : tierOptions.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
                       <button
-                        key={tier}
                         type="button"
-                        onClick={() => setPricingTier(tier)}
+                        onClick={() => { setPricingTierId(null); setPricingTier("standard"); }}
                         className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors capitalize",
-                          pricingTier === tier
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                          !pricingTierId
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                         )}
                       >
-                        {tier}
+                        No tier (standard)
                       </button>
-                    ))}
+                      {tierOptions.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            if (pricingTierId && pricingTierId !== t.id) {
+                              setPendingTierChange(t.id);
+                            } else {
+                              setPricingTierId(t.id);
+                              setPricingTier(t.name);
+                            }
+                          }}
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                            pricingTierId === t.id
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                          )}
+                        >
+                          {t.name}
+                          {t.product_discount_percent > 0 && ` (${t.product_discount_percent}%)`}
+                        </button>
+                      ))}
+                    </div>
+                    {pricingTierId && (() => {
+                      const sel = tierOptions.find((t) => t.id === pricingTierId);
+                      if (!sel) return null;
+                      return (
+                        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                          {sel.product_discount_percent > 0 && <span>{sel.product_discount_percent}% off products</span>}
+                          {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
+                          {sel.delivery_discount_percent > 0 && (
+                            <span>{sel.delivery_discount_percent === 100 ? "Free delivery" : `${sel.delivery_discount_percent}% off delivery`}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No pricing tiers created yet. Create tiers in the Pricing section.</p>
                 )}
               </div>
             </div>
