@@ -1470,6 +1470,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         onSaved={() => void loadProducts()}
       />
 
+      {/* ── Add product dialog ── */}
+      <AddProductDialog
+        open={showCreateProduct}
+        onOpenChange={setShowCreateProduct}
+        onCreated={() => void loadProducts()}
+      />
+
       {/* ── Add client dialog ── */}
       <AddClientDialog
         open={showAddClient}
