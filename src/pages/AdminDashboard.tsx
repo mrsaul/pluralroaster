@@ -1224,9 +1224,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   {isCustom && (
-                                    <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
+                                   <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
                                   )}
                                   <span className="text-muted-foreground">{product.is_active ? "Active" : "Archived"}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => { e.stopPropagation(); setProductToDelete(product); }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
                                 </div>
                               </TableCell>
                             </TableRow>
