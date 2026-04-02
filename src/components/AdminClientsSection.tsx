@@ -28,7 +28,7 @@ function resolveField(client: AppClient, field: "company_name" | "contact_name" 
   return client[field] ?? "—";
 }
 
-export function AdminClientsSection({ clients, loading, error, onSelectClient }: AdminClientsSectionProps) {
+export function AdminClientsSection({ clients, loading, error, onSelectClient, onDeleteClient }: AdminClientsSectionProps) {
   return (
     <section className="mt-8">
       <div className="flex items-center gap-2 mb-3">
