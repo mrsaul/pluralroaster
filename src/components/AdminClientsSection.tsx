@@ -1,4 +1,4 @@
-import { AlertCircle, ChevronRight, Users } from "lucide-react";
+import { AlertCircle, ChevronRight, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
