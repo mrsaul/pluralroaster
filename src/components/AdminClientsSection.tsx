@@ -113,10 +113,22 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="gap-2">
-                        Open
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {onDeleteClient && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => { e.stopPropagation(); onDeleteClient(client); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="gap-2">
+                          Open
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
