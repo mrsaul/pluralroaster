@@ -459,6 +459,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [showCreateOrder, setShowCreateOrder] = useState(false);
    const [showCreateProduct, setShowCreateProduct] = useState(false);
    const [productToDelete, setProductToDelete] = useState<AdminProductRow | null>(null);
+   const [clientToDelete, setClientToDelete] = useState<AppClient | null>(null);
+
+   const deleteClient = async (client: AppClient) => {
+     try {
+       const { error } = await supabase.from("client_onboarding").delete().eq("id", client.id);
+       if (error) throw error;
+       toast({ title: "Client deleted", description: `"${client.company_name || client.contact_name || "Client"}" has been removed.` });
+       void loadClients();
+     } catch (err) {
+       toast({ title: "Delete failed", description: String(err), variant: "destructive" });
+     } finally {
+       setClientToDelete(null);
+     }
+   };
 
    const deleteProduct = async (product: AdminProductRow) => {
      try {
