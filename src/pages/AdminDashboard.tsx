@@ -1071,7 +1071,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   clients={clients}
                   loading={loadingClients}
                   error={clientError}
-                  onSelectClient={setSelectedClient}
+                   onSelectClient={setSelectedClient}
+                   onDeleteClient={setClientToDelete}
                 />
               </>
             )}

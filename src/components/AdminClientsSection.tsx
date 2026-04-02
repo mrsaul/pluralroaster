@@ -16,6 +16,7 @@ interface AdminClientsSectionProps {
   loading: boolean;
   error: string | null;
   onSelectClient: (client: AppClient) => void;
+  onDeleteClient?: (client: AppClient) => void;
 }
 
 function resolveField(client: AppClient, field: "company_name" | "contact_name" | "email" | "phone" | "delivery_address" | "pricing_tier") {
