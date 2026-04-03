@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { X, Upload, Plus, Loader2, AlertTriangle, Link2, Unlink2 } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { X, Upload, Plus, Loader2, AlertTriangle, Link2, Unlink2, Save, CloudOff } from "lucide-react";
 import { ProductVariantsEditor } from "./ProductVariantsEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { useProductDraft, type ProductDraftState } from "@/hooks/useProductDraft";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -69,22 +70,96 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
+  const [pendingClose, setPendingClose] = useState(false);
 
-  // Reset state when product changes
-  const [lastProductId, setLastProductId] = useState<string | null>(null);
-  if (product && product.id !== lastProductId) {
-    setLastProductId(product.id);
-    setImageUrl(product.image_url ?? "");
-    setTags(product.tags ?? []);
-    setTastingNotes(product.tasting_notes ?? "");
-    setIsActive(product.is_active);
-    setProcess(product.process ?? "");
-    setOrigin(product.origin ?? "");
-    setDataSourceMode(product.data_source_mode ?? "sellsy");
-    setCustomName(product.custom_name ?? "");
-    setCustomPrice(product.custom_price_per_kg?.toString() ?? "");
+  const { hasDraft, lastSavedAt, persistDraft, removeDraft, restoreDraft } = useProductDraft(product?.id);
+  const initializedRef = useRef<string | null>(null);
+
+  // Build current form state for draft comparison/persistence
+  const getCurrentFormState = useCallback((): Omit<ProductDraftState, "savedAt"> => ({
+    imageUrl,
+    tags,
+    tastingNotes,
+    isActive,
+    process,
+    origin,
+    dataSourceMode,
+    customName,
+    customPrice,
+  }), [imageUrl, tags, tastingNotes, isActive, process, origin, dataSourceMode, customName, customPrice]);
+
+  // Check if form has changes vs the original product
+  const hasChanges = useCallback(() => {
+    if (!product) return false;
+    return (
+      imageUrl !== (product.image_url ?? "") ||
+      JSON.stringify(tags) !== JSON.stringify(product.tags ?? []) ||
+      tastingNotes !== (product.tasting_notes ?? "") ||
+      isActive !== product.is_active ||
+      process !== (product.process ?? "") ||
+      origin !== (product.origin ?? "") ||
+      dataSourceMode !== (product.data_source_mode ?? "sellsy") ||
+      customName !== (product.custom_name ?? "") ||
+      customPrice !== (product.custom_price_per_kg?.toString() ?? "")
+    );
+  }, [product, imageUrl, tags, tastingNotes, isActive, process, origin, dataSourceMode, customName, customPrice]);
+
+  // Initialize state when product changes — restore draft if available
+  useEffect(() => {
+    if (!product || initializedRef.current === product.id) return;
+    initializedRef.current = product.id;
+
+    const draft = restoreDraft();
+    if (draft) {
+      setImageUrl(draft.imageUrl);
+      setTags(draft.tags);
+      setTastingNotes(draft.tastingNotes);
+      setIsActive(draft.isActive);
+      setProcess(draft.process);
+      setOrigin(draft.origin);
+      setDataSourceMode(draft.dataSourceMode);
+      setCustomName(draft.customName);
+      setCustomPrice(draft.customPrice);
+    } else {
+      setImageUrl(product.image_url ?? "");
+      setTags(product.tags ?? []);
+      setTastingNotes(product.tasting_notes ?? "");
+      setIsActive(product.is_active);
+      setProcess(product.process ?? "");
+      setOrigin(product.origin ?? "");
+      setDataSourceMode(product.data_source_mode ?? "sellsy");
+      setCustomName(product.custom_name ?? "");
+      setCustomPrice(product.custom_price_per_kg?.toString() ?? "");
+    }
     setTagInput("");
-  }
+  }, [product, restoreDraft]);
+
+  // Reset initializedRef when dialog closes so next open re-inits
+  useEffect(() => {
+    if (!open) {
+      initializedRef.current = null;
+    }
+  }, [open]);
+
+  // Auto-persist draft on form changes (debounced via hook)
+  useEffect(() => {
+    if (!product || !open) return;
+    // Only persist if we've initialized
+    if (initializedRef.current !== product.id) return;
+    persistDraft(getCurrentFormState());
+  }, [getCurrentFormState, persistDraft, product, open]);
+
+  // Warn before browser tab close if unsaved changes
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasChanges()) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [open, hasChanges]);
 
   const isSellsyMode = dataSourceMode === "sellsy";
 
@@ -96,7 +171,6 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   const confirmModeSwitch = () => {
     if (!pendingModeSwitch) return;
     if (pendingModeSwitch === "custom" && product) {
-      // Pre-fill custom fields with current Sellsy values
       setCustomName(product.name);
       setCustomPrice(product.price_per_kg.toString());
     }
@@ -166,6 +240,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
         })
         .eq("id", product.id);
       if (error) throw error;
+      removeDraft();
       toast({ title: "Product updated" });
       onSaved();
       onOpenChange(false);
@@ -176,19 +251,71 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
     }
   };
 
+  const handleDiscard = () => {
+    if (!product) return;
+    removeDraft();
+    setImageUrl(product.image_url ?? "");
+    setTags(product.tags ?? []);
+    setTastingNotes(product.tasting_notes ?? "");
+    setIsActive(product.is_active);
+    setProcess(product.process ?? "");
+    setOrigin(product.origin ?? "");
+    setDataSourceMode(product.data_source_mode ?? "sellsy");
+    setCustomName(product.custom_name ?? "");
+    setCustomPrice(product.custom_price_per_kg?.toString() ?? "");
+    toast({ title: "Changes discarded" });
+  };
+
+  const handleClose = (openState: boolean) => {
+    if (!openState && hasChanges()) {
+      setPendingClose(true);
+      return;
+    }
+    onOpenChange(openState);
+  };
+
+  const confirmClose = () => {
+    setPendingClose(false);
+    onOpenChange(false);
+  };
+
   if (!product) return null;
 
   const displayName = dataSourceMode === "custom" && customName ? customName : product.name;
   const displayPrice = dataSourceMode === "custom" && customPrice ? parseFloat(customPrice) : product.price_per_kg;
   const suggestionsFiltered = SUGGESTED_TAGS.filter((t) => !tags.includes(t.toLowerCase()));
+  const dirty = hasChanges();
+
+  const draftTimeLabel = lastSavedAt
+    ? `Draft saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : null;
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{displayName}</DialogTitle>
-            <DialogDescription>Manage product display and data source.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              {displayName}
+              {dirty && (
+                <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-amber-400 text-amber-600 bg-amber-50">
+                  <CloudOff className="h-3 w-3" />
+                  Unsaved changes
+                </Badge>
+              )}
+              {!dirty && hasDraft && (
+                <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-green-400 text-green-600 bg-green-50">
+                  <Save className="h-3 w-3" />
+                  All saved
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription className="flex items-center gap-2">
+              Manage product display and data source.
+              {draftTimeLabel && dirty && (
+                <span className="text-[11px] text-muted-foreground italic">{draftTimeLabel}</span>
+              )}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
@@ -230,7 +357,6 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                 </button>
               </div>
 
-              {/* Mode status label */}
               {isSellsyMode ? (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
                   <Link2 className="h-3.5 w-3.5 text-primary" />
@@ -244,7 +370,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               )}
             </div>
 
-            {/* Name & Price — editable in custom mode, read-only in sellsy mode */}
+            {/* Name & Price */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Product Name</p>
@@ -253,11 +379,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                     <p className="text-sm font-medium text-foreground">{product.name}</p>
                   </div>
                 ) : (
-                  <Input
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder={product.name}
-                  />
+                  <Input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={product.name} />
                 )}
               </div>
               <div className="space-y-1.5">
@@ -267,19 +389,11 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                     <p className="text-sm font-medium tabular-nums text-foreground">€{product.price_per_kg.toFixed(2)}</p>
                   </div>
                 ) : (
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={customPrice}
-                    onChange={(e) => setCustomPrice(e.target.value)}
-                    placeholder={product.price_per_kg.toFixed(2)}
-                  />
+                  <Input type="number" step="0.01" min="0" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} placeholder={product.price_per_kg.toFixed(2)} />
                 )}
               </div>
             </div>
 
-            {/* Sellsy reference price (shown in custom mode) */}
             {!isSellsyMode && (
               <div className="rounded-lg bg-muted/30 border border-dashed border-border px-3 py-2">
                 <p className="text-[11px] text-muted-foreground">
@@ -328,17 +442,13 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               </div>
             </div>
 
-            {/* Image (1:1) */}
+            {/* Image */}
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Product image (square)</p>
               <div className="max-w-[200px]">
                 <AspectRatio ratio={1}>
                   {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt={product.name}
-                      className="h-full w-full rounded-lg object-cover border border-border"
-                    />
+                    <img src={imageUrl} alt={product.name} className="h-full w-full rounded-lg object-cover border border-border" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
                       <p className="text-xs text-muted-foreground">No image</p>
@@ -346,21 +456,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                   )}
                 </AspectRatio>
               </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={uploading}
-                onClick={() => fileRef.current?.click()}
-                className="gap-2"
-              >
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()} className="gap-2">
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 {uploading ? "Uploading…" : "Upload image"}
               </Button>
@@ -384,9 +481,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                   placeholder="Add a tag…"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); }
-                  }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
                   className="max-w-[200px]"
                 />
                 <Button type="button" variant="outline" size="icon" onClick={() => addTag(tagInput)} disabled={!tagInput.trim()}>
@@ -423,11 +518,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
             </div>
 
             {/* Bag Size Variants */}
-            <ProductVariantsEditor
-              productId={product.id}
-              productName={displayName}
-              basePricePerKg={displayPrice}
-            />
+            <ProductVariantsEditor productId={product.id} productName={displayName} basePricePerKg={displayPrice} />
 
             {/* Active toggle */}
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
@@ -438,13 +529,22 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               <Switch checked={isActive} onCheckedChange={setIsActive} />
             </div>
 
-            {/* Save */}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving} className="gap-2">
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Save changes
-              </Button>
+            {/* Save / Discard */}
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <div>
+                {dirty && (
+                  <Button variant="ghost" size="sm" onClick={handleDiscard} className="text-muted-foreground hover:text-destructive">
+                    Discard changes
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+                <Button onClick={handleSave} disabled={saving} className="gap-2">
+                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Save changes
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -469,6 +569,25 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
             <AlertDialogAction onClick={confirmModeSwitch}>
               {pendingModeSwitch === "custom" ? "Use Custom Override" : "Restore Sellsy Sync"}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unsaved changes close confirmation */}
+      <AlertDialog open={pendingClose} onOpenChange={(open) => !open && setPendingClose(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Unsaved changes
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Your draft has been saved locally and will be restored when you reopen this product. Close anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmClose}>Close anyway</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
