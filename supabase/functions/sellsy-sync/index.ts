@@ -356,28 +356,54 @@ async function getSellsyAccessToken() {
   return accessToken;
 }
 
-async function fetchSellsyProducts(accessToken: string) {
-  const listRequest = await fetchSellsy("/v2/items?limit=200", accessToken, {
-    method: "GET",
-  });
+function extractPaginationInfo(data: unknown): { totalPages: number; currentPage: number } | null {
+  if (!data || typeof data !== "object") return null;
+  const obj = data as JsonRecord;
+  const pagination = obj.pagination as JsonRecord | undefined;
+  if (pagination && typeof pagination === "object") {
+    const totalPages = Number(pagination.total_pages ?? pagination.last_page ?? pagination.pages ?? 1);
+    const currentPage = Number(pagination.current_page ?? pagination.page ?? 1);
+    if (Number.isFinite(totalPages) && Number.isFinite(currentPage)) {
+      return { totalPages, currentPage };
+    }
+  }
+  // Some APIs put pagination at the top level
+  const totalPages = Number(obj.total_pages ?? obj.last_page ?? 0);
+  if (totalPages > 0) {
+    return { totalPages, currentPage: Number(obj.current_page ?? obj.page ?? 1) };
+  }
+  return null;
+}
 
-  if (listRequest.response.ok) {
-    return extractSellsyCollection(listRequest.payload.data);
+async function fetchSellsyProducts(accessToken: string) {
+  const allItems: JsonRecord[] = [];
+  const limit = 100;
+
+  // Try paginated GET first
+  const firstPage = await fetchSellsy(`/v2/items?limit=${limit}&page=1`, accessToken, { method: "GET" });
+
+  if (firstPage.response.ok) {
+    const items = extractSellsyCollection(firstPage.payload.data);
+    allItems.push(...items);
+
+    const pageInfo = extractPaginationInfo(firstPage.payload.data);
+    if (pageInfo && pageInfo.totalPages > 1) {
+      for (let page = 2; page <= pageInfo.totalPages; page++) {
+        const nextPage = await fetchSellsy(`/v2/items?limit=${limit}&page=${page}`, accessToken, { method: "GET" });
+        if (nextPage.response.ok) {
+          allItems.push(...extractSellsyCollection(nextPage.payload.data));
+        }
+      }
+    }
+
+    console.log(`Fetched ${allItems.length} items from Sellsy (${pageInfo?.totalPages ?? 1} page(s))`);
+    return allItems;
   }
 
+  // Fallback: search endpoint with pagination
   const searchPayloadCandidates: JsonRecord[] = [
-    {
-      filters: {},
-    },
-    {
-      filters: {},
-      limit: 200,
-    },
-    {
-      filters: {},
-      page: 1,
-      limit: 200,
-    },
+    { filters: {}, limit },
+    { filters: {}, page: 1, limit },
   ];
 
   let lastSearchError: string | null = null;
@@ -385,21 +411,37 @@ async function fetchSellsyProducts(accessToken: string) {
   for (const candidatePayload of searchPayloadCandidates) {
     const searchRequest = await fetchSellsy("/v2/items/search", accessToken, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(candidatePayload),
     });
 
     if (searchRequest.response.ok) {
-      return extractSellsyCollection(searchRequest.payload.data);
+      const items = extractSellsyCollection(searchRequest.payload.data);
+      allItems.push(...items);
+
+      const pageInfo = extractPaginationInfo(searchRequest.payload.data);
+      if (pageInfo && pageInfo.totalPages > 1) {
+        for (let page = 2; page <= pageInfo.totalPages; page++) {
+          const nextSearch = await fetchSellsy("/v2/items/search", accessToken, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...candidatePayload, page }),
+          });
+          if (nextSearch.response.ok) {
+            allItems.push(...extractSellsyCollection(nextSearch.payload.data));
+          }
+        }
+      }
+
+      console.log(`Fetched ${allItems.length} items from Sellsy search (${pageInfo?.totalPages ?? 1} page(s))`);
+      return allItems;
     }
 
     lastSearchError = searchRequest.payload.text;
   }
 
   throw new Error(
-    `Sellsy product fetch failed: ${lastSearchError || listRequest.payload.text || "Unknown Sellsy search error"}`,
+    `Sellsy product fetch failed: ${lastSearchError || firstPage.payload.text || "Unknown Sellsy search error"}`,
   );
 }
 
