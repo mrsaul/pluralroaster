@@ -186,7 +186,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] mx-auto">
         <DialogHeader>
           <DialogTitle>Create New Order</DialogTitle>
           <DialogDescription>Create an order on behalf of a client.</DialogDescription>
