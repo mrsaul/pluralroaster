@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Plus, Minus, Trash2, X, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Minus, Trash2, X, Calendar as CalendarIcon, Check } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -84,6 +84,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const [saving, setSaving] = useState(false);
   const [clientTier, setClientTier] = useState<{ name: string; product_discount_percent: number; delivery_discount_percent: number } | null>(null);
   const draftRestoredRef = useRef(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   // Restore draft when dialog opens
   useEffect(() => {
@@ -116,14 +117,16 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     debounceRef.current = setTimeout(() => {
       const hasContent = selectedClientId || deliveryDate || notes || lineItems.length > 0;
       if (hasContent) {
+        const now = Date.now();
         saveDraftToStorage({
           selectedClientId,
           deliveryDate: deliveryDate ? deliveryDate.toISOString() : null,
           notes,
           lineItemIds: lineItems.map((i) => ({ productId: i.product.id, quantity: i.quantity, price_per_kg: i.price_per_kg })),
           clientTier,
-          savedAt: Date.now(),
+          savedAt: now,
         });
+        setLastSavedAt(now);
       }
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -165,6 +168,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     setNotes("");
     setLineItems([]);
     setClientTier(null);
+    setLastSavedAt(null);
     clearDraftFromStorage();
   }, []);
 
@@ -255,7 +259,15 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] mx-auto">
         <DialogHeader>
-          <DialogTitle>Create New Order</DialogTitle>
+          <div className="flex items-center justify-between gap-2">
+            <DialogTitle>Create New Order</DialogTitle>
+            {lastSavedAt && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-normal animate-in fade-in">
+                <Check className="w-3 h-3 text-green-500" />
+                Draft saved
+              </span>
+            )}
+          </div>
           <DialogDescription>Create an order on behalf of a client.</DialogDescription>
         </DialogHeader>
 
