@@ -258,36 +258,40 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [toast]);
 
+  /* ── Shared helper: lookup client + invoke sellsy-sync create-order ── */
+  const invokeSellsyCreateOrder = useCallback(async (order: AdminOrder) => {
+    const { data: clientRow } = await supabase
+      .from("client_onboarding")
+      .select("sellsy_client_id")
+      .eq("user_id", order.user_id)
+      .maybeSingle();
+
+    return supabase.functions.invoke("sellsy-sync", {
+      body: {
+        mode: "create-order",
+        orderId: order.id,
+        deliveryDate: order.delivery_date,
+        createdAt: order.created_at,
+        sellsy_client_id: clientRow?.sellsy_client_id ?? null,
+        items: order.items.map((i) => ({
+          name: i.product_name,
+          sku: i.product_sku,
+          quantity: i.quantity,
+          pricePerKg: i.price_per_kg,
+        })),
+        totalKg: order.total_kg,
+        totalPrice: order.total_price,
+      },
+    });
+  }, []);
+
   /* ── Approve order (with Sellsy sync) ── */
   const approveOrder = useCallback(async (order: AdminOrder) => {
     setApprovingIds((prev) => new Set(prev).add(order.id));
     try {
       await changeOrderStatus(order.id, "approved");
 
-      // Lookup sellsy_client_id from client_onboarding
-      const { data: clientRow } = await supabase
-        .from("client_onboarding")
-        .select("sellsy_client_id")
-        .eq("user_id", order.user_id)
-        .maybeSingle();
-
-      const { data: sellsyResult, error: sellsyErr } = await supabase.functions.invoke("sellsy-sync", {
-        body: {
-          mode: "create-order",
-          orderId: order.id,
-          deliveryDate: order.delivery_date,
-          createdAt: order.created_at,
-          sellsy_client_id: clientRow?.sellsy_client_id ?? null,
-          items: order.items.map((i) => ({
-            name: i.product_name,
-            sku: i.product_sku,
-            quantity: i.quantity,
-            pricePerKg: i.price_per_kg,
-          })),
-          totalKg: order.total_kg,
-          totalPrice: order.total_price,
-        },
-      });
+      const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
 
       if (sellsyErr || !sellsyResult?.success) {
         toast({
@@ -298,7 +302,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       } else {
         await supabase
           .from("orders")
-          .update({ sellsy_id: sellsyResult.sellsyId ?? sellsyResult.sellsy_id ?? null })
+          .update({ sellsy_id: sellsyResult.sellsy_id ?? null })
           .eq("id", order.id);
       }
 
@@ -312,7 +316,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return next;
       });
     }
-  }, [changeOrderStatus, loadOrders, toast]);
+  }, [changeOrderStatus, invokeSellsyCreateOrder, loadOrders, toast]);
 
   /* ── Bulk approve ── */
   const approveAllReceived = useCallback(async () => {
@@ -331,29 +335,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (!order) throw new Error("Order not found");
       if (order.invoicing_status === "sent") throw new Error("Already sent");
 
-      const { data: clientRow } = await supabase
-        .from("client_onboarding")
-        .select("sellsy_client_id")
-        .eq("user_id", order.user_id)
-        .maybeSingle();
-
-      const { data: sellsyResult, error: sellsyErr } = await supabase.functions.invoke("sellsy-sync", {
-        body: {
-          mode: "create-order",
-          orderId: order.id,
-          deliveryDate: order.delivery_date,
-          createdAt: order.created_at,
-          sellsy_client_id: clientRow?.sellsy_client_id ?? null,
-          items: order.items.map((i) => ({
-            name: i.product_name,
-            sku: i.product_sku,
-            quantity: i.quantity,
-            pricePerKg: i.price_per_kg,
-          })),
-          totalKg: order.total_kg,
-          totalPrice: order.total_price,
-        },
-      });
+      const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
 
       if (sellsyErr || !sellsyResult?.success) {
         await supabase.from("orders").update({
@@ -367,7 +349,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           variant: "destructive",
         });
       } else {
-        const sellsyId = sellsyResult.sellsyId ?? sellsyResult.sellsy_id ?? null;
+        const sellsyId = sellsyResult.sellsy_id ?? null;
         await supabase.from("orders").update({
           sellsy_id: sellsyId,
           invoicing_status: "sent",
@@ -385,7 +367,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return next;
       });
     }
-  }, [adminOrders, toast]);
+  }, [adminOrders, invokeSellsyCreateOrder, toast]);
 
   const bulkSendInvoices = useCallback(async (orderIds: string[]) => {
     for (const id of orderIds) {

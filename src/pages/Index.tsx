@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
-import LoginPage from "./LoginPage";
-import CatalogPage from "./CatalogPage";
-import CheckoutPage from "./CheckoutPage";
-import OrderHistoryPage from "./OrderHistoryPage";
-import AdminDashboard from "./AdminDashboard";
-import RoasterDashboard from "./RoasterDashboard";
-import PackagingDashboard from "./PackagingDashboard";
-import OnboardingPage from "./OnboardingPage";
+
+const LoginPage = lazy(() => import("./LoginPage"));
+const CatalogPage = lazy(() => import("./CatalogPage"));
+const CheckoutPage = lazy(() => import("./CheckoutPage"));
+const OrderHistoryPage = lazy(() => import("./OrderHistoryPage"));
+const AdminDashboard = lazy(() => import("./AdminDashboard"));
+const RoasterDashboard = lazy(() => import("./RoasterDashboard"));
+const PackagingDashboard = lazy(() => import("./PackagingDashboard"));
+const OnboardingPage = lazy(() => import("./OnboardingPage"));
 import { supabase } from "@/integrations/supabase/client";
 
 type View = "home" | "shop" | "checkout" | "orders" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding";
@@ -304,87 +305,103 @@ const Index = () => {
     );
   }
 
+  const fallback = (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 text-sm text-muted-foreground">
+      Loading…
+    </div>
+  );
+
   if (!role) {
-    return <LoginPage />;
+    return <Suspense fallback={fallback}><LoginPage /></Suspense>;
   }
 
   switch (view) {
     case "onboarding":
       return (
-        <OnboardingPage
-          existingData={onboardingData as any}
-          onComplete={async () => {
-            setView("home");
-            await loadOrders();
-          }}
-        />
+        <Suspense fallback={fallback}>
+          <OnboardingPage
+            existingData={onboardingData as any}
+            onComplete={async () => {
+              setView("home");
+              await loadOrders();
+            }}
+          />
+        </Suspense>
       );
     case "home":
       return (
-        <CatalogPage
-          cart={cart}
-          usualOrderItems={usualOrderItems}
-          lastOrderDate={lastOrderDate}
-          lastOrderTotal={lastOrderTotal}
-          mode="home"
-          onCheckout={() => setView("checkout")}
-          onReorderLastOrder={() => setView("checkout")}
-          onGoHome={() => setView("home")}
-          onGoShop={() => setView("shop")}
-          onViewOrders={() => setView("orders")}
-          onLogout={handleLogout}
-        />
+        <Suspense fallback={fallback}>
+          <CatalogPage
+            cart={cart}
+            usualOrderItems={usualOrderItems}
+            lastOrderDate={lastOrderDate}
+            lastOrderTotal={lastOrderTotal}
+            mode="home"
+            onCheckout={() => setView("checkout")}
+            onReorderLastOrder={() => setView("checkout")}
+            onGoHome={() => setView("home")}
+            onGoShop={() => setView("shop")}
+            onViewOrders={() => setView("orders")}
+            onLogout={handleLogout}
+          />
+        </Suspense>
       );
     case "shop":
       return (
-        <CatalogPage
-          cart={cart}
-          usualOrderItems={usualOrderItems}
-          lastOrderDate={lastOrderDate}
-          lastOrderTotal={lastOrderTotal}
-          mode="shop"
-          onCheckout={() => setView("checkout")}
-          onReorderLastOrder={() => setView("checkout")}
-          onGoHome={() => setView("home")}
-          onGoShop={() => setView("shop")}
-          onViewOrders={() => setView("orders")}
-          onLogout={handleLogout}
-        />
+        <Suspense fallback={fallback}>
+          <CatalogPage
+            cart={cart}
+            usualOrderItems={usualOrderItems}
+            lastOrderDate={lastOrderDate}
+            lastOrderTotal={lastOrderTotal}
+            mode="shop"
+            onCheckout={() => setView("checkout")}
+            onReorderLastOrder={() => setView("checkout")}
+            onGoHome={() => setView("home")}
+            onGoShop={() => setView("shop")}
+            onViewOrders={() => setView("orders")}
+            onLogout={handleLogout}
+          />
+        </Suspense>
       );
     case "checkout":
       return (
-        <CheckoutPage
-          items={cart.items}
-          totalKg={cart.totalKg}
-          totalPrice={cart.totalPrice}
-          onBack={() => setView("home")}
-          onConfirm={handleConfirmOrder}
-        />
+        <Suspense fallback={fallback}>
+          <CheckoutPage
+            items={cart.items}
+            totalKg={cart.totalKg}
+            totalPrice={cart.totalPrice}
+            onBack={() => setView("home")}
+            onConfirm={handleConfirmOrder}
+          />
+        </Suspense>
       );
     case "orders":
       return (
-        <OrderHistoryPage
-          orders={visibleOrders}
-          draftItems={cart.items}
-          draftTotalKg={cart.totalKg}
-          draftTotalPrice={cart.totalPrice}
-          draftDeliveryDate={draftDeliveryDate}
-          onDraftDeliveryDateChange={setDraftDeliveryDate}
-          onRemoveDraftItem={handleRemoveDraftItem}
-          onDraftQuantityChange={handleDraftQuantityChange}
-          onPlaceDraftOrder={handlePlaceDraftOrder}
-          onReorder={handleReorder}
-          onGoHome={() => setView("home")}
-          onGoShop={() => setView("shop")}
-          onViewOrders={() => setView("orders")}
-        />
+        <Suspense fallback={fallback}>
+          <OrderHistoryPage
+            orders={visibleOrders}
+            draftItems={cart.items}
+            draftTotalKg={cart.totalKg}
+            draftTotalPrice={cart.totalPrice}
+            draftDeliveryDate={draftDeliveryDate}
+            onDraftDeliveryDateChange={setDraftDeliveryDate}
+            onRemoveDraftItem={handleRemoveDraftItem}
+            onDraftQuantityChange={handleDraftQuantityChange}
+            onPlaceDraftOrder={handlePlaceDraftOrder}
+            onReorder={handleReorder}
+            onGoHome={() => setView("home")}
+            onGoShop={() => setView("shop")}
+            onViewOrders={() => setView("orders")}
+          />
+        </Suspense>
       );
     case "admin":
-      return <AdminDashboard orders={orders} onLogout={handleLogout} />;
+      return <Suspense fallback={fallback}><AdminDashboard orders={orders} onLogout={handleLogout} /></Suspense>;
     case "roaster_dashboard":
-      return <RoasterDashboard onLogout={handleLogout} />;
+      return <Suspense fallback={fallback}><RoasterDashboard onLogout={handleLogout} /></Suspense>;
     case "packaging_dashboard":
-      return <PackagingDashboard onLogout={handleLogout} />;
+      return <Suspense fallback={fallback}><PackagingDashboard onLogout={handleLogout} /></Suspense>;
     default:
       return null;
   }
