@@ -94,9 +94,19 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Filter out null values from existingData so they don't override empty-string defaults
+  const safeExisting: Partial<OnboardingData> = {};
+  if (existingData) {
+    for (const [key, val] of Object.entries(existingData)) {
+      if (val !== null && val !== undefined) {
+        (safeExisting as any)[key] = val;
+      }
+    }
+  }
+
   const initialData: OnboardingData = {
     ...INITIAL_DATA,
-    ...existingData,
+    ...safeExisting,
     preferred_delivery_days: existingData?.preferred_delivery_days ?? [],
     estimated_weekly_volume: String(existingData?.estimated_weekly_volume ?? ""),
   };
@@ -156,7 +166,8 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
 
       if (existing) {
         // Use the secure RPC function to update safe fields only
-        const { error } = await supabase.rpc("user_update_own_onboarding", {
+        // Only send _onboarding_status when completing to avoid "Invalid status transition"
+        const rpcArgs: Record<string, unknown> = {
           _id: existing.id,
           _company_name: data.company_name || null,
           _legal_company_name: data.legal_company_name || null,
@@ -174,8 +185,12 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
           _grinder_type: data.grinder_type || null,
           _notes: data.notes || null,
           _current_step: nextStep,
-          _onboarding_status: status,
-        });
+        };
+        // Only include status when it's changing (e.g., to "completed")
+        if (status !== "pending") {
+          rpcArgs._onboarding_status = status;
+        }
+        const { error } = await supabase.rpc("user_update_own_onboarding", rpcArgs as any);
         if (error) throw error;
       } else {
         // First time: insert with onboarding_status
