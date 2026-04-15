@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { DraftBanner } from "@/components/DraftBanner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -53,41 +55,76 @@ interface Props {
   onSaved: () => void;
 }
 
+// ── Draft-persisted form data ─────────────────────────────────────────────────
+type ClientEditFormData = {
+  dataMode: "sellsy" | "custom";
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  deliveryAddress: string;
+  pricingTier: string;
+  pricingTierId: string | null;
+};
+
+function clientToFormData(client: AppClient): ClientEditFormData {
+  return {
+    dataMode: client.client_data_mode ?? "custom",
+    companyName: client.custom_company_name ?? client.company_name ?? "",
+    contactName: client.custom_contact_name ?? client.contact_name ?? "",
+    email: client.custom_email ?? client.email ?? "",
+    phone: client.custom_phone ?? client.phone ?? "",
+    deliveryAddress: client.custom_delivery_address ?? client.delivery_address ?? "",
+    pricingTier: client.custom_pricing_tier ?? client.pricing_tier ?? "standard",
+    pricingTierId: client.pricing_tier_id ?? null,
+  };
+}
+
 export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props) {
   const { toast } = useToast();
 
-  const [dataMode, setDataMode] = useState<"sellsy" | "custom">(client?.client_data_mode ?? "custom");
-  const [companyName, setCompanyName] = useState(client?.custom_company_name ?? client?.company_name ?? "");
-  const [contactName, setContactName] = useState(client?.custom_contact_name ?? client?.contact_name ?? "");
-  const [email, setEmail] = useState(client?.custom_email ?? client?.email ?? "");
-  const [phone, setPhone] = useState(client?.custom_phone ?? client?.phone ?? "");
-  const [deliveryAddress, setDeliveryAddress] = useState(client?.custom_delivery_address ?? client?.delivery_address ?? "");
-  const [pricingTier, setPricingTier] = useState(client?.custom_pricing_tier ?? client?.pricing_tier ?? "standard");
-  const [pricingTierId, setPricingTierId] = useState<string | null>(client?.pricing_tier_id ?? null);
+  // Transient UI state — not persisted
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
   const [tierOptions, setTierOptions] = useState<PricingTierOption[]>([]);
   const [pendingTierChange, setPendingTierChange] = useState<string | null>(null);
 
+  // ── Draft-persisted form state (key includes client id for per-client drafts) ──
+  const defaultFormData = client ? clientToFormData(client) : {
+    dataMode: "custom" as const, companyName: "", contactName: "", email: "",
+    phone: "", deliveryAddress: "", pricingTier: "standard", pricingTierId: null,
+  };
+
+  const {
+    value: form,
+    setValue: setForm,
+    clearDraft,
+    discardDraft,
+    savedAt: draftSavedAt,
+    showBanner: showDraftBanner,
+  } = useDraftPersistence<ClientEditFormData>(
+    `admin-client-edit:${client?.id ?? "none"}`,
+    defaultFormData,
+  );
+
+  const { dataMode, companyName, contactName, email, phone, deliveryAddress, pricingTier, pricingTierId } = form;
+
+  // Field-specific setters
+  const setDataMode = (v: "sellsy" | "custom") => setForm(p => ({ ...p, dataMode: v }));
+  const setCompanyName = (v: string) => setForm(p => ({ ...p, companyName: v }));
+  const setContactName = (v: string) => setForm(p => ({ ...p, contactName: v }));
+  const setEmail = (v: string) => setForm(p => ({ ...p, email: v }));
+  const setPhone = (v: string) => setForm(p => ({ ...p, phone: v }));
+  const setDeliveryAddress = (v: string) => setForm(p => ({ ...p, deliveryAddress: v }));
+  const setPricingTier = (v: string) => setForm(p => ({ ...p, pricingTier: v }));
+  const setPricingTierId = (v: string | null) => setForm(p => ({ ...p, pricingTierId: v }));
+
   useEffect(() => {
     if (!open) return;
     supabase.from("pricing_tiers").select("id, name, product_discount_percent, delivery_discount_percent").eq("is_active", true).order("name")
       .then(({ data }) => setTierOptions((data ?? []) as PricingTierOption[]));
   }, [open]);
-
-  const [lastClientId, setLastClientId] = useState<string | null>(null);
-  if (client && client.id !== lastClientId) {
-    setLastClientId(client.id);
-    setDataMode(client.client_data_mode ?? "custom");
-    setCompanyName(client.custom_company_name ?? client.company_name ?? "");
-    setContactName(client.custom_contact_name ?? client.contact_name ?? "");
-    setEmail(client.custom_email ?? client.email ?? "");
-    setPhone(client.custom_phone ?? client.phone ?? "");
-    setDeliveryAddress(client.custom_delivery_address ?? client.delivery_address ?? "");
-    setPricingTier(client.custom_pricing_tier ?? client.pricing_tier ?? "standard");
-    setPricingTierId(client.pricing_tier_id ?? null);
-  }
 
   const isSellsyMode = dataMode === "sellsy";
 
@@ -99,22 +136,25 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const confirmModeSwitch = () => {
     if (!pendingModeSwitch || !client) return;
     if (pendingModeSwitch === "custom") {
-      setCompanyName(client.company_name ?? "");
-      setContactName(client.contact_name ?? "");
-      setEmail(client.email ?? "");
-      setPhone(client.phone ?? "");
-      setDeliveryAddress(client.delivery_address ?? "");
-      setPricingTier(client.pricing_tier ?? "standard");
+      setForm(p => ({
+        ...p,
+        dataMode: "custom",
+        companyName: client.company_name ?? "",
+        contactName: client.contact_name ?? "",
+        email: client.email ?? "",
+        phone: client.phone ?? "",
+        deliveryAddress: client.delivery_address ?? "",
+        pricingTier: client.pricing_tier ?? "standard",
+      }));
     }
     if (pendingModeSwitch === "sellsy") {
-      setCompanyName("");
-      setContactName("");
-      setEmail("");
-      setPhone("");
-      setDeliveryAddress("");
-      setPricingTier("");
+      setForm(p => ({
+        ...p,
+        dataMode: "sellsy",
+        companyName: "", contactName: "", email: "",
+        phone: "", deliveryAddress: "", pricingTier: "",
+      }));
     }
-    setDataMode(pendingModeSwitch);
     setPendingModeSwitch(null);
   };
 
@@ -136,6 +176,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
         })
         .eq("id", client.id);
       if (error) throw error;
+      clearDraft();
       toast({ title: "Client updated" });
       onSaved();
       onOpenChange(false);
@@ -169,6 +210,9 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           </DialogHeader>
 
           <div className="space-y-6">
+            {showDraftBanner && draftSavedAt && (
+              <DraftBanner savedAt={draftSavedAt} onDiscard={discardDraft} />
+            )}
             {/* Data Source Mode */}
             <div className="rounded-xl border-2 border-border p-4 space-y-3">
               <p className="text-sm font-medium text-foreground">Client Data Source</p>
@@ -438,9 +482,12 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
               if (pendingTierChange) {
-                setPricingTierId(pendingTierChange);
                 const tier = tierOptions.find((t) => t.id === pendingTierChange);
-                if (tier) setPricingTier(tier.name);
+                setForm(p => ({
+                  ...p,
+                  pricingTierId: pendingTierChange,
+                  pricingTier: tier?.name ?? p.pricingTier,
+                }));
               }
               setPendingTierChange(null);
             }}>

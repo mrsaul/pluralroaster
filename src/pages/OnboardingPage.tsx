@@ -8,6 +8,8 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { DraftBanner } from "@/components/DraftBanner";
 import {
   Building2,
   Truck,
@@ -89,14 +91,24 @@ interface OnboardingPageProps {
 
 const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
   const [step, setStep] = useState(existingData?.current_step ?? 1);
-  const [data, setData] = useState<OnboardingData>(() => ({
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const initialData: OnboardingData = {
     ...INITIAL_DATA,
     ...existingData,
     preferred_delivery_days: existingData?.preferred_delivery_days ?? [],
     estimated_weekly_volume: String(existingData?.estimated_weekly_volume ?? ""),
-  }));
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  };
+
+  const {
+    value: data,
+    setValue: setData,
+    clearDraft,
+    discardDraft,
+    savedAt: draftSavedAt,
+    showBanner: showDraftBanner,
+  } = useDraftPersistence<OnboardingData>("onboarding", initialData);
 
   const updateField = useCallback(<K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -211,9 +223,10 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
 
   const handleConfirm = useCallback(async () => {
     await saveProgress(TOTAL_STEPS, "completed");
+    clearDraft();
     toast({ title: "Account activated!", description: "Welcome to Plural Café — you can now start ordering." });
     onComplete();
-  }, [saveProgress, onComplete]);
+  }, [saveProgress, clearDraft, onComplete]);
 
   // Pre-fill email from auth
   useEffect(() => {
@@ -243,6 +256,9 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-lg mx-auto space-y-6">
+          {showDraftBanner && draftSavedAt && (
+            <DraftBanner savedAt={draftSavedAt} onDiscard={discardDraft} />
+          )}
           {/* Step icon */}
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">

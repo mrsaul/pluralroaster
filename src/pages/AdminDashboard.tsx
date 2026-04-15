@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import { PricingTiersView } from "@/components/PricingTiersView";
 import { UserManagementView } from "@/components/UserManagementView";
+import { StockView } from "@/components/StockView";
 import {
    LogOut, Users, Package, Coffee, BadgeEuro,
    RefreshCw, AlertCircle, CheckCircle2, Clock3,
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
-   Menu, User, Settings,
+   Menu, User, Settings, Warehouse,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -129,7 +130,7 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock">("orders");
   const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -300,10 +301,22 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           variant: "destructive",
         });
       } else {
-        await supabase
+        const sellsyId = sellsyResult.sellsy_id ?? null;
+        const { error: updateErr } = await supabase
           .from("orders")
-          .update({ sellsy_id: sellsyResult.sellsy_id ?? null })
+          .update({ sellsy_id: sellsyId })
           .eq("id", order.id);
+        if (updateErr) {
+          toast({
+            title: "Sellsy ID save failed",
+            description: updateErr.message,
+            variant: "destructive",
+          });
+        } else {
+          setAdminOrders((prev) =>
+            prev.map((o) => o.id === order.id ? { ...o, sellsy_id: sellsyId } : o),
+          );
+        }
       }
 
       await loadOrders();
@@ -662,6 +675,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "pricing" as const, icon: BadgeEuro, label: "Pricing", badge: null },
+    { key: "stock" as const, icon: Warehouse, label: "Stock", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
     { key: "profile" as const, icon: Settings, label: "Profile Settings", badge: null },
   ];
@@ -1247,6 +1261,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
             {/* ═══════════ PRICING ═══════════ */}
             {activeSection === "pricing" && <PricingTiersView />}
+
+            {/* ═══════════ STOCK ═══════════ */}
+            {activeSection === "stock" && <StockView />}
 
             {/* ═══════════ TEAM ═══════════ */}
             {activeSection === "team" && <UserManagementView />}

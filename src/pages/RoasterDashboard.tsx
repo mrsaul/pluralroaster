@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { RoasterView, type RoasterOrder } from "@/components/RoasterView";
-import { LogOut, Flame } from "lucide-react";
+import { StockView } from "@/components/StockView";
+import { LogOut, Flame, Warehouse } from "lucide-react";
 import { type OrderStatus, normalizeOrderStatus } from "@/lib/orderStatuses";
 import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
 
 interface RoasterDashboardProps {
   onLogout: () => void;
@@ -12,6 +14,7 @@ interface RoasterDashboardProps {
 export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
   const [orders, setOrders] = useState<RoasterOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [section, setSection] = useState<"orders" | "stock">("orders");
   const { toast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -51,13 +54,17 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
 
   const handleMarkRoasted = useCallback(async (orderId: string, value: boolean) => {
     try {
-      const { error } = await supabase.from("orders").update({ is_roasted: value }).eq("id", orderId);
+      const patch: Record<string, unknown> = { is_roasted: value };
+      if (value) patch.status = "packaging";
+      const { error } = await supabase.from("orders").update(patch).eq("id", orderId);
       if (error) throw error;
-      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, is_roasted: value } : o));
-      if (value) {
-        await supabase.from("orders").update({ status: "packaging" }).eq("id", orderId);
-        setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: "packaging" as OrderStatus } : o));
-      }
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, is_roasted: value, ...(value ? { status: "packaging" as OrderStatus } : {}) }
+            : o,
+        ),
+      );
     } catch (err) {
       toast({ title: "Update failed", description: String(err), variant: "destructive" });
     }
@@ -65,17 +72,44 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           <Flame className="w-5 h-5 text-warning" />
           <h1 className="text-base font-medium text-foreground">Roaster View</h1>
         </div>
-        <button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <nav className="flex items-center gap-1">
+          <button
+            onClick={() => setSection("orders")}
+            className={cn(
+              "px-3 py-1.5 text-sm rounded-md transition-colors",
+              section === "orders"
+                ? "bg-muted text-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Orders
+          </button>
+          <button
+            onClick={() => setSection("stock")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors",
+              section === "stock"
+                ? "bg-muted text-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Warehouse className="w-3.5 h-3.5" />
+            Stock
+          </button>
+        </nav>
+        <button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0">
           <LogOut className="w-4 h-4" /> Sign Out
         </button>
       </header>
       <main className="p-4 lg:p-8 max-w-6xl mx-auto">
-        {loading ? (
+        {section === "stock" ? (
+          <StockView />
+        ) : loading ? (
           <p className="text-center text-muted-foreground py-8">Loading…</p>
         ) : (
           <RoasterView orders={orders} onMarkRoasted={handleMarkRoasted} />

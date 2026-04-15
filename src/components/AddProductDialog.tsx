@@ -8,6 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { DraftBanner } from "@/components/DraftBanner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -33,6 +35,37 @@ type SizeVariant = {
   is_active: boolean;
 };
 
+// ── Draft-persisted form data type ────────────────────────────────────────────
+type ProductFormData = {
+  name: string;
+  origin: string;
+  process: string;
+  description: string;
+  pricePerKg: string;
+  roastLevel: string;
+  dataSourceMode: "custom" | "sellsy";
+  sellsyId: string;
+  imageUrl: string;
+  tags: string[];
+  variants: SizeVariant[];
+  isActive: boolean;
+};
+
+const PRODUCT_FORM_DEFAULT: ProductFormData = {
+  name: "",
+  origin: "",
+  process: "",
+  description: "",
+  pricePerKg: "",
+  roastLevel: "",
+  dataSourceMode: "custom",
+  sellsyId: "",
+  imageUrl: "",
+  tags: [],
+  variants: [],
+  isActive: true,
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,63 +76,71 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Basic info
-  const [name, setName] = useState("");
-  const [origin, setOrigin] = useState("");
-  const [process, setProcess] = useState("");
-  const [description, setDescription] = useState("");
-  const [pricePerKg, setPricePerKg] = useState("");
-  const [roastLevel, setRoastLevel] = useState("");
-
-  // Sellsy
-  const [dataSourceMode, setDataSourceMode] = useState<"custom" | "sellsy">("custom");
-  const [sellsyId, setSellsyId] = useState("");
-
-  // Image
-  const [imageUrl, setImageUrl] = useState("");
-  const [uploading, setUploading] = useState(false);
+  // Transient UI state — not persisted
   const [tempProductId] = useState(() => crypto.randomUUID());
-
-  // Tags
-  const [tags, setTags] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [tagInput, setTagInput] = useState("");
 
-  // Variants
-  const [variants, setVariants] = useState<SizeVariant[]>([]);
+  // ── Draft-persisted form state ───────────────────────────────────────────
+  const {
+    value: form,
+    setValue: setForm,
+    clearDraft,
+    discardDraft,
+    savedAt: draftSavedAt,
+    showBanner: showDraftBanner,
+  } = useDraftPersistence<ProductFormData>("add-product", PRODUCT_FORM_DEFAULT);
 
-  // Status
-  const [isActive, setIsActive] = useState(true);
-  const [saving, setSaving] = useState(false);
+  // Destructure for JSX readability
+  const { name, origin, process, description, pricePerKg, roastLevel,
+    dataSourceMode, sellsyId, imageUrl, tags, variants, isActive } = form;
 
-  const reset = () => {
-    setName(""); setOrigin(""); setProcess(""); setDescription("");
-    setPricePerKg(""); setRoastLevel(""); setDataSourceMode("custom");
-    setSellsyId(""); setImageUrl(""); setTags([]); setTagInput("");
-    setVariants([]); setIsActive(true);
-  };
+  // Field-specific setters — same call signature as the original useState setters
+  const setName = (v: string) => setForm(p => ({ ...p, name: v }));
+  const setOrigin = (v: string) => setForm(p => ({ ...p, origin: v }));
+  const setDescription = (v: string) => setForm(p => ({ ...p, description: v }));
+  const setPricePerKg = (v: string) => setForm(p => ({ ...p, pricePerKg: v }));
+  const setSellsyId = (v: string) => setForm(p => ({ ...p, sellsyId: v }));
+  const setDataSourceMode = (v: "custom" | "sellsy") => setForm(p => ({ ...p, dataSourceMode: v }));
+  const setIsActive = (v: boolean) => setForm(p => ({ ...p, isActive: v }));
+  const setImageUrl = (v: string) => setForm(p => ({ ...p, imageUrl: v }));
 
+  const setProcess = (v: string) =>
+    setForm(p => ({ ...p, process: p.process === v ? "" : v }));
+  const setRoastLevel = (v: string) =>
+    setForm(p => ({ ...p, roastLevel: p.roastLevel === v ? "" : v }));
+
+  // Tag helpers
   const addTag = (tag: string) => {
     const normalized = tag.trim().toLowerCase();
-    if (normalized && !tags.includes(normalized)) setTags([...tags, normalized]);
+    if (normalized && !tags.includes(normalized)) {
+      setForm(p => ({ ...p, tags: [...p.tags, normalized] }));
+    }
     setTagInput("");
   };
+  const removeTag = (tag: string) =>
+    setForm(p => ({ ...p, tags: p.tags.filter(t => t !== tag) }));
 
-  const removeTag = (tag: string) => setTags(tags.filter((t) => t !== tag));
-
+  // Variant helpers
   const addVariant = (opt: typeof SIZE_OPTIONS[number]) => {
-    if (variants.some((v) => v.size_label === opt.label)) return;
+    if (variants.some(v => v.size_label === opt.label)) return;
     const basePrice = parseFloat(pricePerKg) || 0;
-    setVariants((prev) => [
-      ...prev,
-      { size_label: opt.label, size_kg: opt.kg, price: +(basePrice * opt.kg).toFixed(2), sku: "", is_active: true },
-    ]);
+    setForm(p => ({
+      ...p,
+      variants: [...p.variants, {
+        size_label: opt.label, size_kg: opt.kg,
+        price: +(basePrice * opt.kg).toFixed(2), sku: "", is_active: true,
+      }],
+    }));
   };
+  const removeVariant = (idx: number) =>
+    setForm(p => ({ ...p, variants: p.variants.filter((_, i) => i !== idx) }));
+  const updateVariant = (idx: number, field: keyof SizeVariant, value: any) =>
+    setForm(p => ({ ...p, variants: p.variants.map((v, i) => i === idx ? { ...v, [field]: value } : v) }));
 
-  const removeVariant = (idx: number) => setVariants((prev) => prev.filter((_, i) => i !== idx));
-
-  const updateVariant = (idx: number, field: keyof SizeVariant, value: any) => {
-    setVariants((prev) => prev.map((v, i) => i === idx ? { ...v, [field]: value } : v));
-  };
+  // Reset = discard draft + reset form to defaults
+  const reset = () => discardDraft();
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -132,7 +173,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
       return;
     }
 
-    const activeVariants = variants.filter((v) => v.is_active);
+    const activeVariants = variants.filter(v => v.is_active);
     if (variants.length > 0 && activeVariants.length === 0) {
       toast({ title: "At least one size must be active", variant: "destructive" });
       return;
@@ -170,9 +211,8 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
       if (error) throw error;
 
-      // Insert variants
       if (variants.length > 0) {
-        const rows = variants.map((v) => ({
+        const rows = variants.map(v => ({
           product_id: product.id,
           size_label: v.size_label,
           size_kg: v.size_kg,
@@ -185,7 +225,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
       }
 
       toast({ title: "Product created" });
-      reset();
+      clearDraft();
       onCreated();
       onOpenChange(false);
     } catch (err) {
@@ -195,11 +235,11 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
     }
   };
 
-  const availableSizes = SIZE_OPTIONS.filter((opt) => !variants.some((v) => v.size_label === opt.label));
-  const suggestionsFiltered = SUGGESTED_TAGS.filter((t) => !tags.includes(t.toLowerCase()));
+  const availableSizes = SIZE_OPTIONS.filter(opt => !variants.some(v => v.size_label === opt.label));
+  const suggestionsFiltered = SUGGESTED_TAGS.filter(t => !tags.includes(t.toLowerCase()));
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !showDraftBanner) { /* keep draft alive */ } onOpenChange(o); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Product</DialogTitle>
@@ -207,6 +247,10 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
         </DialogHeader>
 
         <div className="space-y-6">
+          {showDraftBanner && draftSavedAt && (
+            <DraftBanner savedAt={draftSavedAt} onDiscard={reset} />
+          )}
+
           {/* Data Source Mode */}
           <div className="rounded-xl border-2 border-border p-4 space-y-3">
             <p className="text-sm font-medium text-foreground">Data Source</p>
@@ -272,7 +316,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
                   <button
                     key={p}
                     type="button"
-                    onClick={() => setProcess(process === p ? "" : p)}
+                    onClick={() => setProcess(p)}
                     className={cn(
                       "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                       process === p
@@ -295,7 +339,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
                   <button
                     key={r}
                     type="button"
-                    onClick={() => setRoastLevel(roastLevel === r ? "" : r)}
+                    onClick={() => setRoastLevel(r)}
                     className={cn(
                       "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                       roastLevel === r
@@ -457,7 +501,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving} className="gap-2">
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Create Product

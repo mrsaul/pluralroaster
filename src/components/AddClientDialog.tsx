@@ -6,9 +6,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { DraftBanner } from "@/components/DraftBanner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+
+// ── Draft-persisted form data type ────────────────────────────────────────────
+type ClientFormData = {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  deliveryAddress: string;
+  pricingTier: string;
+  notes: string;
+  sellsyClientId: string;
+  dataMode: "custom" | "sellsy";
+};
+
+const CLIENT_FORM_DEFAULT: ClientFormData = {
+  companyName: "",
+  contactName: "",
+  email: "",
+  phone: "",
+  deliveryAddress: "",
+  pricingTier: "standard",
+  notes: "",
+  sellsyClientId: "",
+  dataMode: "custom",
+};
 
 interface Props {
   open: boolean;
@@ -18,37 +45,38 @@ interface Props {
 
 export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
   const { toast } = useToast();
+
+  // Transient UI state — not persisted
   const [saving, setSaving] = useState(false);
-
-  // Basic info
-  const [companyName, setCompanyName] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-
-  // Delivery
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-
-  // Business
-  const [pricingTier, setPricingTier] = useState("standard");
-  const [notes, setNotes] = useState("");
-
-  // Sellsy
-  const [sellsyClientId, setSellsyClientId] = useState("");
-  const [dataMode, setDataMode] = useState<"custom" | "sellsy">("custom");
-
   const [duplicateWarning, setDuplicateWarning] = useState(false);
 
+  // ── Draft-persisted form state ───────────────────────────────────────────
+  const {
+    value: form,
+    setValue: setForm,
+    clearDraft,
+    discardDraft,
+    savedAt: draftSavedAt,
+    showBanner: showDraftBanner,
+  } = useDraftPersistence<ClientFormData>("add-client", CLIENT_FORM_DEFAULT);
+
+  // Destructure for JSX readability
+  const { companyName, contactName, email, phone, deliveryAddress,
+    pricingTier, notes, sellsyClientId, dataMode } = form;
+
+  // Field-specific setters
+  const setCompanyName = (v: string) => setForm(p => ({ ...p, companyName: v }));
+  const setContactName = (v: string) => setForm(p => ({ ...p, contactName: v }));
+  const setEmail = (v: string) => setForm(p => ({ ...p, email: v }));
+  const setPhone = (v: string) => setForm(p => ({ ...p, phone: v }));
+  const setDeliveryAddress = (v: string) => setForm(p => ({ ...p, deliveryAddress: v }));
+  const setPricingTier = (v: string) => setForm(p => ({ ...p, pricingTier: v }));
+  const setNotes = (v: string) => setForm(p => ({ ...p, notes: v }));
+  const setSellsyClientId = (v: string) => setForm(p => ({ ...p, sellsyClientId: v }));
+  const setDataMode = (v: "custom" | "sellsy") => setForm(p => ({ ...p, dataMode: v }));
+
   const resetForm = () => {
-    setCompanyName("");
-    setContactName("");
-    setEmail("");
-    setPhone("");
-    setDeliveryAddress("");
-    setPricingTier("standard");
-    setNotes("");
-    setSellsyClientId("");
-    setDataMode("custom");
+    discardDraft();
     setDuplicateWarning(false);
   };
 
@@ -85,8 +113,6 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Generate a deterministic placeholder user_id for admin-created clients
-      // We use the admin's own id as user_id — the client can later claim it
       const { error } = await supabase.from("client_onboarding").insert({
         user_id: crypto.randomUUID(),
         company_name: companyName.trim(),
@@ -111,7 +137,7 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
       if (error) throw error;
 
       toast({ title: "Client created" });
-      resetForm();
+      clearDraft();
       onCreated();
       onOpenChange(false);
     } catch (err) {
@@ -122,7 +148,7 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { /* keep draft alive on close */ } onOpenChange(v); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Client</DialogTitle>
@@ -130,6 +156,10 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
         </DialogHeader>
 
         <div className="space-y-6">
+          {showDraftBanner && draftSavedAt && (
+            <DraftBanner savedAt={draftSavedAt} onDiscard={resetForm} />
+          )}
+
           {/* Basic Info */}
           <div className="space-y-3">
             <p className="text-sm font-medium text-foreground">Basic Information</p>
@@ -257,7 +287,7 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving} className="gap-2">
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Create Client

@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { DraftBanner } from "@/components/DraftBanner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -30,6 +32,18 @@ export type PricingTier = {
   updated_at: string;
 };
 
+type TierFormData = {
+  name: string;
+  description: string;
+  productDiscount: number;
+  deliveryDiscount: number;
+  isActive: boolean;
+};
+
+const TIER_FORM_DEFAULT: TierFormData = {
+  name: "", description: "", productDiscount: 0, deliveryDiscount: 0, isActive: true,
+};
+
 export function PricingTiersView() {
   const { toast } = useToast();
   const [tiers, setTiers] = useState<PricingTier[]>([]);
@@ -39,12 +53,27 @@ export function PricingTiersView() {
   const [deleteTier, setDeleteTier] = useState<PricingTier | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Form state
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [productDiscount, setProductDiscount] = useState(0);
-  const [deliveryDiscount, setDeliveryDiscount] = useState(0);
-  const [isActive, setIsActive] = useState(true);
+  // Dynamic draft key: per-tier for edits, fixed for create
+  const draftKey = editTier ? `pricing-tier-edit:${editTier.id}` : "pricing-tier-create";
+  const draftDefault = editTier
+    ? { name: editTier.name, description: editTier.description ?? "", productDiscount: editTier.product_discount_percent, deliveryDiscount: editTier.delivery_discount_percent, isActive: editTier.is_active }
+    : TIER_FORM_DEFAULT;
+
+  const {
+    value: form,
+    setValue: setForm,
+    clearDraft,
+    discardDraft,
+    savedAt: draftSavedAt,
+    showBanner: showDraftBanner,
+  } = useDraftPersistence<TierFormData>(draftKey, draftDefault);
+
+  const { name, description, productDiscount, deliveryDiscount, isActive } = form;
+  const setName = (v: string) => setForm(p => ({ ...p, name: v }));
+  const setDescription = (v: string) => setForm(p => ({ ...p, description: v }));
+  const setProductDiscount = (v: number) => setForm(p => ({ ...p, productDiscount: v }));
+  const setDeliveryDiscount = (v: number) => setForm(p => ({ ...p, deliveryDiscount: v }));
+  const setIsActive = (v: boolean) => setForm(p => ({ ...p, isActive: v }));
 
   const loadTiers = useCallback(async () => {
     setLoading(true);
@@ -64,25 +93,16 @@ export function PricingTiersView() {
 
   useEffect(() => { void loadTiers(); }, [loadTiers]);
 
-  const resetForm = () => {
-    setName("");
-    setDescription("");
-    setProductDiscount(0);
-    setDeliveryDiscount(0);
-    setIsActive(true);
-  };
+  const resetForm = () => discardDraft();
 
   const openEdit = (tier: PricingTier) => {
-    setName(tier.name);
-    setDescription(tier.description ?? "");
-    setProductDiscount(tier.product_discount_percent);
-    setDeliveryDiscount(tier.delivery_discount_percent);
-    setIsActive(tier.is_active);
+    // Setting editTier changes the draftKey, which triggers hook re-init
+    // and loads that tier's draft (or its current DB values as default)
     setEditTier(tier);
   };
 
   const openCreate = () => {
-    resetForm();
+    setEditTier(null);
     setShowCreate(true);
   };
 
@@ -107,6 +127,7 @@ export function PricingTiersView() {
           .update(payload)
           .eq("id", editTier.id);
         if (error) throw error;
+        clearDraft();
         toast({ title: "Tier updated" });
         setEditTier(null);
       } else {
@@ -114,10 +135,10 @@ export function PricingTiersView() {
           .from("pricing_tiers")
           .insert(payload);
         if (error) throw error;
+        clearDraft();
         toast({ title: "Tier created" });
         setShowCreate(false);
       }
-      resetForm();
       void loadTiers();
     } catch (err) {
       toast({ title: "Save failed", description: String(err), variant: "destructive" });
@@ -242,6 +263,9 @@ export function PricingTiersView() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {showDraftBanner && draftSavedAt && (
+              <DraftBanner savedAt={draftSavedAt} onDiscard={resetForm} />
+            )}
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Name</label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Tier VIP" />

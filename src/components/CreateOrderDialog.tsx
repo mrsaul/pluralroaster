@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Plus, Minus, Trash2, X, Calendar as CalendarIcon, Check } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { Plus, Minus, Trash2, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { DraftBanner } from "@/components/DraftBanner";
 
 export type SimpleClient = {
   user_id: string;
@@ -43,6 +45,31 @@ type LineItem = {
   price_per_kg: number;
 };
 
+type ClientTier = {
+  name: string;
+  product_discount_percent: number;
+  delivery_discount_percent: number;
+};
+
+// ── Draft-persisted form type ─────────────────────────────────────────────────
+// deliveryDateStr is an ISO string (Date doesn't round-trip through JSON).
+// lineItems stores full product objects — they serialize cleanly.
+type OrderDraftForm = {
+  selectedClientId: string;
+  deliveryDateStr: string | null;
+  notes: string;
+  lineItems: LineItem[];
+  clientTier: ClientTier | null;
+};
+
+const ORDER_DRAFT_DEFAULT: OrderDraftForm = {
+  selectedClientId: "",
+  deliveryDateStr: null,
+  notes: "",
+  lineItems: [],
+  clientTier: null,
+};
+
 interface CreateOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -51,89 +78,43 @@ interface CreateOrderDialogProps {
   onCreated: () => void;
 }
 
-const DRAFT_KEY = "create_order_draft";
-
-type OrderDraft = {
-  selectedClientId: string;
-  deliveryDate: string | null;
-  notes: string;
-  lineItemIds: { productId: string; quantity: number; price_per_kg: number }[];
-  clientTier: { name: string; product_discount_percent: number; delivery_discount_percent: number } | null;
-  savedAt: number;
-};
-
-function saveDraftToStorage(draft: OrderDraft) {
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
-}
-function loadDraftFromStorage(): OrderDraft | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? JSON.parse(raw) as OrderDraft : null;
-  } catch { return null; }
-}
-function clearDraftFromStorage() {
-  localStorage.removeItem(DRAFT_KEY);
-}
-
 export function CreateOrderDialog({ open, onOpenChange, clients, products, onCreated }: CreateOrderDialogProps) {
   const { toast } = useToast();
-  const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(undefined);
-  const [notes, setNotes] = useState("");
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [saving, setSaving] = useState(false);
-  const [clientTier, setClientTier] = useState<{ name: string; product_discount_percent: number; delivery_discount_percent: number } | null>(null);
-  const draftRestoredRef = useRef(false);
-  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
-  // Restore draft when dialog opens
-  useEffect(() => {
-    if (open && !draftRestoredRef.current) {
-      const draft = loadDraftFromStorage();
-      if (draft && products.length > 0) {
-        setSelectedClientId(draft.selectedClientId);
-        setDeliveryDate(draft.deliveryDate ? new Date(draft.deliveryDate) : undefined);
-        setNotes(draft.notes);
-        setClientTier(draft.clientTier);
-        const restored: LineItem[] = [];
-        for (const item of draft.lineItemIds) {
-          const product = products.find((p) => p.id === item.productId);
-          if (product) restored.push({ product, quantity: item.quantity, price_per_kg: item.price_per_kg });
-        }
-        setLineItems(restored);
-      }
-      draftRestoredRef.current = true;
-    }
-    if (!open) {
-      draftRestoredRef.current = false;
-    }
-  }, [open, products]);
+  const {
+    value: form,
+    setValue: setForm,
+    clearDraft,
+    discardDraft,
+    savedAt: draftSavedAt,
+    showBanner: showDraftBanner,
+  } = useDraftPersistence<OrderDraftForm>("create-order", ORDER_DRAFT_DEFAULT);
 
-  // Auto-save draft on every change (debounced)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  useEffect(() => {
-    if (!open) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const hasContent = selectedClientId || deliveryDate || notes || lineItems.length > 0;
-      if (hasContent) {
-        const now = Date.now();
-        saveDraftToStorage({
-          selectedClientId,
-          deliveryDate: deliveryDate ? deliveryDate.toISOString() : null,
-          notes,
-          lineItemIds: lineItems.map((i) => ({ productId: i.product.id, quantity: i.quantity, price_per_kg: i.price_per_kg })),
-          clientTier,
-          savedAt: now,
-        });
-        setLastSavedAt(now);
-      }
-    }, 400);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [open, selectedClientId, deliveryDate, notes, lineItems, clientTier]);
+  const { selectedClientId, deliveryDateStr, notes, lineItems, clientTier } = form;
 
+  // Derived: rehydrate Date from stored ISO string
+  const deliveryDate: Date | undefined = deliveryDateStr ? new Date(deliveryDateStr) : undefined;
+
+  // Field setters
+  const setDeliveryDate = useCallback((d: Date | undefined) => {
+    setForm(p => ({ ...p, deliveryDateStr: d ? d.toISOString() : null }));
+  }, [setForm]);
+
+  const setNotes = useCallback((v: string) => setForm(p => ({ ...p, notes: v })), [setForm]);
+
+  const setLineItems = useCallback(
+    (updater: LineItem[] | ((prev: LineItem[]) => LineItem[])) => {
+      setForm(p => ({
+        ...p,
+        lineItems: typeof updater === "function" ? updater(p.lineItems) : updater,
+      }));
+    },
+    [setForm],
+  );
+
+  // Computed totals
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
-
   const totalKg = useMemo(() => lineItems.reduce((s, i) => s + i.quantity, 0), [lineItems]);
   const subtotal = useMemo(() => lineItems.reduce((s, i) => s + i.quantity * i.price_per_kg, 0), [lineItems]);
   const discountAmount = clientTier ? subtotal * clientTier.product_discount_percent / 100 : 0;
@@ -144,37 +125,29 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     const price = product.data_source_mode === "custom" && product.custom_price_per_kg != null
       ? product.custom_price_per_kg : product.price_per_kg;
     setLineItems((prev) => [...prev, { product, quantity: 3, price_per_kg: price }]);
-  }, [lineItems]);
+  }, [lineItems, setLineItems]);
 
   const updateQty = useCallback((productId: string, delta: number) => {
     setLineItems((prev) => prev.map((i) =>
       i.product.id === productId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i
     ));
-  }, []);
+  }, [setLineItems]);
 
   const updatePrice = useCallback((productId: string, price: number) => {
     setLineItems((prev) => prev.map((i) =>
       i.product.id === productId ? { ...i, price_per_kg: price } : i
     ));
-  }, []);
+  }, [setLineItems]);
 
   const removeItem = useCallback((productId: string) => {
     setLineItems((prev) => prev.filter((i) => i.product.id !== productId));
-  }, []);
+  }, [setLineItems]);
 
-  const resetForm = useCallback(() => {
-    setSelectedClientId("");
-    setDeliveryDate(undefined);
-    setNotes("");
-    setLineItems([]);
-    setClientTier(null);
-    setLastSavedAt(null);
-    clearDraftFromStorage();
-  }, []);
+  const resetForm = useCallback(() => { discardDraft(); }, [discardDraft]);
 
   // Load tier when client changes
   const handleClientChange = useCallback(async (clientId: string) => {
-    setSelectedClientId(clientId);
+    setForm(p => ({ ...p, selectedClientId: clientId, clientTier: null }));
     const client = clients.find((c) => c.user_id === clientId);
     if (client?.pricing_tier_id) {
       const { data } = await supabase
@@ -182,12 +155,9 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
         .select("name, product_discount_percent, delivery_discount_percent")
         .eq("id", client.pricing_tier_id)
         .single();
-      if (data) setClientTier(data as { name: string; product_discount_percent: number; delivery_discount_percent: number });
-      else setClientTier(null);
-    } else {
-      setClientTier(null);
+      if (data) setForm(p => ({ ...p, clientTier: data as ClientTier }));
     }
-  }, [clients]);
+  }, [clients, setForm]);
 
   const handleSave = useCallback(async () => {
     if (!selectedClientId) { toast({ title: "Select a client", variant: "destructive" }); return; }
@@ -234,7 +204,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
       }
 
       toast({ title: "Order created successfully" });
-      resetForm();
+      clearDraft();
       onOpenChange(false);
       onCreated();
     } catch (err) {
@@ -242,7 +212,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     } finally {
       setSaving(false);
     }
-  }, [selectedClientId, deliveryDate, lineItems, totalKg, totalPrice, subtotal, clientTier, toast, resetForm, onOpenChange, onCreated]);
+  }, [selectedClientId, deliveryDate, lineItems, totalKg, totalPrice, clientTier, toast, clearDraft, onOpenChange, onCreated]);
 
   const getClientLabel = (c: SimpleClient) => {
     const name = c.client_data_mode === "custom" && c.custom_company_name
@@ -256,22 +226,19 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const availableProducts = activeProducts.filter((p) => !lineItems.some((i) => i.product.id === p.id));
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
+    // Keep draft alive on close — only discard on explicit Cancel or successful save
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onOpenChange(false); else onOpenChange(true); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] mx-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-2">
-            <DialogTitle>Create New Order</DialogTitle>
-            {lastSavedAt && (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-normal animate-in fade-in">
-                <Check className="w-3 h-3 text-green-500" />
-                Draft saved
-              </span>
-            )}
-          </div>
+          <DialogTitle>Create New Order</DialogTitle>
           <DialogDescription>Create an order on behalf of a client.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
+          {showDraftBanner && draftSavedAt && (
+            <DraftBanner savedAt={draftSavedAt} onDiscard={resetForm} />
+          )}
+
           {/* Client */}
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Client</label>
@@ -438,7 +405,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
               {clientTier && clientTier.delivery_discount_percent > 0 && (
                 <div className="flex items-center justify-between text-xs text-primary">
                   <span>Delivery</span>
-                  <span>{clientTier.delivery_discount_percent === 100 ? "Free" : `${clientTier.delivery_discount_percent}% off`}</span>
+                  <span>{clientTier.delivery_discount_percent === 100 ? "Free" : `${clientTier.delivery_discount_percent}% off delivery`}</span>
                 </div>
               )}
               <div className="flex items-center justify-between">

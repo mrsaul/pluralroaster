@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { X, Upload, Plus, Loader2, AlertTriangle, Link2, Unlink2, Save, CloudOff } from "lucide-react";
 import { ProductVariantsEditor } from "./ProductVariantsEditor";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { useProductDraft, type ProductDraftState } from "@/hooks/useProductDraft";
+import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { DraftBanner } from "@/components/DraftBanner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -38,6 +39,38 @@ export type AdminProduct = {
   custom_price_per_kg: number | null;
 };
 
+// ── Draft-persisted form type ─────────────────────────────────────────────────
+type ProductFormData = {
+  imageUrl: string;
+  tags: string[];
+  tastingNotes: string;
+  isActive: boolean;
+  process: string;
+  origin: string;
+  dataSourceMode: "sellsy" | "custom";
+  customName: string;
+  customPrice: string;
+};
+
+function productToForm(product: AdminProduct): ProductFormData {
+  return {
+    imageUrl: product.image_url ?? "",
+    tags: product.tags ?? [],
+    tastingNotes: product.tasting_notes ?? "",
+    isActive: product.is_active,
+    process: product.process ?? "",
+    origin: product.origin ?? "",
+    dataSourceMode: product.data_source_mode ?? "sellsy",
+    customName: product.custom_name ?? "",
+    customPrice: product.custom_price_per_kg?.toString() ?? "",
+  };
+}
+
+const PRODUCT_FORM_DEFAULT: ProductFormData = {
+  imageUrl: "", tags: [], tastingNotes: "", isActive: true,
+  process: "", origin: "", dataSourceMode: "sellsy", customName: "", customPrice: "",
+};
+
 const SUGGESTED_TAGS = [
   "espresso", "filter", "blend", "single origin",
   "chocolate", "fruity", "nutty", "floral", "caramel", "citrus",
@@ -57,109 +90,53 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [imageUrl, setImageUrl] = useState(product?.image_url ?? "");
-  const [tags, setTags] = useState<string[]>(product?.tags ?? []);
-  const [tastingNotes, setTastingNotes] = useState(product?.tasting_notes ?? "");
-  const [isActive, setIsActive] = useState(product?.is_active ?? true);
-  const [process, setProcess] = useState(product?.process ?? "");
-  const [origin, setOrigin] = useState(product?.origin ?? "");
-  const [dataSourceMode, setDataSourceMode] = useState<"sellsy" | "custom">(product?.data_source_mode ?? "sellsy");
-  const [customName, setCustomName] = useState(product?.custom_name ?? "");
-  const [customPrice, setCustomPrice] = useState(product?.custom_price_per_kg?.toString() ?? "");
+  // Transient UI state — not persisted
   const [tagInput, setTagInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
   const [pendingClose, setPendingClose] = useState(false);
 
-  const { hasDraft, lastSavedAt, persistDraft, removeDraft, restoreDraft } = useProductDraft(product?.id);
-  const initializedRef = useRef<string | null>(null);
+  // Dynamic draft key per product; defaultValue is always current DB values
+  const draftKey = product ? `admin-product-edit:${product.id}` : "admin-product-none";
+  const draftDefault = product ? productToForm(product) : PRODUCT_FORM_DEFAULT;
 
-  // Build current form state for draft comparison/persistence
-  const getCurrentFormState = useCallback((): Omit<ProductDraftState, "savedAt"> => ({
-    imageUrl,
-    tags,
-    tastingNotes,
-    isActive,
-    process,
-    origin,
-    dataSourceMode,
-    customName,
-    customPrice,
-  }), [imageUrl, tags, tastingNotes, isActive, process, origin, dataSourceMode, customName, customPrice]);
+  const {
+    value: form,
+    setValue: setForm,
+    clearDraft,
+    discardDraft,
+    savedAt: draftSavedAt,
+    showBanner: showDraftBanner,
+  } = useDraftPersistence<ProductFormData>(draftKey, draftDefault);
 
-  // Check if form has changes vs the original product
+  const { imageUrl, tags, tastingNotes, isActive, process, origin, dataSourceMode, customName, customPrice } = form;
+
+  // Field setters
+  const setImageUrl = useCallback((v: string) => setForm(p => ({ ...p, imageUrl: v })), [setForm]);
+  const setTags = useCallback((v: string[]) => setForm(p => ({ ...p, tags: v })), [setForm]);
+  const setTastingNotes = useCallback((v: string) => setForm(p => ({ ...p, tastingNotes: v })), [setForm]);
+  const setIsActive = useCallback((v: boolean) => setForm(p => ({ ...p, isActive: v })), [setForm]);
+  const setProcess = useCallback((v: string) => setForm(p => ({ ...p, process: v })), [setForm]);
+  const setOrigin = useCallback((v: string) => setForm(p => ({ ...p, origin: v })), [setForm]);
+  const setCustomName = useCallback((v: string) => setForm(p => ({ ...p, customName: v })), [setForm]);
+  const setCustomPrice = useCallback((v: string) => setForm(p => ({ ...p, customPrice: v })), [setForm]);
+
   const hasChanges = useCallback(() => {
     if (!product) return false;
+    const db = productToForm(product);
     return (
-      imageUrl !== (product.image_url ?? "") ||
-      JSON.stringify(tags) !== JSON.stringify(product.tags ?? []) ||
-      tastingNotes !== (product.tasting_notes ?? "") ||
-      isActive !== product.is_active ||
-      process !== (product.process ?? "") ||
-      origin !== (product.origin ?? "") ||
-      dataSourceMode !== (product.data_source_mode ?? "sellsy") ||
-      customName !== (product.custom_name ?? "") ||
-      customPrice !== (product.custom_price_per_kg?.toString() ?? "")
+      imageUrl !== db.imageUrl ||
+      JSON.stringify(tags) !== JSON.stringify(db.tags) ||
+      tastingNotes !== db.tastingNotes ||
+      isActive !== db.isActive ||
+      process !== db.process ||
+      origin !== db.origin ||
+      dataSourceMode !== db.dataSourceMode ||
+      customName !== db.customName ||
+      customPrice !== db.customPrice
     );
   }, [product, imageUrl, tags, tastingNotes, isActive, process, origin, dataSourceMode, customName, customPrice]);
-
-  // Initialize state when product changes — restore draft if available
-  useEffect(() => {
-    if (!product || initializedRef.current === product.id) return;
-    initializedRef.current = product.id;
-
-    const draft = restoreDraft();
-    if (draft) {
-      setImageUrl(draft.imageUrl);
-      setTags(draft.tags);
-      setTastingNotes(draft.tastingNotes);
-      setIsActive(draft.isActive);
-      setProcess(draft.process);
-      setOrigin(draft.origin);
-      setDataSourceMode(draft.dataSourceMode);
-      setCustomName(draft.customName);
-      setCustomPrice(draft.customPrice);
-    } else {
-      setImageUrl(product.image_url ?? "");
-      setTags(product.tags ?? []);
-      setTastingNotes(product.tasting_notes ?? "");
-      setIsActive(product.is_active);
-      setProcess(product.process ?? "");
-      setOrigin(product.origin ?? "");
-      setDataSourceMode(product.data_source_mode ?? "sellsy");
-      setCustomName(product.custom_name ?? "");
-      setCustomPrice(product.custom_price_per_kg?.toString() ?? "");
-    }
-    setTagInput("");
-  }, [product, restoreDraft]);
-
-  // Reset initializedRef when dialog closes so next open re-inits
-  useEffect(() => {
-    if (!open) {
-      initializedRef.current = null;
-    }
-  }, [open]);
-
-  // Auto-persist draft on form changes (debounced via hook)
-  useEffect(() => {
-    if (!product || !open) return;
-    // Only persist if we've initialized
-    if (initializedRef.current !== product.id) return;
-    persistDraft(getCurrentFormState());
-  }, [getCurrentFormState, persistDraft, product, open]);
-
-  // Warn before browser tab close if unsaved changes
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      if (hasChanges()) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [open, hasChanges]);
 
   const isSellsyMode = dataSourceMode === "sellsy";
 
@@ -169,16 +146,12 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   };
 
   const confirmModeSwitch = () => {
-    if (!pendingModeSwitch) return;
-    if (pendingModeSwitch === "custom" && product) {
-      setCustomName(product.name);
-      setCustomPrice(product.price_per_kg.toString());
+    if (!pendingModeSwitch || !product) return;
+    if (pendingModeSwitch === "custom") {
+      setForm(p => ({ ...p, dataSourceMode: "custom", customName: product.name, customPrice: product.price_per_kg.toString() }));
+    } else {
+      setForm(p => ({ ...p, dataSourceMode: "sellsy", customName: "", customPrice: "" }));
     }
-    if (pendingModeSwitch === "sellsy") {
-      setCustomName("");
-      setCustomPrice("");
-    }
-    setDataSourceMode(pendingModeSwitch);
     setPendingModeSwitch(null);
   };
 
@@ -240,7 +213,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
         })
         .eq("id", product.id);
       if (error) throw error;
-      removeDraft();
+      clearDraft();
       toast({ title: "Product updated" });
       onSaved();
       onOpenChange(false);
@@ -252,17 +225,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   };
 
   const handleDiscard = () => {
-    if (!product) return;
-    removeDraft();
-    setImageUrl(product.image_url ?? "");
-    setTags(product.tags ?? []);
-    setTastingNotes(product.tasting_notes ?? "");
-    setIsActive(product.is_active);
-    setProcess(product.process ?? "");
-    setOrigin(product.origin ?? "");
-    setDataSourceMode(product.data_source_mode ?? "sellsy");
-    setCustomName(product.custom_name ?? "");
-    setCustomPrice(product.custom_price_per_kg?.toString() ?? "");
+    discardDraft();
+    setTagInput("");
     toast({ title: "Changes discarded" });
   };
 
@@ -286,10 +250,6 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   const suggestionsFiltered = SUGGESTED_TAGS.filter((t) => !tags.includes(t.toLowerCase()));
   const dirty = hasChanges();
 
-  const draftTimeLabel = lastSavedAt
-    ? `Draft saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-    : null;
-
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
@@ -303,22 +263,23 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                   Unsaved changes
                 </Badge>
               )}
-              {!dirty && hasDraft && (
+              {!dirty && draftSavedAt && (
                 <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-green-400 text-green-600 bg-green-50">
                   <Save className="h-3 w-3" />
                   All saved
                 </Badge>
               )}
             </DialogTitle>
-            <DialogDescription className="flex items-center gap-2">
+            <DialogDescription>
               Manage product display and data source.
-              {draftTimeLabel && dirty && (
-                <span className="text-[11px] text-muted-foreground italic">{draftTimeLabel}</span>
-              )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
+            {showDraftBanner && draftSavedAt && (
+              <DraftBanner savedAt={draftSavedAt} onDiscard={handleDiscard} />
+            )}
+
             {/* Data Source Mode */}
             <div className="rounded-xl border-2 border-border p-4 space-y-3">
               <p className="text-sm font-medium text-foreground">Data Source</p>

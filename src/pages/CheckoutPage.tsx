@@ -9,22 +9,27 @@ interface CheckoutPageProps {
   totalKg: number;
   totalPrice: number;
   onBack: () => void;
-  onConfirm: (deliveryDate: string) => void;
+  onConfirm: (deliveryDate: string) => Promise<void>;
 }
 
 export default function CheckoutPage({ items, totalKg, totalPrice, onBack, onConfirm }: CheckoutPageProps) {
   const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!deliveryDate) return;
     setConfirming(true);
-    setTimeout(() => {
-      setConfirming(false);
+    setOrderError(null);
+    try {
+      await onConfirm(deliveryDate);
       setConfirmed(true);
-      setTimeout(() => onConfirm(deliveryDate), 1200);
-    }, 1500);
+    } catch (err) {
+      setOrderError(err instanceof Error ? err.message : "Failed to place order. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
   };
 
   return (
@@ -76,6 +81,11 @@ export default function CheckoutPage({ items, totalKg, totalPrice, onBack, onCon
         </section>
 
         <section className="pt-4">
+          {orderError && (
+            <div className="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {orderError}
+            </div>
+          )}
           <AnimatePresence mode="wait">
             {confirmed ? (
               <motion.div

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState, useCallback } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
+import { useToast } from "@/components/ui/use-toast";
 
 const LoginPage = lazy(() => import("./LoginPage"));
 const CatalogPage = lazy(() => import("./CatalogPage"));
@@ -74,11 +75,13 @@ const Index = () => {
   const [view, setView] = useState<View>("home");
   const [role, setRole] = useState<AppRole | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const cart = useCart();
   const { clearCart } = cart;
+  const { toast } = useToast();
 
   const loadOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -163,8 +166,11 @@ const Index = () => {
   useEffect(() => {
     const handleAuthenticatedSession = async () => {
       setAuthLoading(true);
+      setAuthError(null);
       try {
         await syncUserRole();
+      } catch (err) {
+        setAuthError(err instanceof Error ? err.message : "Authentication error. Please refresh and try again.");
       } finally {
         setAuthLoading(false);
       }
@@ -249,7 +255,9 @@ const Index = () => {
       .single();
 
     if (orderError || !createdOrder) {
-      throw orderError ?? new Error("Failed to create order");
+      const msg = orderError?.message ?? "Failed to create order";
+      toast({ title: "Order failed", description: msg, variant: "destructive" });
+      throw orderError ?? new Error(msg);
     }
 
     const itemRows = cart.items.map((item) => ({
@@ -257,8 +265,8 @@ const Index = () => {
       product_id: item.product.id,
       product_name: item.product.name,
       product_sku: item.product.sku,
-      price_per_kg: item.unitPrice
-        ? item.unitPrice / (item.sizeKg ?? 1)
+      price_per_kg: item.unitPrice != null && item.sizeKg
+        ? item.unitPrice / item.sizeKg
         : item.product.pricePerKg,
       quantity: item.sizeKg ? item.sizeKg * item.quantity : item.quantity,
       size_label: item.sizeLabel ?? null,
@@ -269,6 +277,7 @@ const Index = () => {
       const { error: itemsError } = await supabase.from("order_items").insert(itemRows);
 
       if (itemsError) {
+        toast({ title: "Order items failed", description: itemsError.message, variant: "destructive" });
         throw itemsError;
       }
     }
@@ -277,7 +286,7 @@ const Index = () => {
     setDraftDeliveryDate(null);
     cart.clearCart();
     setView("home");
-  }, [cart, loadOrders]);
+  }, [cart, loadOrders, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
     if (!draftDeliveryDate || cart.items.length === 0) {
@@ -301,6 +310,20 @@ const Index = () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4 text-sm text-muted-foreground">
         Checking authentication…
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-4">
+        <p className="text-sm text-destructive">{authError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm underline text-muted-foreground hover:text-foreground"
+        >
+          Reload page
+        </button>
       </div>
     );
   }
