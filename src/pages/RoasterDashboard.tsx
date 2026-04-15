@@ -54,8 +54,9 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
 
   const handleMarkRoasted = useCallback(async (orderId: string, value: boolean) => {
     try {
-      const patch: Record<string, unknown> = { is_roasted: value };
-      if (value) patch.status = "packaging";
+      const patch = value
+        ? { is_roasted: value, status: "packaging" as const }
+        : { is_roasted: value };
       const { error } = await supabase.from("orders").update(patch).eq("id", orderId);
       if (error) throw error;
       setOrders((prev) =>
