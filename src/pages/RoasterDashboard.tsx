@@ -82,7 +82,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
           <button
             onClick={() => setSection("orders")}
             className={cn(
-              "px-3 py-1.5 text-sm rounded-md transition-colors",
+              "px-3 min-h-[44px] text-sm rounded-md transition-colors",
               section === "orders"
                 ? "bg-muted text-foreground font-medium"
                 : "text-muted-foreground hover:text-foreground"
@@ -93,7 +93,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
           <button
             onClick={() => setSection("stock")}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors",
+              "flex items-center gap-1.5 px-3 min-h-[44px] text-sm rounded-md transition-colors",
               section === "stock"
                 ? "bg-muted text-foreground font-medium"
                 : "text-muted-foreground hover:text-foreground"
@@ -103,7 +103,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
             Stock
           </button>
         </nav>
-        <button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0">
+        <button onClick={onLogout} className="flex items-center gap-2 px-3 min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0">
           <LogOut className="w-4 h-4" /> Sign Out
         </button>
       </header>

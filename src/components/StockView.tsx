@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { Loader2, AlertTriangle, Pencil, History, Search, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -197,6 +198,43 @@ function EditPopover({
   );
 }
 
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+
+function StockTableSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <TableRow key={i} className="hover:bg-transparent">
+          <TableCell>
+            <Skeleton className="h-4 w-40" />
+          </TableCell>
+          <TableCell className="text-right">
+            <Skeleton className="h-6 w-14 ml-auto" />
+          </TableCell>
+          <TableCell className="text-right">
+            <Skeleton className="h-4 w-10 ml-auto" />
+          </TableCell>
+          <TableCell className="text-center">
+            <Skeleton className="h-5 w-16 mx-auto rounded-full" />
+          </TableCell>
+          <TableCell>
+            <Skeleton className="h-4 w-24" />
+          </TableCell>
+          <TableCell>
+            <Skeleton className="h-4 w-20" />
+          </TableCell>
+          <TableCell className="text-right">
+            <div className="flex justify-end gap-1">
+              <Skeleton className="h-7 w-7 rounded" />
+              <Skeleton className="h-7 w-7 rounded" />
+            </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
 // ── Main StockView ────────────────────────────────────────────────────────────
 
 type Filter = "all" | "low";
@@ -278,7 +316,7 @@ export function StockView() {
             {search && (
               <button
                 onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center text-muted-foreground hover:text-foreground"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -292,7 +330,7 @@ export function StockView() {
                 key={f}
                 onClick={() => setFilter(f)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  "rounded-full border px-3 min-h-[44px] text-xs font-medium transition-colors",
                   filter === f
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
@@ -320,11 +358,7 @@ export function StockView() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10">
-                    <Loader2 className="w-4 h-4 animate-spin mx-auto text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
+                <StockTableSkeleton />
               ) : displayed.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
@@ -443,7 +477,7 @@ export function StockView() {
                             >
                               <PopoverTrigger asChild>
                                 <button
-                                  className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+                                  className="w-11 h-11 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
                                   onClick={() => setEditingId(rowEditId)}
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
@@ -462,7 +496,7 @@ export function StockView() {
 
                             {/* History button */}
                             <button
-                              className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+                              className="w-11 h-11 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
                               onClick={() => {
                                 setHistoryId(item.id);
                                 setHistoryName(item.product_name);

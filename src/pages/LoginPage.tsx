@@ -178,7 +178,7 @@ export default function LoginPage() {
                   setError(null);
                   setMessage(null);
                 }}
-                className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Forgot password?
               </button>
@@ -189,7 +189,7 @@ export default function LoginPage() {
                   setError(null);
                   setMessage(null);
                 }}
-                className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Need an account? Create one
               </button>
@@ -202,7 +202,7 @@ export default function LoginPage() {
                 setError(null);
                 setMessage(null);
               }}
-              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Back to sign in
             </button>
