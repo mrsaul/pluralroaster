@@ -1,7 +1,10 @@
 import { useState, useMemo } from "react";
 import {
   Send, RefreshCw, ExternalLink, AlertCircle, CheckCircle2, Search, X, Filter, AlertTriangle,
+  Sheet,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -66,6 +69,31 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailOrder, setDetailOrder] = useState<InvoicingOrder | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleExportToSheets = async () => {
+    setExporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-invoicing-sheet");
+      if (error) throw error;
+      const result = data as { url: string; orders_exported: number; month: string };
+      setSheetUrl(result.url);
+      toast({
+        title: "Exported to Google Sheets",
+        description: `${result.orders_exported} orders exported for ${result.month}.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Export failed",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Filter orders to invoicing-eligible statuses
   const eligibleOrders = useMemo(() =>
@@ -183,17 +211,43 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
             </Select>
           </div>
 
-          {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2">
+            {/* Export to Google Sheets */}
             <Button
+              variant="outline"
               size="sm"
               className="gap-2"
-              disabled={bulkSending}
-              onClick={() => void handleBulkSend()}
+              disabled={exporting}
+              onClick={() => void handleExportToSheets()}
             >
-              {bulkSending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              Send selected ({selectedIds.size})
+              {exporting
+                ? <RefreshCw className="w-4 h-4 animate-spin" />
+                : <Sheet className="w-4 h-4 text-green-600" />}
+              {exporting ? "Exporting…" : "Export to Sheets"}
             </Button>
-          )}
+
+            {/* Link to last exported sheet */}
+            {sheetUrl && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-green-600 hover:text-green-700" asChild>
+                <a href={sheetUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open Sheet
+                </a>
+              </Button>
+            )}
+
+            {selectedIds.size > 0 && (
+              <Button
+                size="sm"
+                className="gap-2"
+                disabled={bulkSending}
+                onClick={() => void handleBulkSend()}
+              >
+                {bulkSending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Send selected ({selectedIds.size})
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Table */}

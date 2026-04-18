@@ -2,3 +2,6 @@ project_id = "wkffugaijomivqahnxom"
 
 [functions.sellsy-sync]
 verify_jwt = false
+
+[functions.export-invoicing-sheet]
+verify_jwt = true
