@@ -77,7 +77,20 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
     setExporting(true);
     try {
       const { data, error } = await supabase.functions.invoke("export-invoicing-sheet");
-      if (error) throw error;
+
+      // Extract the real error message from the function response body
+      if (error) {
+        let detail = error.message;
+        try {
+          // FunctionsHttpError carries the response body in error.context
+          const body = await (error as any).context?.json?.();
+          if (body?.error) detail = body.error;
+        } catch {
+          // ignore — use the original error.message
+        }
+        throw new Error(detail);
+      }
+
       const result = data as { url: string; orders_exported: number; month: string };
       setSheetUrl(result.url);
       toast({

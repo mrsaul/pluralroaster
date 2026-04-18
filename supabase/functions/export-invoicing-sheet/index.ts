@@ -221,12 +221,14 @@ Deno.serve(async (req: Request) => {
 
     const db = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: roleRow } = await db
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .single();
-    if (!roleRow || roleRow.role !== "admin") throw new Error("Admin only");
+    // Use the same RPC the app uses — runs in the user's session context
+    const { data: currentRole, error: roleErr } = await userClient.rpc(
+      "ensure_current_user_role",
+    );
+    if (roleErr) throw new Error(`Role check failed: ${roleErr.message}`);
+    if (currentRole !== "admin") {
+      throw new Error(`Admin only (your role: ${currentRole})`);
+    }
 
     // ── Fetch invoiceable orders for current month ───────────────────────────
     const now = new Date();
