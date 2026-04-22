@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 
 export interface ProductVariant {
   id: string;
@@ -88,8 +88,45 @@ export const MOCK_ORDERS: Order[] = [
   },
 ];
 
+// ── Cart persistence ──────────────────────────────────────────────────────────
+
+const CART_STORAGE_KEY = "pr_cart_v1";
+
+function loadCartFromStorage(): Map<string, CartItem> {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    if (!raw) return new Map();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Map();
+    return new Map(parsed as Array<[string, CartItem]>);
+  } catch {
+    return new Map();
+  }
+}
+
+function persistCartToStorage(items: Map<string, CartItem>): void {
+  try {
+    if (items.size === 0) {
+      localStorage.removeItem(CART_STORAGE_KEY);
+    } else {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify([...items.entries()]));
+    }
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+// ── useCart hook ──────────────────────────────────────────────────────────────
+
 export function useCart() {
-  const [items, setItems] = useState<Map<string, CartItem>>(new Map());
+  // Initialize from localStorage so cart survives tab switches, hard refreshes,
+  // and browser memory pressure that unmounts the component.
+  const [items, setItems] = useState<Map<string, CartItem>>(() => loadCartFromStorage());
+
+  // Sync to localStorage whenever items change
+  useEffect(() => {
+    persistCartToStorage(items);
+  }, [items]);
 
   const updateQuantity = useCallback((product: Product, quantity: number, sizeLabel?: string, sizeKg?: number, unitPrice?: number) => {
     setItems((prev) => {
@@ -113,6 +150,7 @@ export function useCart() {
   }, [items]);
 
   const clearCart = useCallback(() => {
+    localStorage.removeItem(CART_STORAGE_KEY);
     setItems(new Map());
   }, []);
 

@@ -129,8 +129,26 @@ function formatDate(value: string | null) {
 
 /* ─── Component ─── */
 
+const ADMIN_SECTION_KEY = "pr_admin_section";
+type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock";
+const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "invoicing", "team", "profile", "pricing", "stock"];
+
+function loadAdminSection(): AdminSection {
+  try {
+    const saved = sessionStorage.getItem(ADMIN_SECTION_KEY) as AdminSection | null;
+    return saved && VALID_ADMIN_SECTIONS.includes(saved) ? saved : "orders";
+  } catch {
+    return "orders";
+  }
+}
+
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock">("orders");
+  const [activeSection, setActiveSectionRaw] = useState<AdminSection>(() => loadAdminSection());
+
+  const setActiveSection = useCallback((section: AdminSection) => {
+    try { sessionStorage.setItem(ADMIN_SECTION_KEY, section); } catch { /* ignore */ }
+    setActiveSectionRaw(section);
+  }, []);
   const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);

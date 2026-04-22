@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useCallback } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -14,6 +14,28 @@ import { supabase } from "@/integrations/supabase/client";
 
 type View = "home" | "shop" | "checkout" | "orders" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding";
 type AppRole = "admin" | "user" | "roaster" | "packaging";
+
+// ── View persistence (sessionStorage) ────────────────────────────────────────
+// sessionStorage survives tab switches and is cleared when the browser session ends.
+
+const VIEW_KEY = "pr_view";
+
+// Views that are safe to restore per role on initial load
+const RESTORABLE_CLIENT_VIEWS: View[] = ["home", "shop", "orders"];
+
+function saveView(v: View): void {
+  try { sessionStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
+}
+
+function loadSavedView(): View | null {
+  try { return sessionStorage.getItem(VIEW_KEY) as View | null; } catch { return null; }
+}
+
+function clearSavedView(): void {
+  try { sessionStorage.removeItem(VIEW_KEY); } catch { /* ignore */ }
+}
+
+// ── Data types ────────────────────────────────────────────────────────────────
 
 type PersistedOrderRow = {
   id: string;
@@ -71,8 +93,12 @@ const mapPersistedOrder = (order: PersistedOrderRow): Order => ({
   })),
 });
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 const Index = () => {
-  const [view, setView] = useState<View>("home");
+  // View starts as whatever was last saved (or "home") — auth loading spinner hides
+  // this until syncUserRole confirms what the user should see.
+  const [view, setViewRaw] = useState<View>("home");
   const [role, setRole] = useState<AppRole | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -82,6 +108,16 @@ const Index = () => {
   const cart = useCart();
   const { clearCart } = cart;
   const { toast } = useToast();
+
+  // Prevents getSession() and onAuthStateChange(INITIAL_SESSION) from both
+  // triggering a full auth cycle simultaneously on app load.
+  const hasInitialized = useRef(false);
+
+  // Wraps setView so every navigation is saved to sessionStorage automatically.
+  const setView = useCallback((v: View) => {
+    saveView(v);
+    setViewRaw(v);
+  }, []);
 
   const loadOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -127,28 +163,27 @@ const Index = () => {
       throw ensureError;
     }
 
-    const normalizedRole = ensuredRole === "admin" ? "admin" 
+    const normalizedRole: AppRole = ensuredRole === "admin" ? "admin"
       : ensuredRole === "roaster" ? "roaster"
       : ensuredRole === "packaging" ? "packaging"
       : "user";
     setRole(normalizedRole);
 
+    // Non-client roles always land on their single dedicated view
     if (normalizedRole === "admin") {
       setView("admin");
       return;
     }
-
     if (normalizedRole === "roaster") {
       setView("roaster_dashboard");
       return;
     }
-
     if (normalizedRole === "packaging") {
       setView("packaging_dashboard");
       return;
     }
 
-    // Check onboarding status for regular users
+    // Regular user — check onboarding first
     const { data: onboarding } = await supabase
       .from("client_onboarding")
       .select("*")
@@ -157,12 +192,18 @@ const Index = () => {
     if (!onboarding || onboarding.onboarding_status !== "completed") {
       setOnboardingData(onboarding as Record<string, unknown> | null);
       setView("onboarding");
-    } else {
-      setView("home");
-      await loadOrders();
+      return;
     }
-  }, [loadOrders]);
 
+    // Restore last client view (home/shop/orders) — skip checkout since cart
+    // might be stale. Falls back to "home" if nothing saved or view is incompatible.
+    const savedView = loadSavedView();
+    const restored = savedView && RESTORABLE_CLIENT_VIEWS.includes(savedView) ? savedView : "home";
+    setView(restored);
+    await loadOrders();
+  }, [loadOrders, setView]);
+
+  // ── Auth lifecycle ──────────────────────────────────────────────────────────
   useEffect(() => {
     const handleAuthenticatedSession = async () => {
       setAuthLoading(true);
@@ -176,25 +217,48 @@ const Index = () => {
       }
     };
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) {
-        setRole(null);
-        setOrders([]);
-        setAuthLoading(false);
-        clearCart();
+    const handleSignedOut = () => {
+      hasInitialized.current = false;
+      clearSavedView();
+      setRole(null);
+      setOrders([]);
+      setAuthLoading(false);
+      clearCart();
+    };
+
+    // onAuthStateChange fires for every auth event — including background
+    // TOKEN_REFRESHED when the JWT silently renews (e.g. on tab focus).
+    // We must NOT reset the view for passive events — only for actual sign-in/out.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Silent token refresh: session is still valid, role unchanged, stay on current view.
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
         return;
       }
 
+      if (!session?.user || event === "SIGNED_OUT") {
+        handleSignedOut();
+        return;
+      }
+
+      // SIGNED_IN or INITIAL_SESSION: only run once per app mount via the
+      // hasInitialized guard — getSession() below handles the first load.
+      if (!hasInitialized.current) {
+        // Will be initialized by the getSession() call below; skip the duplicate.
+        return;
+      }
+
+      // Subsequent explicit sign-in (e.g. user logged out then back in)
       void handleAuthenticatedSession();
     });
 
+    // Primary initialization: always use getSession() as the single source of truth
+    // on mount. This avoids the INITIAL_SESSION / getSession() double-fire.
     void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (hasInitialized.current) return; // already handled
+      hasInitialized.current = true;
+
       if (!session?.user) {
-        setRole(null);
-        setOrders([]);
-        setAuthLoading(false);
+        handleSignedOut();
         return;
       }
 
@@ -206,7 +270,22 @@ const Index = () => {
     };
   }, [clearCart, syncUserRole]);
 
+  // ── Tab visibility: refresh data when user returns, never reset view ─────────
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible" || !role) return;
+      // Refresh stale data silently in background — no loading state, no view change
+      if (role === "user") {
+        void loadOrders().catch(() => { /* non-critical */ });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [role, loadOrders]);
+
   const handleLogout = useCallback(async () => {
+    clearSavedView();
     cart.clearCart();
     await supabase.auth.signOut();
   }, [cart]);
@@ -303,12 +382,14 @@ const Index = () => {
   const handleReorder = useCallback((order: Order) => {
     cart.hydrateCart(order.items);
     setView("checkout");
-  }, [cart]);
+  }, [cart, setView]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
   const lastOrderDate = orders[0]?.createdAt ?? null;
   const lastOrderTotal = orders[0]?.totalPrice ?? null;
   const visibleOrders = role === "admin" ? [...orders, ...MOCK_ORDERS] : orders;
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   if (authLoading) {
     return (
