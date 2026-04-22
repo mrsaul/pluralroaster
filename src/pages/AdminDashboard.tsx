@@ -8,7 +8,7 @@ import {
    RefreshCw, AlertCircle, CheckCircle2, Clock3,
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
-   Menu, User, Settings, Warehouse,
+   Menu, User, Settings, Warehouse, ExternalLink,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -135,6 +135,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+
+  // Packaging sheet export
+  const [packagingSheetIdInput, setPackagingSheetIdInput] = useState("");
+  const [packagingSheetUrl, setPackagingSheetUrl] = useState<string | null>(null);
+  const [exportingPackaging, setExportingPackaging] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -756,6 +761,50 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     [adminOrders, clients],
   );
 
+  /* ── Packaging sheet export ── */
+  const parsePackagingSheetId = (input: string): string | null => {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
+    return null;
+  };
+
+  const handleExportPackagingSheet = async () => {
+    const spreadsheetId = parsePackagingSheetId(packagingSheetIdInput) ?? undefined;
+    setExportingPackaging(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-packaging-sheet", {
+        body: { spreadsheet_id: spreadsheetId },
+      });
+
+      if (error) {
+        let detail = error.message;
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) detail = body.error;
+        } catch { /* ignore */ }
+        throw new Error(detail);
+      }
+
+      const result = data as { url: string; orders_exported: number };
+      setPackagingSheetUrl(result.url);
+      toast({
+        title: "Packaging list exported",
+        description: `${result.orders_exported} order${result.orders_exported !== 1 ? "s" : ""} exported to Google Sheets.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Export failed",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setExportingPackaging(false);
+    }
+  };
+
   return (
     <>
       <div className="min-h-screen bg-background flex">
@@ -1040,11 +1089,66 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
             {/* ═══════════ PACKAGING ═══════════ */}
             {activeSection === "packaging" && (
-              <PackagingView
-                orders={packagingOrders}
-                onStatusChange={(orderId, newStatus) => void changeOrderStatus(orderId, newStatus)}
-                onChecklistChange={(orderId, field, value) => void updateChecklist(orderId, field, value)}
-              />
+              <div className="space-y-4">
+                {/* Export toolbar */}
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Packaging Checklist</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {packagingSheetUrl && (
+                        <Button variant="ghost" size="sm" className="gap-1.5 text-green-600 hover:text-green-700" asChild>
+                          <a href={packagingSheetUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Open Sheet
+                          </a>
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleExportPackagingSheet()}
+                        disabled={exportingPackaging || (!packagingSheetUrl && !parsePackagingSheetId(packagingSheetIdInput))}
+                        className="gap-1.5"
+                      >
+                        {exportingPackaging ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                        {exportingPackaging ? "Exporting…" : "Export Packaging List"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Connect sheet banner — shown until a URL is returned */}
+                  {!packagingSheetUrl && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Create a Google Sheet, share it with the service account as <strong>Editor</strong>, then paste the URL below.
+                      </p>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          placeholder="https://docs.google.com/spreadsheets/d/…"
+                          value={packagingSheetIdInput}
+                          onChange={(e) => setPackagingSheetIdInput(e.target.value)}
+                          className="text-sm flex-1"
+                        />
+                        {packagingSheetIdInput && !parsePackagingSheetId(packagingSheetIdInput) && (
+                          <p className="text-xs text-destructive whitespace-nowrap">Invalid URL</p>
+                        )}
+                      </div>
+                      {parsePackagingSheetId(packagingSheetIdInput) && (
+                        <p className="text-xs text-green-600 mt-1.5">✓ Sheet ID detected: {parsePackagingSheetId(packagingSheetIdInput)}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <PackagingView
+                  orders={packagingOrders}
+                  onStatusChange={(orderId, newStatus) => void changeOrderStatus(orderId, newStatus)}
+                  onChecklistChange={(orderId, field, value) => void updateChecklist(orderId, field, value)}
+                />
+              </div>
             )}
 
             {/* ═══════════ INVOICING ═══════════ */}
