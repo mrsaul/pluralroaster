@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useCallback, useRef } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -109,10 +109,6 @@ const Index = () => {
   const { clearCart } = cart;
   const { toast } = useToast();
 
-  // Prevents getSession() and onAuthStateChange(INITIAL_SESSION) from both
-  // triggering a full auth cycle simultaneously on app load.
-  const hasInitialized = useRef(false);
-
   // Wraps setView so every navigation is saved to sessionStorage automatically.
   const setView = useCallback((v: View) => {
     saveView(v);
@@ -218,7 +214,6 @@ const Index = () => {
     };
 
     const handleSignedOut = () => {
-      hasInitialized.current = false;
       clearSavedView();
       setRole(null);
       setOrders([]);
@@ -230,38 +225,29 @@ const Index = () => {
     // TOKEN_REFRESHED when the JWT silently renews (e.g. on tab focus).
     // We must NOT reset the view for passive events — only for actual sign-in/out.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // Silent token refresh: session is still valid, role unchanged, stay on current view.
-      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-        return;
-      }
+      // Silent refresh — session valid, stay on current page, don't reset anything.
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
+
+      // INITIAL_SESSION fires on subscribe when an existing session is found.
+      // Defer entirely to getSession() below to avoid double-initialization.
+      if (event === "INITIAL_SESSION") return;
 
       if (!session?.user || event === "SIGNED_OUT") {
         handleSignedOut();
         return;
       }
 
-      // SIGNED_IN or INITIAL_SESSION: only run once per app mount via the
-      // hasInitialized guard — getSession() below handles the first load.
-      if (!hasInitialized.current) {
-        // Will be initialized by the getSession() call below; skip the duplicate.
-        return;
-      }
-
-      // Subsequent explicit sign-in (e.g. user logged out then back in)
+      // SIGNED_IN — covers first login AND re-login after logout.
       void handleAuthenticatedSession();
     });
 
-    // Primary initialization: always use getSession() as the single source of truth
-    // on mount. This avoids the INITIAL_SESSION / getSession() double-fire.
+    // Single source of truth on mount. INITIAL_SESSION is filtered above,
+    // so only getSession() drives the startup auth cycle.
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (hasInitialized.current) return; // already handled
-      hasInitialized.current = true;
-
       if (!session?.user) {
         handleSignedOut();
         return;
       }
-
       void handleAuthenticatedSession();
     });
 
