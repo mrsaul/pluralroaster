@@ -449,6 +449,112 @@ export type Database = {
         }
         Relationships: []
       }
+      roasted_stock: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_updated_at: string | null
+          last_updated_by: string | null
+          low_stock_threshold_kg: number
+          product_id: string | null
+          quantity_kg: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_updated_at?: string | null
+          last_updated_by?: string | null
+          low_stock_threshold_kg?: number
+          product_id?: string | null
+          quantity_kg?: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_updated_at?: string | null
+          last_updated_by?: string | null
+          low_stock_threshold_kg?: number
+          product_id?: string | null
+          quantity_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roasted_stock_last_updated_by_fkey"
+            columns: ["last_updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roasted_stock_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roasted_stock_history: {
+        Row: {
+          change_type: string
+          delta_kg: number
+          id: string
+          new_quantity_kg: number
+          note: string | null
+          order_id: string | null
+          previous_quantity_kg: number
+          stock_id: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          change_type: string
+          delta_kg: number
+          id?: string
+          new_quantity_kg: number
+          note?: string | null
+          order_id?: string | null
+          previous_quantity_kg: number
+          stock_id?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          change_type?: string
+          delta_kg?: number
+          id?: string
+          new_quantity_kg?: number
+          note?: string | null
+          order_id?: string | null
+          previous_quantity_kg?: number
+          stock_id?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roasted_stock_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roasted_stock_history_stock_id_fkey"
+            columns: ["stock_id"]
+            isOneToOne: false
+            referencedRelation: "roasted_stock"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roasted_stock_history_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_runs: {
         Row: {
           completed_at: string
@@ -523,6 +629,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_order_with_items: {
+        Args: {
+          p_order_data: Json
+          p_items_data: Json
+        }
+        Returns: string
+      }
       ensure_current_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
@@ -533,6 +646,16 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      update_stock_with_history: {
+        Args: {
+          p_stock_id: string
+          p_new_qty: number
+          p_new_threshold: number
+          p_note: string | null
+          p_updated_by: string
+        }
+        Returns: undefined
       }
       user_update_own_onboarding: {
         Args: {

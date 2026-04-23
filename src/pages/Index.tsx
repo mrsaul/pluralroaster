@@ -319,30 +319,17 @@ const Index = () => {
       throw new Error("Not authenticated");
     }
 
-    const payload = {
+    const orderData = {
       user_id: user.id,
       delivery_date: deliveryDate,
       total_kg: cart.totalKg,
       total_price: cart.totalPrice,
-      status: "received" as const,
+      status: "received",
       confirmed_at: new Date().toISOString(),
       notes: notes ?? null,
     };
 
-    const { data: createdOrder, error: orderError } = await supabase
-      .from("orders")
-      .insert(payload)
-      .select("id, delivery_date, total_kg, total_price, status, sellsy_id, created_at")
-      .single();
-
-    if (orderError || !createdOrder) {
-      const msg = orderError?.message ?? "Failed to create order";
-      toast({ title: "Order failed", description: msg, variant: "destructive" });
-      throw orderError ?? new Error(msg);
-    }
-
-    const itemRows = cart.items.map((item) => ({
-      order_id: createdOrder.id,
+    const itemsData = cart.items.map((item) => ({
       product_id: item.product.id,
       product_name: item.product.name,
       product_sku: item.product.sku,
@@ -354,13 +341,15 @@ const Index = () => {
       size_kg: item.sizeKg ?? null,
     }));
 
-    if (itemRows.length > 0) {
-      const { error: itemsError } = await supabase.from("order_items").insert(itemRows);
+    const { data: orderId, error } = await supabase.rpc("create_order_with_items", {
+      p_order_data: orderData,
+      p_items_data: itemsData,
+    });
 
-      if (itemsError) {
-        toast({ title: "Order items failed", description: itemsError.message, variant: "destructive" });
-        throw itemsError;
-      }
+    if (error || !orderId) {
+      const msg = error?.message ?? "Failed to create order";
+      toast({ title: "Order failed", description: msg, variant: "destructive" });
+      throw error ?? new Error(msg);
     }
 
     // Refresh orders in background; CheckoutPage shows success screen, not Index
@@ -368,7 +357,7 @@ const Index = () => {
     setDraftDeliveryDate(null);
     cart.clearCart();
 
-    return { orderId: createdOrder.id };
+    return { orderId };
   }, [cart, loadOrders, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
