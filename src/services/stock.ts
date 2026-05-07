@@ -1,9 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-// roasted_stock and roasted_stock_history are new tables not yet in the
-// auto-generated types.ts. We cast via `any` once here at the boundary;
-// all downstream code is typed through these interfaces.
+// roasted_stock and roasted_stock_history are now included in auto-generated types.ts.
 
 export type StockListItem = {
   id: string | null;             // null = product exists but no stock row yet
@@ -33,15 +30,12 @@ export type StockHistoryRow = {
   order_reference: string | null;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as any;
-
 // ── getStockList ──────────────────────────────────────────────────────────────
 // Drives from products (LEFT JOIN roasted_stock) so every active product
 // always appears, even if its stock row is somehow missing.
 
 export async function getStockList(): Promise<StockListItem[]> {
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("products")
     .select(`
       id, name, custom_name, data_source_mode,
@@ -56,8 +50,7 @@ export async function getStockList(): Promise<StockListItem[]> {
 
   if (error) throw error;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: StockListItem[] = ((data ?? []) as any[]).map((row: any) => {
+  const rows: StockListItem[] = (data ?? []).map((row) => {
     const productName =
       row.data_source_mode === "custom" && row.custom_name
         ? row.custom_name
@@ -82,7 +75,7 @@ export async function getStockList(): Promise<StockListItem[]> {
       last_updated_at: rs?.last_updated_at ?? null,
       created_at: rs?.created_at ?? null,
       product_name: productName,
-      updater_name: rs?.profiles?.full_name ?? null,
+      updater_name: (rs?.profiles as any)?.full_name ?? null,
       is_low: isLow,
     };
   });
@@ -107,40 +100,15 @@ export async function updateStock(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  // Fetch current quantity for delta and history
-  const { data: current, error: fetchErr } = await db
-    .from("roasted_stock")
-    .select("quantity_kg")
-    .eq("id", stockId)
-    .single();
-  if (fetchErr) throw fetchErr;
-
-  const prevQty = Number(current.quantity_kg);
-  const delta = newQuantityKg - prevQty;
-
-  // Insert history row first — audit trail survives even if stock update fails
-  const { error: histErr } = await db.from("roasted_stock_history").insert({
-    stock_id: stockId,
-    previous_quantity_kg: prevQty,
-    new_quantity_kg: newQuantityKg,
-    delta_kg: delta,
-    change_type: "manual_update",
-    order_id: null,
-    note: note?.trim() || null,
-    updated_by: user.id,
+  const { error } = await supabase.rpc("update_stock_with_history", {
+    p_stock_id: stockId,
+    p_new_qty: newQuantityKg,
+    p_new_threshold: newThresholdKg,
+    p_note: note?.trim() || null,
+    p_updated_by: user.id,
   });
-  if (histErr) throw histErr;
 
-  const { error: updateErr } = await db
-    .from("roasted_stock")
-    .update({
-      quantity_kg: newQuantityKg,
-      low_stock_threshold_kg: newThresholdKg,
-      last_updated_by: user.id,
-      last_updated_at: new Date().toISOString(),
-    })
-    .eq("id", stockId);
-  if (updateErr) throw updateErr;
+  if (error) throw error;
 }
 
 // ── initStock ─────────────────────────────────────────────────────────────────
@@ -148,7 +116,7 @@ export async function updateStock(
 // on conflict do nothing makes this idempotent.
 
 export async function initStock(productId: string): Promise<{ id: string }> {
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("roasted_stock")
     .upsert(
       { product_id: productId, quantity_kg: 0, low_stock_threshold_kg: 5 },
@@ -163,7 +131,7 @@ export async function initStock(productId: string): Promise<{ id: string }> {
 // ── getStockHistory ───────────────────────────────────────────────────────────
 
 export async function getStockHistory(stockId: string): Promise<StockHistoryRow[]> {
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("roasted_stock_history")
     .select(`
       id, stock_id, previous_quantity_kg, new_quantity_kg,
@@ -176,10 +144,9 @@ export async function getStockHistory(stockId: string): Promise<StockHistoryRow[
 
   if (error) throw error;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((data ?? []) as any[]).map((row: any) => ({
+  return (data ?? []).map((row) => ({
     id: row.id,
-    stock_id: row.stock_id,
+    stock_id: row.stock_id ?? "",
     previous_quantity_kg: Number(row.previous_quantity_kg),
     new_quantity_kg: Number(row.new_quantity_kg),
     delta_kg: Number(row.delta_kg),
@@ -187,8 +154,8 @@ export async function getStockHistory(stockId: string): Promise<StockHistoryRow[
     order_id: row.order_id,
     note: row.note,
     updated_by: row.updated_by,
-    updated_at: row.updated_at,
-    updater_name: row.profiles?.full_name ?? null,
+    updated_at: row.updated_at ?? "",
+    updater_name: (row.profiles as any)?.full_name ?? null,
     order_reference: row.order_id ? (row.order_id as string).slice(0, 8) : null,
   }));
 }
