@@ -847,7 +847,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   /* ── Invoicing orders mapped ── */
   const invoicingOrders: InvoicingOrder[] = useMemo(() =>
     adminOrders.map((o) => {
-      const client = clients.find((c) => c.user_id === o.user_id);
+      const client = o.user_id ? clients.find((c) => c.user_id === o.user_id) : undefined;
       return {
         id: o.id,
         user_id: o.user_id,
@@ -1121,7 +1121,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 </span>
                               </TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
-                              <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || order.user_id.slice(0, 8) + "…"}</TableCell>
+                              <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || (order.user_id ? order.user_id.slice(0, 8) + "…" : "—")}</TableCell>
                               <TableCell className="text-muted-foreground">
                                 {order.items.length > 0
                                   ? order.items.map((i) => `${i.product_name} ×${i.quantity}`).join(", ").slice(0, 40) + (order.items.length > 2 ? "…" : "")
