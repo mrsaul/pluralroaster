@@ -154,62 +154,29 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) throw new Error("Not authenticated");
 
-      const { data: existing } = await supabase
-        .from("client_onboarding")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const { error } = await (supabase as any).rpc("user_save_onboarding_progress", {
+        _company_name:            data.company_name || user.email || "My Company",
+        _legal_company_name:      data.legal_company_name || null,
+        _vat_number:              data.vat_number || null,
+        _siret:                   data.siret || null,
+        _email:                   data.email || user.email || null,
+        _phone:                   data.phone || null,
+        _contact_name:            data.contact_name || null,
+        _delivery_address:        data.delivery_address || null,
+        _delivery_instructions:   data.delivery_instructions || null,
+        _preferred_delivery_days: data.preferred_delivery_days,
+        _delivery_time_window:    data.delivery_time_window || null,
+        _coffee_type:             data.coffee_type || null,
+        _estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : null,
+        _grinder_type:            data.grinder_type || null,
+        _notes:                   data.notes || null,
+        _current_step:            nextStep,
+        _onboarding_status:       status,
+      });
 
-      if (existing) {
-        const rpcArgs: Record<string, unknown> = {
-          _id: existing.id,
-          _company_name: data.company_name || null,
-          _legal_company_name: data.legal_company_name || null,
-          _vat_number: data.vat_number || null,
-          _siret: data.siret || null,
-          _contact_name: data.contact_name || null,
-          _email: data.email || user.email || null,
-          _phone: data.phone || null,
-          _delivery_address: data.delivery_address || null,
-          _delivery_instructions: data.delivery_instructions || null,
-          _preferred_delivery_days: data.preferred_delivery_days,
-          _delivery_time_window: data.delivery_time_window || null,
-          _coffee_type: data.coffee_type || null,
-          _estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : 0,
-          _grinder_type: data.grinder_type || null,
-          _notes: data.notes || null,
-          _current_step: nextStep,
-        };
-        if (status !== "pending") {
-          rpcArgs._onboarding_status = status;
-        }
-        const { error } = await supabase.rpc("user_update_own_onboarding", rpcArgs as any);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("client_onboarding").insert({
-          user_id: user.id,
-          company_name: data.company_name || null,
-          legal_company_name: data.legal_company_name || null,
-          vat_number: data.vat_number || null,
-          siret: data.siret || null,
-          contact_name: data.contact_name || null,
-          email: data.email || user.email || null,
-          phone: data.phone || null,
-          delivery_address: data.delivery_address || null,
-          delivery_instructions: data.delivery_instructions || null,
-          preferred_delivery_days: data.preferred_delivery_days,
-          delivery_time_window: data.delivery_time_window || null,
-          coffee_type: data.coffee_type || null,
-          estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : 0,
-          grinder_type: data.grinder_type || null,
-          notes: data.notes || null,
-          current_step: nextStep,
-          onboarding_status: status,
-        });
-        if (error) throw error;
-      }
+      if (error) throw error;
     } finally {
       setSaving(false);
     }
@@ -222,8 +189,16 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
       return;
     }
     const nextStep = Math.min(step + 1, TOTAL_STEPS);
-    await saveProgress(nextStep);
-    setStep(nextStep);
+    try {
+      await saveProgress(nextStep);
+      setStep(nextStep);
+    } catch (err) {
+      toast({
+        title: "Couldn't save progress",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   }, [step, validateStep, saveProgress]);
 
   const handleBack = useCallback(() => {
@@ -231,10 +206,18 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
   }, []);
 
   const handleConfirm = useCallback(async () => {
-    await saveProgress(TOTAL_STEPS, "completed");
-    clearDraft();
-    toast({ title: "Account activated!", description: "Welcome to Plural Café — you can now start ordering." });
-    onComplete();
+    try {
+      await saveProgress(TOTAL_STEPS, "completed");
+      clearDraft();
+      toast({ title: "Account activated!", description: "Welcome to Plural Café — you can now start ordering." });
+      onComplete();
+    } catch (err) {
+      toast({
+        title: "Couldn't activate account",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   }, [saveProgress, clearDraft, onComplete]);
 
   useEffect(() => {
