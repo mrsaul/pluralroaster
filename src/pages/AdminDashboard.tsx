@@ -288,29 +288,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [toast]);
 
-  /* ── Shared helper: lookup client + invoke sellsy-sync create-order ── */
+  /* ── Shared helper: invoke sellsy-sync create-invoice ── */
+  // The edge function fetches the order, looks up contacts → companies.sellsy_id internally.
   const invokeSellsyCreateOrder = useCallback(async (order: AdminOrder) => {
-    const { data: clientRow } = await supabase
-      .from("client_onboarding")
-      .select("sellsy_client_id")
-      .eq("user_id", order.user_id)
-      .maybeSingle();
-
     return supabase.functions.invoke("sellsy-sync", {
       body: {
-        mode: "create-order",
-        orderId: order.id,
-        deliveryDate: order.delivery_date,
-        createdAt: order.created_at,
-        sellsy_client_id: clientRow?.sellsy_client_id ?? null,
-        items: order.items.map((i) => ({
-          name: i.product_name,
-          sku: i.product_sku,
-          quantity: i.quantity,
-          pricePerKg: i.price_per_kg,
-        })),
-        totalKg: order.total_kg,
-        totalPrice: order.total_price,
+        mode: "create-invoice",
+        order_id: order.id,
+        subject: `Commande #${order.id.slice(0, 8).toUpperCase()}`,
       },
     });
   }, []);
@@ -324,9 +309,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
 
       if (sellsyErr || !sellsyResult?.success) {
+        const detail = sellsyResult?.error || sellsyErr?.message || "Unknown error";
         toast({
-          title: "Sellsy sync failed",
-          description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
+          title: "Commande approuvée — Sellsy non synchronisé",
+          description: detail,
           variant: "destructive",
         });
       } else {
