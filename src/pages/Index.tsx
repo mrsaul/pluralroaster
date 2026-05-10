@@ -322,20 +322,10 @@ const Index = () => {
       throw new Error("Not authenticated");
     }
 
-    const orderData = {
-      user_id: user.id,
-      delivery_date: deliveryDate,
-      total_kg: cart.totalKg,
-      total_price: cart.totalPrice,
-      status: "received",
-      confirmed_at: new Date().toISOString(),
-      notes: notes ?? null,
-    };
-
-    const itemsData = cart.items.map((item) => ({
+    const items = cart.items.map((item) => ({
       product_id: item.product.id,
       product_name: item.product.name,
-      product_sku: item.product.sku,
+      product_sku: item.product.sku ?? null,
       price_per_kg: item.unitPrice != null && item.sizeKg
         ? item.unitPrice / item.sizeKg
         : item.product.pricePerKg,
@@ -344,15 +334,21 @@ const Index = () => {
       size_kg: item.sizeKg ?? null,
     }));
 
-    const { data: orderId, error } = await supabase.rpc("create_order_with_items", {
-      p_order_data: orderData,
-      p_items_data: itemsData,
+    const { data: rpcResult, error: rpcError } = await (supabase as any).rpc("create_order_with_items", {
+      p_user_id:       user.id,
+      p_delivery_date: deliveryDate,
+      p_total_kg:      cart.totalKg,
+      p_total_price:   cart.totalPrice,
+      p_status:        "received",
+      p_confirmed_at:  new Date().toISOString(),
+      p_notes:         notes ?? null,
+      p_items:         items,
     });
 
-    if (error || !orderId) {
-      const msg = error?.message ?? "Failed to create order";
+    if (rpcError || !rpcResult?.order_id) {
+      const msg = rpcError?.message ?? "Failed to create order";
       toast({ title: "Order failed", description: msg, variant: "destructive" });
-      throw error ?? new Error(msg);
+      throw rpcError ?? new Error(msg);
     }
 
     // Refresh orders in background; CheckoutPage shows success screen, not Index
@@ -360,7 +356,7 @@ const Index = () => {
     setDraftDeliveryDate(null);
     cart.clearCart();
 
-    return { orderId };
+    return { orderId: rpcResult.order_id as string };
   }, [cart, loadOrders, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
