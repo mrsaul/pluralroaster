@@ -98,7 +98,8 @@ type AdminOrderItem = {
 
 type AdminOrder = {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  company_id: string | null;
   user_email: string | null;
   client_name: string | null;
   delivery_date: string;
@@ -221,7 +222,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         const userEmail = profile?.email || (o.companies as any)?.email || null;
         return {
           id: o.id,
-          user_id: o.user_id,
+          user_id: o.user_id ?? null,
+          company_id: o.company_id ?? null,
           user_email: userEmail,
           client_name: clientName,
           delivery_date: o.delivery_date,
@@ -852,7 +854,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   /* ── Invoicing orders mapped ── */
   const invoicingOrders: InvoicingOrder[] = useMemo(() =>
     adminOrders.map((o) => {
-      const client = o.user_id ? clients.find((c) => c.user_id === o.user_id) : undefined;
+      const client = o.user_id
+        ? clients.find((c) => c.user_id === o.user_id)
+        : o.company_id
+          ? clients.find((c) => c.id === o.company_id)
+          : undefined;
       return {
         id: o.id,
         user_id: o.user_id,
