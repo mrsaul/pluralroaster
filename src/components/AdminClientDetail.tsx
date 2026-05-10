@@ -162,20 +162,54 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     if (!client) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("client_onboarding")
+      // Update company core fields
+      const { error: companyErr } = await supabase
+        .from("companies")
         .update({
           client_data_mode: dataMode,
-          custom_company_name: dataMode === "custom" ? (companyName || null) : null,
-          custom_contact_name: dataMode === "custom" ? (contactName || null) : null,
-          custom_email: dataMode === "custom" ? (email || null) : null,
-          custom_phone: dataMode === "custom" ? (phone || null) : null,
-          custom_delivery_address: dataMode === "custom" ? (deliveryAddress || null) : null,
-          custom_pricing_tier: dataMode === "custom" ? (pricingTier || null) : null,
+          name: dataMode === "custom" ? (companyName || client.company_name) : client.company_name,
+          email: email || null,
+          phone: phone || null,
           pricing_tier_id: pricingTierId,
         })
         .eq("id", client.id);
-      if (error) throw error;
+      if (companyErr) throw companyErr;
+
+      // Update primary contact name / email / phone
+      if (dataMode === "custom") {
+        await supabase
+          .from("contacts")
+          .update({
+            last_name: contactName || null,
+            email: email || null,
+            phone: phone || null,
+          })
+          .eq("company_id", client.id)
+          .eq("is_primary", true);
+      }
+
+      // Upsert delivery address
+      if (deliveryAddress) {
+        const { data: existingAddr } = await supabase
+          .from("company_addresses")
+          .select("id")
+          .eq("company_id", client.id)
+          .eq("label", "Delivery")
+          .maybeSingle();
+
+        if (existingAddr) {
+          await supabase.from("company_addresses")
+            .update({ address_line1: deliveryAddress })
+            .eq("id", existingAddr.id);
+        } else {
+          await supabase.from("company_addresses").insert({
+            company_id: client.id,
+            label: "Delivery",
+            address_line1: deliveryAddress,
+          });
+        }
+      }
+
       clearDraft();
       toast({ title: "Client updated" });
       onSaved();

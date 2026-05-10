@@ -477,7 +477,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
    const deleteClient = async (client: AppClient) => {
      try {
-       const { error } = await supabase.from("client_onboarding").delete().eq("id", client.id);
+       // Delete dependent rows first, then the company
+       await supabase.from("contacts").delete().eq("company_id", client.id);
+       await supabase.from("company_addresses").delete().eq("company_id", client.id);
+       const { error } = await supabase.from("companies").delete().eq("id", client.id);
        if (error) throw error;
        toast({ title: "Client deleted", description: `"${client.company_name || client.contact_name || "Client"}" has been removed.` });
        void loadClients();
@@ -509,11 +512,53 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setClientError(null);
     try {
       const { data, error } = await supabase
-        .from("client_onboarding")
-        .select("*")
-        .order("company_name", { ascending: true });
+        .from("companies")
+        .select(`
+          id, name, email, phone,
+          client_data_mode, onboarding_status, sellsy_client_id,
+          pricing_tier_id, last_synced_at, created_at, updated_at,
+          contacts(user_id, last_name, first_name, email, phone, is_primary),
+          company_addresses(label, address_line1)
+        `)
+        .order("name", { ascending: true });
       if (error) throw new Error(error.message);
-      setClients((data as AppClient[]) ?? []);
+
+      const mapped: AppClient[] = ((data ?? []) as any[]).map((company) => {
+        const contacts: any[] = company.contacts ?? [];
+        const primaryContact = contacts.find((c) => c.is_primary) ?? contacts[0] ?? null;
+        const deliveryAddr = (company.company_addresses ?? []).find((a: any) => a.label === "Delivery") ?? null;
+        const contactName = primaryContact
+          ? [primaryContact.first_name, primaryContact.last_name].filter(Boolean).join(" ") || null
+          : null;
+        const resolvedEmail = company.email ?? primaryContact?.email ?? null;
+        const resolvedPhone = company.phone ?? primaryContact?.phone ?? null;
+
+        return {
+          id: company.id,
+          user_id: primaryContact?.user_id ?? null,
+          company_name: company.name,
+          contact_name: contactName,
+          email: resolvedEmail,
+          phone: resolvedPhone,
+          delivery_address: deliveryAddr?.address_line1 ?? null,
+          pricing_tier: null,
+          pricing_tier_id: company.pricing_tier_id ?? null,
+          sellsy_client_id: company.sellsy_client_id ?? null,
+          onboarding_status: company.onboarding_status ?? null,
+          client_data_mode: company.client_data_mode ?? "custom",
+          // New schema has no separate custom_* columns — map to same values
+          custom_company_name: company.name,
+          custom_contact_name: contactName,
+          custom_email: resolvedEmail,
+          custom_phone: resolvedPhone,
+          custom_delivery_address: deliveryAddr?.address_line1 ?? null,
+          custom_pricing_tier: null,
+          last_synced_at: company.last_synced_at ?? null,
+          created_at: company.created_at,
+          updated_at: company.updated_at,
+        };
+      });
+      setClients(mapped);
     } catch (err) {
       setClientError(err instanceof Error ? err.message : String(err));
     } finally {
