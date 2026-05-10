@@ -46,6 +46,9 @@ type PersistedOrderRow = {
   status: Order["status"];
   sellsy_id: string | null;
   created_at: string;
+  notes: string | null;
+  reordered_from: string | null;
+  delivery_address_id: string | null;
   order_items: {
     quantity: number;
     price_per_kg: number;
@@ -80,6 +83,9 @@ const mapPersistedOrder = (order: PersistedOrderRow): Order => ({
   status: order.status,
   sellsyId: order.sellsy_id ?? undefined,
   createdAt: order.created_at,
+  notes: order.notes ?? null,
+  reorderedFrom: order.reordered_from ?? null,
+  deliveryAddressId: order.delivery_address_id ?? null,
   items: (order.order_items ?? []).map((item) => ({
     quantity: Number(item.quantity),
     product: {
@@ -106,6 +112,7 @@ const Index = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
+  const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
   const cart = useCart();
   const { clearCart } = cart;
   const { toast } = useToast();
@@ -127,6 +134,9 @@ const Index = () => {
         status,
         sellsy_id,
         created_at,
+        notes,
+        reordered_from,
+        delivery_address_id,
         order_items (
           quantity,
           price_per_kg,
@@ -335,14 +345,15 @@ const Index = () => {
     }));
 
     const { data: rpcResult, error: rpcError } = await (supabase as any).rpc("create_order_with_items", {
-      p_user_id:       user.id,
-      p_delivery_date: deliveryDate,
-      p_total_kg:      cart.totalKg,
-      p_total_price:   cart.totalPrice,
-      p_status:        "received",
-      p_confirmed_at:  new Date().toISOString(),
-      p_notes:         notes ?? null,
-      p_items:         items,
+      p_user_id:            user.id,
+      p_delivery_date:      deliveryDate,
+      p_total_kg:           cart.totalKg,
+      p_total_price:        cart.totalPrice,
+      p_status:             "received",
+      p_confirmed_at:       new Date().toISOString(),
+      p_notes:              notes ?? null,
+      p_items:              items,
+      p_reordered_from:     reorderedFromId ?? null,
     });
 
     if (rpcError || !rpcResult?.order_id) {
@@ -354,10 +365,11 @@ const Index = () => {
     // Refresh orders in background; CheckoutPage shows success screen, not Index
     void loadOrders();
     setDraftDeliveryDate(null);
+    setReorderedFromId(null);
     cart.clearCart();
 
     return { orderId: rpcResult.order_id as string };
-  }, [cart, loadOrders, toast]);
+  }, [cart, loadOrders, reorderedFromId, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
     if (!draftDeliveryDate || cart.items.length === 0) {
@@ -369,6 +381,7 @@ const Index = () => {
 
   const handleReorder = useCallback((order: Order) => {
     cart.hydrateCart(order.items);
+    setReorderedFromId(order.id);
     setView("checkout");
   }, [cart, setView]);
 
@@ -463,6 +476,7 @@ const Index = () => {
             totalPrice={cart.totalPrice}
             onBack={() => setView("home")}
             onConfirm={handleConfirmOrder}
+            reorderedFromRef={reorderedFromId}
           />
         </Suspense>
       );
@@ -495,6 +509,7 @@ const Index = () => {
             onGoShop={() => setView("shop")}
             onGoAccount={() => setView("account")}
             onLogout={handleLogout}
+            onReorder={handleReorder}
           />
         </Suspense>
       );

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, AlertCircle, Package } from "lucide-react";
+import { ArrowLeft, CheckCircle2, AlertCircle, Package, RotateCcw } from "lucide-react";
 import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,8 @@ interface CheckoutPageProps {
   totalPrice: number;
   onBack: () => void;
   onConfirm: (deliveryDate: string, notes?: string) => Promise<{ orderId: string }>;
+  /** Short ref of the original order when this is a re-order (e.g. "A1B2C3D4") */
+  reorderedFromRef?: string | null;
 }
 
 type Step = "review" | "success" | "error";
@@ -44,6 +46,7 @@ export default function CheckoutPage({
   totalPrice,
   onBack,
   onConfirm,
+  reorderedFromRef,
 }: CheckoutPageProps) {
   const [step, setStep] = useState<Step>("review");
   const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
@@ -232,6 +235,17 @@ export default function CheckoutPage({
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6 pb-10">
+
+        {/* ── Re-order banner ── */}
+        {reorderedFromRef && (
+          <div className="flex items-center gap-2.5 rounded-xl bg-primary/8 border border-primary/20 px-4 py-3 text-sm text-primary">
+            <RotateCcw className="w-4 h-4 shrink-0" />
+            <span>
+              Basé sur votre commande{" "}
+              <span className="font-mono font-semibold">#{reorderedFromRef.slice(0, 8).toUpperCase()}</span>
+            </span>
+          </div>
+        )}
 
         {/* ── Order items ── */}
         <section className="bg-card border border-border rounded-lg overflow-hidden">

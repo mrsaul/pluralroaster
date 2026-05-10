@@ -47,6 +47,9 @@ export interface Order {
   status: "pending" | "confirmed" | "fulfilled" | "synced" | "received" | "approved" | "in_production" | "ready_for_packaging" | "packaging" | "ready_for_delivery" | "shipped" | "delivered";
   sellsyId?: string;
   createdAt: string;
+  notes?: string | null;
+  reorderedFrom?: string | null;
+  deliveryAddressId?: string | null;
 }
 
 export const MOCK_PRODUCTS: Product[] = [

@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { House, ShoppingBag, UserCircle2, LogOut, Package, ChevronRight } from "lucide-react";
-import { StatusBadge } from "@/components/StatusBadge";
+import {
+  House,
+  ShoppingBag,
+  UserCircle2,
+  LogOut,
+  ClipboardList,
+  MapPin,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
 import type { Order } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { OrderHistoryTab } from "@/components/OrderHistoryTab";
+import { OrderDetailView } from "@/components/OrderDetailView";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,6 +23,41 @@ interface AccountPageProps {
   onGoShop: () => void;
   onGoAccount: () => void;
   onLogout: () => void;
+  onReorder: (order: Order) => void;
+}
+
+type Tab = "orders" | "profile" | "addresses";
+
+interface CompanyProfile {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  legalName: string | null;
+  siret: string | null;
+  vatNumber: string | null;
+}
+
+interface Address {
+  id: string;
+  label: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string | null;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function ProfileField({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex flex-col gap-0.5 py-2.5 border-b border-border last:border-0">
+      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+        {label}
+      </span>
+      <span className="text-sm text-foreground">{value || "—"}</span>
+    </div>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -26,24 +68,47 @@ export default function AccountPage({
   onGoShop,
   onGoAccount,
   onLogout,
+  onReorder,
 }: AccountPageProps) {
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState<string | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [activeTab, setActiveTab] = useState<Tab>("orders");
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+
+  // Load company profile from contacts → companies
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      const [{ data: userData }, { data: onboarding }] = await Promise.all([
+      setLoadingProfile(true);
+      const [{ data: userData }, { data: contact }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from("client_onboarding").select("company_name").maybeSingle(),
+        supabase
+          .from("contacts")
+          .select("id, company_id, companies(name, email, phone, legal_company_name, siret, vat_number)")
+          .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
+          .maybeSingle(),
       ]);
 
       if (cancelled) return;
 
       setUserEmail(userData.user?.email ?? null);
-      setCompanyName((onboarding as any)?.company_name ?? null);
+
+      const company = (contact?.companies as any) ?? null;
+      if (company) {
+        setProfile({
+          name: company.name,
+          email: company.email,
+          phone: company.phone,
+          legalName: company.legal_company_name,
+          siret: company.siret,
+          vatNumber: company.vat_number,
+        });
+      }
       setLoadingProfile(false);
     };
 
@@ -51,120 +116,264 @@ export default function AccountPage({
     return () => { cancelled = true; };
   }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Load addresses when the addresses tab is first opened
+  useEffect(() => {
+    if (activeTab !== "addresses" || addresses.length > 0) return;
+
+    let cancelled = false;
+    const load = async () => {
+      setLoadingAddresses(true);
+      const { data: contact } = await supabase
+        .from("contacts")
+        .select("company_id")
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
+        .maybeSingle();
+
+      if (!contact?.company_id || cancelled) {
+        setLoadingAddresses(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("company_addresses")
+        .select("id, label, address_line1, address_line2, postal_code, city, country_code")
+        .eq("company_id", contact.company_id);
+
+      if (cancelled) return;
+
+      setAddresses(
+        (data ?? []).map((a: any) => ({
+          id: a.id,
+          label: a.label,
+          addressLine1: a.address_line1,
+          addressLine2: a.address_line2,
+          postalCode: a.postal_code,
+          city: a.city,
+          country: a.country_code,
+        }))
+      );
+      setLoadingAddresses(false);
+    };
+
+    void load();
+    return () => { cancelled = true; };
+  }, [activeTab, addresses.length]);
+
+  // ── Order detail view ─────────────────────────────────────────────────────
+
+  if (selectedOrder) {
+    return (
+      <OrderDetailView
+        order={selectedOrder}
+        onBack={() => setSelectedOrder(null)}
+        onReorder={(order) => {
+          setSelectedOrder(null);
+          onReorder(order);
+        }}
+      />
+    );
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+
+  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: "orders",    label: "Commandes", icon: ClipboardList },
+    { id: "profile",   label: "Profil",    icon: UserCircle2 },
+    { id: "addresses", label: "Adresses",  icon: MapPin },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 pt-[max(20px,calc(env(safe-area-inset-top)+16px))] pb-3">
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 pt-[max(20px,calc(env(safe-area-inset-top)+16px))] pb-0">
         <div className="max-w-lg mx-auto">
-          <h1 className="text-base font-semibold text-foreground">Account</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Profile & order history</p>
+          {/* Title row */}
+          <div className="flex items-center justify-between pb-3">
+            <div>
+              {loadingProfile ? (
+                <>
+                  <div className="h-3.5 w-32 rounded bg-muted animate-pulse mb-1" />
+                  <div className="h-3 w-40 rounded bg-muted animate-pulse" />
+                </>
+              ) : (
+                <>
+                  <h1 className="text-base font-semibold text-foreground">
+                    {profile?.name ?? "Mon compte"}
+                  </h1>
+                  <p className="text-xs text-muted-foreground">{userEmail ?? ""}</p>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-0">
+            {tabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors",
+                  activeTab === id
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
       {/* ── Main ── */}
-      <main className="max-w-lg mx-auto px-4 pt-5 pb-36 space-y-6">
+      <main className="max-w-lg mx-auto px-4 pt-5 pb-36">
 
-        {/* Profile card */}
-        <section>
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <UserCircle2 className="w-6 h-6 text-primary" />
+        {/* Commandes tab */}
+        {activeTab === "orders" && (
+          <motion.div
+            key="orders"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <OrderHistoryTab
+              orders={orders}
+              onViewDetail={setSelectedOrder}
+              onReorder={onReorder}
+            />
+          </motion.div>
+        )}
+
+        {/* Profil tab */}
+        {activeTab === "profile" && (
+          <motion.div
+            key="profile"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            className="space-y-4"
+          >
+            <section className="rounded-2xl border border-border bg-card px-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1">
+                Entreprise
+              </p>
+              {loadingProfile ? (
+                <div className="py-4 space-y-3 animate-pulse">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-4 w-full rounded bg-muted" />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <ProfileField label="Nom commercial" value={profile?.name} />
+                  <ProfileField label="Raison sociale" value={profile?.legalName} />
+                  <ProfileField label="SIRET" value={profile?.siret} />
+                  <ProfileField label="N° TVA" value={profile?.vatNumber} />
+                </>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card px-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1">
+                Contact
+              </p>
+              {loadingProfile ? (
+                <div className="py-4 space-y-3 animate-pulse">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="h-4 w-full rounded bg-muted" />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <ProfileField label="Email" value={profile?.email ?? userEmail} />
+                  <ProfileField label="Téléphone" value={profile?.phone} />
+                </>
+              )}
+            </section>
+
+            <p className="text-xs text-muted-foreground text-center pb-2">
+              Pour modifier ces informations, contactez votre chargé de compte.
+            </p>
+          </motion.div>
+        )}
+
+        {/* Adresses tab */}
+        {activeTab === "addresses" && (
+          <motion.div
+            key="addresses"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            className="space-y-3"
+          >
+            {loadingAddresses ? (
+              <div className="space-y-3">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="rounded-2xl border border-border bg-card p-4 space-y-2 animate-pulse">
+                    <div className="h-3 w-20 rounded bg-muted" />
+                    <div className="h-4 w-48 rounded bg-muted" />
+                    <div className="h-3 w-32 rounded bg-muted" />
+                  </div>
+                ))}
               </div>
-              <div className="min-w-0 flex-1">
-                {loadingProfile ? (
-                  <>
-                    <div className="h-3.5 w-32 rounded bg-muted animate-pulse mb-1.5" />
-                    <div className="h-3 w-44 rounded bg-muted animate-pulse" />
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      {companyName ?? "Your company"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {userEmail ?? "—"}
-                    </p>
-                  </>
-                )}
+            ) : addresses.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+                <div className="p-4 rounded-full bg-muted">
+                  <MapPin className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-semibold text-foreground">Aucune adresse</p>
+                  <p className="text-sm text-muted-foreground">
+                    Vos adresses de livraison apparaîtront ici.
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Order history */}
-        <section className="space-y-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Order history
-          </p>
-
-          {orders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
-              <Package className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-              <p className="text-sm text-muted-foreground">No orders yet.</p>
-              <button
-                type="button"
-                onClick={onGoShop}
-                className="mt-3 rounded-full bg-primary text-primary-foreground text-xs font-semibold px-4 py-2 hover:bg-primary/90 transition-colors"
-              >
-                Start an order
-              </button>
-            </div>
-          ) : (
-            <motion.div
-              className="space-y-2"
-              initial="hidden"
-              animate="visible"
-              variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
-            >
-              {orders.map((order) => (
-                <motion.div
-                  key={order.id}
-                  variants={{ hidden: { opacity: 0, y: 6 }, visible: { opacity: 1, y: 0 } }}
-                  className="rounded-xl border border-border bg-card px-4 py-3"
+            ) : (
+              addresses.map((addr) => (
+                <div
+                  key={addr.id}
+                  className="rounded-2xl border border-border bg-card p-4 space-y-1"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="text-[11px] text-muted-foreground">
-                        {format(new Date(order.createdAt), "d MMM yyyy")}
-                      </p>
-                      <p className="text-sm font-semibold text-foreground">
-                        {order.items.length}{" "}
-                        {order.items.length === 1 ? "product" : "products"} · €{order.totalPrice.toFixed(2)}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground line-clamp-1">
-                        {order.items.map((i) => i.product.name).join(", ")}
-                      </p>
-                    </div>
-                    <div className="shrink-0 pt-0.5">
-                      <StatusBadge status={order.status} sellsyId={order.sellsyId} />
-                    </div>
-                  </div>
+                  {addr.label && (
+                    <span className="inline-block text-[11px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full mb-1">
+                      {addr.label}
+                    </span>
+                  )}
+                  {addr.addressLine1 && (
+                    <p className="text-sm text-foreground">{addr.addressLine1}</p>
+                  )}
+                  {addr.addressLine2 && (
+                    <p className="text-sm text-muted-foreground">{addr.addressLine2}</p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {[addr.postalCode, addr.city].filter(Boolean).join(" ")}
+                    {addr.country ? ` · ${addr.country}` : ""}
+                  </p>
+                </div>
+              ))
+            )}
 
-                  <div className="mt-2 flex items-center text-[11px] text-muted-foreground gap-1">
-                    <ChevronRight className="w-3 h-3 shrink-0" />
-                    <span>Delivery: {format(new Date(order.deliveryDate), "EEE d MMM")}</span>
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-        </section>
+            <p className="text-xs text-muted-foreground text-center pb-2">
+              Pour modifier vos adresses, contactez votre chargé de compte.
+            </p>
+          </motion.div>
+        )}
 
         {/* Sign out */}
-        <section>
+        <div className="pt-6">
           <Button
             variant="outline"
             className="w-full gap-2 text-destructive border-destructive/20 hover:text-destructive hover:bg-destructive/5"
             onClick={onLogout}
           >
             <LogOut className="w-4 h-4" />
-            Sign out
+            Se déconnecter
           </Button>
-        </section>
+        </div>
       </main>
 
       {/* ── Bottom Navigation ── */}
@@ -172,9 +381,9 @@ export default function AccountPage({
         <div className="max-w-lg mx-auto flex items-center justify-between rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-lg supports-[backdrop-filter]:bg-card/85 pointer-events-auto">
           {(
             [
-              { label: "Home",    icon: House,       onClick: onGoHome,    active: false },
-              { label: "Shop",    icon: ShoppingBag, onClick: onGoShop,    active: false },
-              { label: "Account", icon: UserCircle2, onClick: onGoAccount, active: true  },
+              { label: "Accueil", icon: House,       onClick: onGoHome,    active: false },
+              { label: "Boutique", icon: ShoppingBag, onClick: onGoShop,    active: false },
+              { label: "Compte",  icon: UserCircle2, onClick: onGoAccount, active: true  },
             ] as const
           ).map(({ label, icon: Icon, onClick, active }) => (
             <button
