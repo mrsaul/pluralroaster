@@ -176,6 +176,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     try {
       const { data: order, error: orderErr } = await supabase.from("orders").insert({
         user_id: orderUserId,
+        company_id: selectedCompanyId,
         delivery_date: format(deliveryDate, "yyyy-MM-dd"),
         total_kg: totalKg,
         total_price: totalPrice,

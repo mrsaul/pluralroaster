@@ -198,27 +198,32 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, user_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
+          id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
           is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync,
-          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg )
+          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg ),
+          companies ( name, email )
         `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id))];
+      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
       const { data: profiles } = userIds.length > 0
         ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
         : { data: [] };
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
       const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
-        const profile = profileMap.get(o.user_id);
+        const profile = o.user_id ? profileMap.get(o.user_id) : null;
+        // Fallback chain: auth profile → joined company → nothing
+        const clientName = profile?.full_name || profile?.email
+          || (o.companies as any)?.name || (o.companies as any)?.email || null;
+        const userEmail = profile?.email || (o.companies as any)?.email || null;
         return {
           id: o.id,
           user_id: o.user_id,
-          user_email: profile?.email ?? null,
-          client_name: profile?.full_name || profile?.email || null,
+          user_email: userEmail,
+          client_name: clientName,
           delivery_date: o.delivery_date,
           total_kg: Number(o.total_kg),
           total_price: Number(o.total_price),
