@@ -19,7 +19,10 @@ import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 
 export type SimpleClient = {
-  user_id: string;
+  /** Company UUID — always unique, used as the Select identifier */
+  company_id: string;
+  /** Auth user UUID — may be null for Sellsy-only clients without accounts */
+  user_id: string | null;
   company_name: string | null;
   contact_name: string | null;
   email: string | null;
@@ -55,7 +58,8 @@ type ClientTier = {
 // deliveryDateStr is an ISO string (Date doesn't round-trip through JSON).
 // lineItems stores full product objects — they serialize cleanly.
 type OrderDraftForm = {
-  selectedClientId: string;
+  /** company_id of the selected client — always unique */
+  selectedCompanyId: string;
   deliveryDateStr: string | null;
   notes: string;
   lineItems: LineItem[];
@@ -63,7 +67,7 @@ type OrderDraftForm = {
 };
 
 const ORDER_DRAFT_DEFAULT: OrderDraftForm = {
-  selectedClientId: "",
+  selectedCompanyId: "",
   deliveryDateStr: null,
   notes: "",
   lineItems: [],
@@ -91,7 +95,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     showBanner: showDraftBanner,
   } = useDraftPersistence<OrderDraftForm>("create-order", ORDER_DRAFT_DEFAULT);
 
-  const { selectedClientId, deliveryDateStr, notes, lineItems, clientTier } = form;
+  const { selectedCompanyId, deliveryDateStr, notes, lineItems, clientTier } = form;
 
   // Derived: rehydrate Date from stored ISO string
   const deliveryDate: Date | undefined = deliveryDateStr ? new Date(deliveryDateStr) : undefined;
@@ -146,9 +150,9 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const resetForm = useCallback(() => { discardDraft(); }, [discardDraft]);
 
   // Load tier when client changes
-  const handleClientChange = useCallback(async (clientId: string) => {
-    setForm(p => ({ ...p, selectedClientId: clientId, clientTier: null }));
-    const client = clients.find((c) => c.user_id === clientId);
+  const handleClientChange = useCallback(async (companyId: string) => {
+    setForm(p => ({ ...p, selectedCompanyId: companyId, clientTier: null }));
+    const client = clients.find((c) => c.company_id === companyId);
     if (client?.pricing_tier_id) {
       const { data } = await supabase
         .from("pricing_tiers")
@@ -160,14 +164,18 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   }, [clients, setForm]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedClientId) { toast({ title: "Select a client", variant: "destructive" }); return; }
+    if (!selectedCompanyId) { toast({ title: "Select a client", variant: "destructive" }); return; }
     if (!deliveryDate) { toast({ title: "Select a delivery date", variant: "destructive" }); return; }
     if (lineItems.length === 0) { toast({ title: "Add at least one product", variant: "destructive" }); return; }
+
+    // Resolve the auth user_id for the selected company (may be null for Sellsy-only clients)
+    const selectedClient = clients.find((c) => c.company_id === selectedCompanyId);
+    const orderUserId = selectedClient?.user_id ?? null;
 
     setSaving(true);
     try {
       const { data: order, error: orderErr } = await supabase.from("orders").insert({
-        user_id: selectedClientId,
+        user_id: orderUserId,
         delivery_date: format(deliveryDate, "yyyy-MM-dd"),
         total_kg: totalKg,
         total_price: totalPrice,
@@ -212,7 +220,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     } finally {
       setSaving(false);
     }
-  }, [selectedClientId, deliveryDate, lineItems, totalKg, totalPrice, clientTier, toast, clearDraft, onOpenChange, onCreated]);
+  }, [selectedCompanyId, clients, deliveryDate, lineItems, totalKg, totalPrice, clientTier, toast, clearDraft, onOpenChange, onCreated]);
 
   const getClientLabel = (c: SimpleClient) => {
     const name = c.client_data_mode === "custom" && c.custom_company_name
@@ -242,11 +250,11 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           {/* Client */}
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Client</label>
-            <Select value={selectedClientId} onValueChange={handleClientChange}>
+            <Select value={selectedCompanyId} onValueChange={handleClientChange}>
               <SelectTrigger><SelectValue placeholder="Select a client…" /></SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
-                  <SelectItem key={c.user_id} value={c.user_id}>{getClientLabel(c)}</SelectItem>
+                  <SelectItem key={c.company_id} value={c.company_id}>{getClientLabel(c)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

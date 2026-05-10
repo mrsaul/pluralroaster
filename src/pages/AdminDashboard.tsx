@@ -1889,7 +1889,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         open={showCreateOrder}
         onOpenChange={setShowCreateOrder}
         clients={clients.map((c) => ({
-          user_id: c.user_id,
+          company_id: c.id,
+          user_id: c.user_id ?? null,
           company_name: c.company_name ?? null,
           contact_name: c.contact_name ?? null,
           email: c.email ?? null,
