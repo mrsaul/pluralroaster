@@ -970,6 +970,114 @@ async function handleClientSync(user: AuthenticatedUser, accessToken: string, bo
   });
 }
 
+// Import (create-or-update) a single Sellsy client into companies by Sellsy ID alone.
+// Used when the company doesn't exist in the DB yet — no client_id needed.
+async function handleImportClient(_user: AuthenticatedUser, accessToken: string, body: JsonRecord) {
+  const sellsyClientId = String(body.sellsy_client_id ?? "").trim();
+  if (!sellsyClientId) {
+    return jsonResponse({ success: false, error: "sellsy_client_id is required" }, 400);
+  }
+
+  // 1. Fetch from Sellsy
+  let clientData: JsonRecord | null = null;
+  for (const endpoint of ["/v2/companies", "/v2/contacts"]) {
+    const req = await fetchSellsy(`${endpoint}/${sellsyClientId}`, accessToken, { method: "GET" });
+    if (req.response.ok && req.payload.data && typeof req.payload.data === "object") {
+      clientData = req.payload.data as JsonRecord;
+      break;
+    }
+  }
+  if (!clientData) {
+    return jsonResponse({ success: false, error: `Sellsy client ${sellsyClientId} not found` }, 404);
+  }
+
+  const normalized = normalizeClient(clientData);
+  const now = new Date().toISOString();
+  const address = [normalized.address, normalized.city, normalized.country].filter(Boolean).join(", ") || null;
+  const supabase = createServiceSupabaseClient();
+
+  // 2. Check if company already exists with this sellsy_client_id
+  const { data: existing } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("sellsy_client_id", sellsyClientId)
+    .maybeSingle();
+
+  let companyId: string;
+
+  if (existing) {
+    // Update existing
+    await supabase.from("companies").update({
+      name: normalized.name,
+      email: normalized.email,
+      phone: normalized.phone,
+      last_synced_at: now,
+    }).eq("id", existing.id);
+    companyId = existing.id;
+  } else {
+    // Create new company
+    const { data: newCompany, error: insertErr } = await supabase
+      .from("companies")
+      .insert({
+        name: normalized.name,
+        email: normalized.email,
+        phone: normalized.phone,
+        sellsy_client_id: sellsyClientId,
+        sellsy_id: sellsyClientId,
+        client_data_mode: "sellsy",
+        onboarding_status: "completed",
+        last_synced_at: now,
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !newCompany) {
+      throw new Error(`Failed to create company: ${insertErr?.message ?? "unknown"}`);
+    }
+    companyId = newCompany.id;
+
+    // Create placeholder primary contact
+    await supabase.from("contacts").insert({
+      company_id: companyId,
+      last_name: normalized.name,
+      email: normalized.email,
+      phone: normalized.phone,
+      is_primary: true,
+    });
+  }
+
+  // 3. Upsert delivery address
+  if (address) {
+    const { data: existingAddr } = await supabase
+      .from("company_addresses")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("label", "Delivery")
+      .maybeSingle();
+
+    if (existingAddr) {
+      await supabase.from("company_addresses")
+        .update({ address_line1: address })
+        .eq("id", existingAddr.id);
+    } else {
+      await supabase.from("company_addresses").insert({
+        company_id: companyId,
+        label: "Delivery",
+        address_line1: address,
+      });
+    }
+  }
+
+  return jsonResponse({
+    success: true,
+    mode: "import-client",
+    created: !existing,
+    company_id: companyId,
+    client: normalized,
+    synced_at: now,
+  });
+}
+
 async function handleOrderSync(user: AuthenticatedUser, accessToken: string, body: JsonRecord) {
   const sellsyPayload = buildSellsyOrderPayload(body, user);
   const sellsyResponse = await createSellsyOrder(accessToken, sellsyPayload);
@@ -1244,6 +1352,10 @@ Deno.serve(async (req) => {
 
     if (body?.mode === "sync-client") {
       return await handleClientSync(user, accessToken, body);
+    }
+
+    if (body?.mode === "import-client") {
+      return await handleImportClient(user, accessToken, body);
     }
 
     if (body?.mode === "create-invoice") {

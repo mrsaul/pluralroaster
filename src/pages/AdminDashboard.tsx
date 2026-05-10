@@ -171,6 +171,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [clientError, setClientError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<AppClient | null>(null);
   const [runningClientSync, setRunningClientSync] = useState(false);
+  const [importSellsyId, setImportSellsyId] = useState("");
+  const [importingClient, setImportingClient] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
 
   // Products
@@ -639,6 +641,28 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       toast({ title: "Client sync failed", description: msg, variant: "destructive" });
     } finally {
       setRunningClientSync(false);
+    }
+  };
+
+  const importClientBySellsyId = async () => {
+    const id = importSellsyId.trim();
+    if (!id) return;
+    setImportingClient(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "import-client", sellsy_client_id: id },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Import failed");
+      setImportSellsyId("");
+      await loadClients();
+      const action = data.created ? "imported" : "updated";
+      toast({ title: `Client ${action}`, description: `${data.client?.name ?? id} has been ${action}.` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Import failed", description: msg, variant: "destructive" });
+    } finally {
+      setImportingClient(false);
     }
   };
 
@@ -1262,7 +1286,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
 
                 {/* Sellsy Client Sync */}
-                <div className="mb-6 rounded-lg border border-border bg-card p-4">
+                <div className="mb-6 rounded-lg border border-border bg-card p-4 space-y-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="flex items-center gap-2">
@@ -1282,6 +1306,29 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
                       </Button>
                     </div>
+                  </div>
+
+                  {/* Import single client by Sellsy ID */}
+                  <div className="flex items-center gap-2 border-t border-border pt-3">
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Sellsy client ID (e.g. 46)"
+                        value={importSellsyId}
+                        onChange={(e) => setImportSellsyId(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && void importClientBySellsyId()}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 shrink-0"
+                      disabled={!importSellsyId.trim() || importingClient}
+                      onClick={() => void importClientBySellsyId()}
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5", importingClient && "animate-spin")} />
+                      {importingClient ? "Importing…" : "Import client"}
+                    </Button>
                   </div>
                 </div>
 
