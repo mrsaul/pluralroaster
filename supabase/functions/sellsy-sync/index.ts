@@ -448,6 +448,171 @@ async function fetchSellsyProducts(accessToken: string) {
   );
 }
 
+// ── Declination fetching ──────────────────────────────────────────────────────
+
+type RawDeclination = {
+  id: number;
+  item_id: number;
+  reference: string | null;
+  is_active: boolean;
+  price?: {
+    default_amount?: number | null;
+    default_amount_taxes_inc?: number | null;
+  } | null;
+  values?: Array<{
+    attribute_label?: string | null;
+    value_label?: string | null;
+  }> | null;
+};
+
+async function fetchDeclinationsForItem(
+  accessToken: string,
+  itemId: number,
+): Promise<RawDeclination[]> {
+  const url = `https://api.sellsy.com/v2/items/${itemId}/declinations`;
+  const resp = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    console.error(`[declinations] item ${itemId} → HTTP ${resp.status}: ${body}`);
+    return [];
+  }
+
+  const json = await resp.json();
+
+  // PROBE: log the full raw response for item 126 so we can verify structure
+  if (itemId === 126) {
+    console.log("[PROBE] Raw /declinations response for item 126:", JSON.stringify(json, null, 2));
+  }
+
+  // Sellsy v2 lists come back as { data: [...], pagination: {...} }
+  // or sometimes as a bare array — handle both
+  const items: RawDeclination[] = Array.isArray(json)
+    ? json
+    : Array.isArray(json?.data)
+    ? json.data
+    : [];
+
+  return items;
+}
+
+/** Parse a size label like "250g", "1kg", "3kg" into grams for sort ordering. */
+function parseSizeWeightGrams(label: string | null): number {
+  if (!label) return 9999;
+  const lower = label.toLowerCase().trim();
+  const kgMatch = lower.match(/^(\d+(?:\.\d+)?)\s*kg/);
+  if (kgMatch) return Math.round(parseFloat(kgMatch[1]) * 1000);
+  const gMatch = lower.match(/^(\d+(?:\.\d+)?)\s*g/);
+  if (gMatch) return Math.round(parseFloat(gMatch[1]));
+  return 9999;
+}
+
+/** Convert grams to kg for size_kg column (e.g. 250 → 0.25, 1000 → 1). */
+function gramsToKg(grams: number): number {
+  return grams / 1000;
+}
+
+type VariantRow = {
+  product_id: string;       // UUID from our products table
+  sellsy_declination_id: number;
+  size_label: string;
+  size_kg: number;
+  price: number;
+  sku: string | null;
+  is_active: boolean;
+  source: "sellsy";
+  synced_at: string;        // ISO timestamp
+};
+
+function normalizeDeclination(
+  raw: RawDeclination,
+  productId: string,           // UUID from our products table
+): VariantRow | null {
+  // Extract the first attribute value as the size label (e.g. "250g", "1kg")
+  const sizeLabel = raw.values?.[0]?.value_label?.trim() ?? null;
+  if (!sizeLabel) {
+    // Declination without a size attribute — skip (will get default variant in ensureDefaultVariant)
+    return null;
+  }
+
+  const priceHT = raw.price?.default_amount ?? 0;
+  const weightGrams = parseSizeWeightGrams(sizeLabel);
+  const sizeKg = gramsToKg(weightGrams);
+
+  return {
+    product_id: productId,
+    sellsy_declination_id: raw.id,
+    size_label: sizeLabel,
+    size_kg: sizeKg,
+    price: priceHT,
+    sku: raw.reference ?? null,
+    is_active: raw.is_active,
+    source: "sellsy",
+    synced_at: new Date().toISOString(),
+  };
+}
+
+async function syncDeclinationsToDatabase(
+  db: ReturnType<typeof createClient>,
+  rows: VariantRow[],
+): Promise<{ synced: number; errors: string[] }> {
+  if (rows.length === 0) return { synced: 0, errors: [] };
+
+  const { error, count } = await db
+    .from("product_variants")
+    .upsert(rows, {
+      onConflict: "sellsy_declination_id",
+      count: "exact",
+    });
+
+  if (error) {
+    return { synced: 0, errors: [error.message] };
+  }
+
+  return { synced: count ?? rows.length, errors: [] };
+}
+
+async function ensureDefaultVariant(
+  db: ReturnType<typeof createClient>,
+  productId: string,
+  pricePerKg: number,
+): Promise<void> {
+  // Check if this product already has any Sellsy-sourced variants
+  const { data } = await db
+    .from("product_variants")
+    .select("id")
+    .eq("product_id", productId)
+    .eq("source", "sellsy")
+    .limit(1);
+
+  if (data && data.length > 0) return; // Already has Sellsy variants
+
+  // Upsert a default "Standard" variant keyed on (product_id, size_label)
+  // The existing UNIQUE(product_id, size_label) constraint covers this
+  const { error } = await db.from("product_variants").upsert(
+    {
+      product_id: productId,
+      sellsy_declination_id: null,   // null — won't trigger the UNIQUE constraint
+      size_label: "Standard",
+      size_kg: 1,
+      price: pricePerKg,
+      sku: null,
+      is_active: true,
+      source: "sellsy",
+      synced_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "product_id,size_label",
+    },
+  );
+
+  if (error) {
+    console.error(`[defaultVariant] product ${productId}:`, error.message);
+  }
+}
+
 async function fetchSellsyClients(accessToken: string) {
   const endpointCandidates = [
     { path: "/v2/companies?limit=200", method: "GET" as const },
@@ -753,42 +918,118 @@ function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): Jso
   return payload;
 }
 
-async function handleProductSync(user: AuthenticatedUser, accessToken: string) {
+async function handleProductSync(user: AuthenticatedUser, accessToken: string): Promise<Response> {
+  const db = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
   const startedAt = new Date().toISOString();
+  console.log("[sync] Starting product + declination sync");
 
-  try {
-    const sellsyProducts = await fetchSellsyProducts(accessToken);
-    const { rows, parseErrors } = normalizeProducts(sellsyProducts);
-    await syncProductsToDatabase(rows);
-    const completedAt = new Date().toISOString();
-    await logSyncRun({
-      userId: user.userId,
-      status: parseErrors.length > 0 ? "warning" : "success",
-      syncedCount: rows.length,
-      parseErrors,
-      startedAt,
-      completedAt,
-    });
+  // ── 1. Fetch all Sellsy items ──────────────────────────────────────────────
+  const rawProducts = await fetchSellsyProducts(accessToken);
+  console.log(`[sync] Fetched ${rawProducts.length} items from Sellsy`);
 
-    return jsonResponse({
-      success: true,
-      mode: "sync-products",
-      syncedCount: rows.length,
-      parseErrors,
-      requestedBy: user.userId,
-    });
-  } catch (error) {
-    const completedAt = new Date().toISOString();
-    await logSyncRun({
-      userId: user.userId,
-      status: "error",
-      syncedCount: 0,
-      parseErrors: [],
-      startedAt,
-      completedAt,
-    });
-    throw error;
+  // ── 2. Normalize + upsert products ────────────────────────────────────────
+  const productRows = rawProducts.map((p) => normalizeProduct(p).row);
+  const parseErrorsFromProducts: ProductParseError[] = rawProducts
+    .map((p) => normalizeProduct(p).parseError)
+    .filter((e): e is ProductParseError => e !== null);
+  await syncProductsToDatabase(productRows);
+
+  // Fetch our product UUIDs keyed by sellsy_id (TEXT)
+  const { data: dbProducts, error: dbErr } = await db
+    .from("products")
+    .select("id, sellsy_id, price_per_kg")
+    .in("sellsy_id", productRows.map((p) => p.sellsy_id));
+
+  if (dbErr || !dbProducts) {
+    console.error("[sync] Failed to load product UUIDs:", dbErr?.message);
+    throw new Error(dbErr?.message ?? "Failed to load products");
   }
+
+  const productUuidBySellsyId = Object.fromEntries(
+    dbProducts.map((p) => [p.sellsy_id, { uuid: p.id, pricePerKg: Number(p.price_per_kg) }]),
+  );
+
+  // ── 3. Fetch declinations per item + upsert variants ─────────────────────
+  let totalVariantsSynced = 0;
+  const allSeenDeclinationIds: number[] = [];
+  const parseErrors: string[] = [...parseErrorsFromProducts.map((e) => e.message)];
+
+  for (const raw of rawProducts) {
+    const sellsyId = String(raw.id);
+    const entry = productUuidBySellsyId[sellsyId];
+    if (!entry) {
+      console.warn(`[sync] No UUID found for sellsy_id=${sellsyId}, skipping declinations`);
+      continue;
+    }
+
+    // Rate limit: 150ms between declination API calls
+    await new Promise((r) => setTimeout(r, 150));
+
+    const declinations = await fetchDeclinationsForItem(accessToken, raw.id as number);
+    const variantRows: VariantRow[] = [];
+
+    for (const dec of declinations) {
+      const row = normalizeDeclination(dec, entry.uuid);
+      if (!row) {
+        parseErrors.push(`item ${raw.id} declination ${dec.id}: no size label`);
+        continue;
+      }
+      variantRows.push(row);
+      if (dec.id) allSeenDeclinationIds.push(dec.id);
+    }
+
+    const { synced, errors } = await syncDeclinationsToDatabase(db, variantRows);
+    totalVariantsSynced += synced;
+    parseErrors.push(...errors);
+
+    // If no valid declinations, ensure a default "Standard" variant exists
+    if (variantRows.length === 0) {
+      await ensureDefaultVariant(db, entry.uuid, entry.pricePerKg);
+    }
+  }
+
+  // ── 4. Deactivate variants no longer returned by Sellsy ──────────────────
+  if (allSeenDeclinationIds.length > 0) {
+    const { error: deactivateErr } = await db
+      .from("product_variants")
+      .update({ is_active: false })
+      .eq("source", "sellsy")
+      .not("sellsy_declination_id", "is", null)
+      .not("sellsy_declination_id", "in", `(${allSeenDeclinationIds.join(",")})`);
+
+    if (deactivateErr) {
+      console.error("[sync] Deactivate stale variants:", deactivateErr.message);
+    }
+  }
+
+  // ── 5. Log sync run ───────────────────────────────────────────────────────
+  await db.from("sync_runs").insert({
+    source: "sellsy",
+    sync_type: "products",
+    status: parseErrors.length > 0 ? "partial" : "success",
+    synced_count: productRows.length,
+    parse_errors: parseErrors.length > 0 ? parseErrors : null,
+    started_at: startedAt,
+    completed_at: new Date().toISOString(),
+    created_by: user.userId,
+  });
+
+  console.log(
+    `[sync] Done. Products: ${productRows.length}, Variants synced: ${totalVariantsSynced}, Errors: ${parseErrors.length}`,
+  );
+
+  return jsonResponse({
+    success: true,
+    mode: "sync-products",
+    syncedCount: productRows.length,
+    variantsSynced: totalVariantsSynced,
+    parseErrors,
+    requestedBy: user.userId,
+  });
 }
 
 async function handleClientList(user: AuthenticatedUser, accessToken: string) {
