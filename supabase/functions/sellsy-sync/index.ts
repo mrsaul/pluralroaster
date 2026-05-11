@@ -1301,8 +1301,14 @@ async function handleCreateInvoice(
     return d.toISOString().slice(0, 10);
   })();
 
+  // Sellsy v2 requires `related` to link the invoice to the company
+  const related: JsonRecord[] = [{ type: "company", id: Number(companySellsyId) }];
+  if (contactSellsyId) {
+    related.push({ type: "contact", id: Number(contactSellsyId) });
+  }
+
   const invoicePayload: JsonRecord = {
-    company_id: String(companySellsyId),
+    related,
     date: today,
     due_date: dueDateFinal,
     subject,
@@ -1310,10 +1316,6 @@ async function handleCreateInvoice(
     note,
     rows: items,
   };
-
-  if (contactSellsyId) {
-    invoicePayload.contact_id = String(contactSellsyId);
-  }
 
   // 5. POST to Sellsy
   const token = accessToken;
