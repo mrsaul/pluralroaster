@@ -257,21 +257,25 @@ export default function CatalogPage({
 
     const { data: variantsData } = await supabase
       .from("product_variants")
-      .select("id, product_id, size_label, size_kg, price, sku, is_active")
+      .select("id, product_id, size_label, size_kg, price, sku, is_active, source, sellsy_declination_id")
       .eq("is_active", true)
+      .eq("source", "sellsy")
       .order("size_kg", { ascending: true });
 
     const variantsByProduct = new Map<string, ProductVariant[]>();
     ((variantsData ?? []) as any[]).forEach((v) => {
       const list = variantsByProduct.get(v.product_id) ?? [];
-      list.push({
+      const mapped: ProductVariant = {
         id: v.id,
         size_label: v.size_label,
         size_kg: Number(v.size_kg),
         price: Number(v.price),
-        sku: v.sku,
+        sku: v.sku ?? null,
         is_active: v.is_active,
-      });
+        source: (v.source as "sellsy" | "manual") ?? "manual",
+        sellsy_declination_id: v.sellsy_declination_id ?? null,
+      };
+      list.push(mapped);
       variantsByProduct.set(v.product_id, list);
     });
 

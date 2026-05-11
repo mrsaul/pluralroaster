@@ -7,6 +7,8 @@ export interface ProductVariant {
   price: number;
   sku: string | null;
   is_active: boolean;
+  source: "sellsy" | "manual";
+  sellsy_declination_id: number | null;
 }
 
 export interface Product {
