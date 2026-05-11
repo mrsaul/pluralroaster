@@ -1271,8 +1271,8 @@ async function handleCreateInvoice(
 
     if (hasItem) {
       const row: JsonRecord = {
-        type: "line",
-        related: [{ type: "item", id: Number(product.sellsy_id) }],
+        type: "product",
+        related: [{ type: "product", id: Number(product.sellsy_id) }],
         description: String(item.product_name ?? product.name ?? ""),
         unit_amount: Number(item.price_per_kg),
         quantity: Number(item.quantity),
