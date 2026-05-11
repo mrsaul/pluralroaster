@@ -1271,7 +1271,7 @@ async function handleCreateInvoice(
 
     if (hasItem) {
       const row: JsonRecord = {
-        type: "product",
+        type: "line",
         related: [{ type: "item", id: Number(product.sellsy_id) }],
         description: String(item.product_name ?? product.name ?? ""),
         unit_amount: Number(item.price_per_kg),
@@ -1287,7 +1287,7 @@ async function handleCreateInvoice(
 
     // Free-form line item (product not in Sellsy catalog)
     return {
-      type: "service",
+      type: "line",
       description: String(item.product_name ?? "Product"),
       unit_amount: Number(item.price_per_kg),
       quantity: Number(item.quantity),
