@@ -1194,7 +1194,7 @@ async function handleCreateInvoice(
   const { data: order, error: orderErr } = await supabaseClient
     .from("orders")
     .select(`
-      id, user_id, created_at, total_price,
+      id, user_id, company_id, created_at, total_price,
       order_items (
         id, product_name, quantity, price_per_kg,
         products ( sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
@@ -1209,21 +1209,46 @@ async function handleCreateInvoice(
     });
   }
 
-  // 2. Load company + contact via user_id
-  const { data: contactRow, error: contactErr } = await supabaseClient
-    .from("contacts")
-    .select("sellsy_contact_id, companies ( sellsy_id )")
-    .eq("user_id", order.user_id)
-    .maybeSingle();
+  // 2. Resolve company sellsy_id + contact sellsy_contact_id
+  // Prefer lookup via user_id (auth clients); fall back to company_id for Sellsy-only clients
+  let companySellsyId: unknown = null;
+  let contactSellsyId: string | null = null;
 
-  if (contactErr) {
-    return new Response(JSON.stringify({ success: false, error: contactErr.message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  if ((order as any).user_id) {
+    const { data: contactRow, error: contactErr } = await supabaseClient
+      .from("contacts")
+      .select("sellsy_contact_id, companies ( sellsy_id )")
+      .eq("user_id", (order as any).user_id)
+      .maybeSingle();
+
+    if (contactErr) {
+      return new Response(JSON.stringify({ success: false, error: contactErr.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id ?? null;
+    contactSellsyId = (contactRow as any)?.sellsy_contact_id ?? null;
+  } else if ((order as any).company_id) {
+    // Sellsy-only client: look up company directly
+    const { data: companyRow, error: companyErr } = await supabaseClient
+      .from("companies")
+      .select("sellsy_id, contacts ( sellsy_contact_id, is_primary )")
+      .eq("id", (order as any).company_id)
+      .maybeSingle();
+
+    if (companyErr) {
+      return new Response(JSON.stringify({ success: false, error: companyErr.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    companySellsyId = (companyRow as any)?.sellsy_id ?? null;
+    const primaryContact = ((companyRow as any)?.contacts ?? []).find((c: any) => c.is_primary)
+      ?? ((companyRow as any)?.contacts ?? [])[0]
+      ?? null;
+    contactSellsyId = primaryContact?.sellsy_contact_id ?? null;
   }
-
-  const companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id;
-  const contactSellsyId = contactRow?.sellsy_contact_id ?? null;
 
   if (!companySellsyId) {
     return new Response(JSON.stringify({ success: false, error: "Company has no Sellsy ID — sync the client first" }), {
