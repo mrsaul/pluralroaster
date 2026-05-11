@@ -631,11 +631,12 @@ Deno.serve(async (req: Request) => {
     if (bodySpreadsheetId) {
       spreadsheetId = bodySpreadsheetId;
       spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-      if (existingExport) {
-        await db.from("sheet_exports").update({ spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl }).eq("month_key", yearKey);
-      } else {
-        await db.from("sheet_exports").insert({ month_key: yearKey, spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl, orders_count: 0 });
-      }
+      // Upsert with onConflict to avoid race conditions and swallowed errors
+      const { error: upsertErr } = await db.from("sheet_exports").upsert(
+        { month_key: yearKey, spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl, orders_count: existingExport?.orders_count ?? 0 },
+        { onConflict: "month_key" },
+      );
+      if (upsertErr) throw new Error(`Failed to save sheet reference: ${upsertErr.message}`);
     } else if (existingExport) {
       spreadsheetId = existingExport.spreadsheet_id;
       spreadsheetUrl = existingExport.spreadsheet_url;
@@ -689,7 +690,7 @@ Deno.serve(async (req: Request) => {
     }
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }, // corsHeaders required for browser CORS
     );
   }
 });
