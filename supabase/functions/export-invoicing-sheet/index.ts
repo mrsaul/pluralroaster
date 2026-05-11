@@ -594,7 +594,102 @@ const serviceEmail = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  return new Response(JSON.stringify({ error: "Not yet implemented — see plan tasks 2-5" }), {
-    status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+
+  try {
+    const privateKey = Deno.env.get("GOOGLE_PRIVATE_KEY");
+    if (!serviceEmail || !privateKey) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY env vars");
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = (Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY"))!;
+
+    // Auth — admin only
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Unauthorized");
+    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !user) throw new Error("Unauthorized");
+    const { data: currentRole, error: roleErr } = await userClient.rpc("ensure_current_user_role");
+    if (roleErr) throw new Error(`Role check failed: ${roleErr.message}`);
+    if (currentRole !== "admin") throw new Error(`Admin only (your role: ${currentRole})`);
+
+    const db = createClient(supabaseUrl, serviceRoleKey);
+
+    // Parse request
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const bodySpreadsheetId = typeof body.spreadsheet_id === "string" ? body.spreadsheet_id.trim() : null;
+    const now = new Date();
+    const reqYear = typeof body.year === "number" ? body.year : now.getFullYear();
+    const reqMonth = typeof body.month === "number" ? body.month : now.getMonth(); // 0-indexed
+    const summaryOnly = body.action === "export_summary";
+
+    // Resolve spreadsheet for this year
+    const yearKey = `invoicing-${reqYear}`;
+    const { data: existingExport } = await db.from("sheet_exports").select("spreadsheet_id, spreadsheet_url").eq("month_key", yearKey).maybeSingle();
+
+    let spreadsheetId: string, spreadsheetUrl: string;
+    if (bodySpreadsheetId) {
+      spreadsheetId = bodySpreadsheetId;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+      if (existingExport) {
+        await db.from("sheet_exports").update({ spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl }).eq("month_key", yearKey);
+      } else {
+        await db.from("sheet_exports").insert({ month_key: yearKey, spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl, orders_count: 0 });
+      }
+    } else if (existingExport) {
+      spreadsheetId = existingExport.spreadsheet_id;
+      spreadsheetUrl = existingExport.spreadsheet_url;
+    } else {
+      throw new Error(`Aucun Google Sheet connecté pour ${reqYear}. Créez un Google Sheet, partagez-le avec le compte de service (${serviceEmail}) en tant qu'Éditeur, collez l'URL et réessayez.`);
+    }
+
+    // Google auth
+    const token = await getGoogleAccessToken(serviceEmail, privateKey);
+    let allSheets = await getAllSheets(token, spreadsheetId);
+
+    // Ensure "Résumé Annuel" tab exists at index 0
+    const resumeSheetId = await ensureResumeTab(token, spreadsheetId, allSheets);
+    allSheets = await getAllSheets(token, spreadsheetId);
+
+    let ordersExported = 0;
+
+    if (!summaryOnly) {
+      const tabName = monthTabName(reqYear, reqMonth);
+      const monthSheetId = await ensureMonthTab(token, spreadsheetId, allSheets, tabName);
+      allSheets = await getAllSheets(token, spreadsheetId);
+
+      const groups = await fetchOrdersForMonth(db, reqYear, reqMonth);
+      ordersExported = groups.reduce((s, g) => s + g.orders.length, 0);
+      await writeMonthlyTab(token, spreadsheetId, tabName, monthSheetId, groups);
+
+      const orderIds = groups.flatMap((g) => g.orders.map((o) => o.id));
+      if (orderIds.length > 0) {
+        await db.from("orders").update({ exported_to_sheet_at: now.toISOString() }).in("id", orderIds);
+      }
+    }
+
+    // Always refresh Résumé Annuel
+    const allYearOrders = await fetchAllOrdersForYear(db, reqYear);
+    await writeResumeAnnuel(token, spreadsheetId, resumeSheetId, reqYear, allYearOrders);
+
+    await db.from("sheet_exports").update({ last_exported_at: now.toISOString(), orders_count: allYearOrders.length }).eq("month_key", yearKey);
+
+    return new Response(
+      JSON.stringify({ url: spreadsheetUrl, orders_exported: ordersExported, month: monthTabName(reqYear, reqMonth), year: reqYear, service_account_email: serviceEmail }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    console.error("[export-invoicing-sheet]", err);
+    if (err instanceof SheetsPermissionError) {
+      const email = serviceEmail ?? "the service account";
+      return new Response(
+        JSON.stringify({ error: `Permission refusée. Partagez le Google Sheet avec "${email}" en tant qu'Éditeur, puis réessayez.`, service_account_email: serviceEmail ?? null }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
 });
