@@ -183,6 +183,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [runningProductSync, setRunningProductSync] = useState(false);
   const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
   const [syncRunError, setSyncRunError] = useState<string | null>(null);
+  const [productCount, setProductCount] = useState<number | null>(null);
+  const [variantCount, setVariantCount] = useState<number | null>(null);
   const [runningHealthCheck, setRunningHealthCheck] = useState(false);
   const [healthCheckResult, setHealthCheckResult] = useState<{
     success: boolean;
@@ -606,6 +608,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .maybeSingle();
       if (error) throw new Error(error.message);
       setSyncRun((data as SyncRunRow | null) ?? null);
+
+      const [{ count: pCount }, { count: vCount }] = await Promise.all([
+        supabase
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("is_active", true),
+        supabase
+          .from("product_variants")
+          .select("*", { count: "exact", head: true })
+          .eq("source", "sellsy")
+          .eq("is_active", true),
+      ]);
+
+      setProductCount(pCount);
+      setVariantCount(vCount);
     } catch (err) {
       setSyncRunError(err instanceof Error ? err.message : String(err));
     }
@@ -1456,6 +1473,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <div className="rounded-lg bg-muted/40 p-3">
                           <p className="text-xs text-muted-foreground">Synced items</p>
                           <p className="mt-2 text-2xl font-medium tabular-nums text-foreground">{syncRun.synced_count}</p>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                            {productCount !== null && <span>{productCount} products</span>}
+                            {variantCount !== null && productCount !== null && <span>·</span>}
+                            {variantCount !== null && <span>{variantCount} Sellsy variants</span>}
+                          </div>
                         </div>
                         <div className="rounded-lg bg-muted/40 p-3">
                           <p className="text-xs text-muted-foreground">Result</p>
