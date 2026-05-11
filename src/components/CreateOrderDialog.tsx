@@ -46,6 +46,7 @@ type LineItem = {
   product: SimpleProduct;
   quantity: number;
   price_per_kg: number;
+  sizeLabel?: string;
 };
 
 type ClientTier = {
@@ -189,15 +190,40 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
       if (orderErr || !order) throw orderErr || new Error("Failed to create order");
 
-      const items = lineItems.map((i) => ({
-        order_id: order.id,
-        product_id: i.product.id,
-        product_name: i.product.data_source_mode === "custom" && i.product.custom_name
-          ? i.product.custom_name : i.product.name,
-        product_sku: i.product.sku,
-        quantity: i.quantity,
-        price_per_kg: i.price_per_kg,
-      }));
+      // Resolve product_variant_id for items that have a size variant
+      const sellsyItems = lineItems.filter((item) => item.sizeLabel);
+      let variantIdMap: Record<string, string> = {}; // "productId::sizeLabel" → variant UUID
+
+      if (sellsyItems.length > 0) {
+        const { data: variantRows } = await supabase
+          .from("product_variants")
+          .select("id, product_id, size_label")
+          .eq("source", "sellsy")
+          .eq("is_active", true)
+          .in(
+            "product_id",
+            [...new Set(sellsyItems.map((i) => i.product.id))],
+          );
+
+        for (const v of variantRows ?? []) {
+          variantIdMap[`${v.product_id}::${v.size_label}`] = v.id;
+        }
+      }
+
+      const items = lineItems.map((i) => {
+        const variantKey = i.sizeLabel ? `${i.product.id}::${i.sizeLabel}` : null;
+        const productVariantId = variantKey ? (variantIdMap[variantKey] ?? null) : null;
+        return {
+          order_id: order.id,
+          product_id: i.product.id,
+          product_name: i.product.data_source_mode === "custom" && i.product.custom_name
+            ? i.product.custom_name : i.product.name,
+          product_sku: i.product.sku,
+          quantity: i.quantity,
+          price_per_kg: i.price_per_kg,
+          product_variant_id: productVariantId,
+        };
+      });
 
       const { error: itemsErr } = await supabase.from("order_items").insert(items);
       if (itemsErr) throw itemsErr;
