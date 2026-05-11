@@ -272,7 +272,7 @@ export default function CatalogPage({
         price: Number(v.price),
         sku: v.sku ?? null,
         is_active: v.is_active,
-        source: (v.source as "sellsy" | "manual") ?? "manual",
+        source: (v.source as "sellsy" | "manual") ?? "sellsy",
         sellsy_declination_id: v.sellsy_declination_id ?? null,
       };
       list.push(mapped);
