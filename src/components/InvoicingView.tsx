@@ -70,10 +70,17 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
   const [detailOrder, setDetailOrder] = useState<InvoicingOrder | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingSummary, setExportingSummary] = useState(false);
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
   const [sheetIdInput, setSheetIdInput] = useState("");
   const [serviceAccountEmail, setServiceAccountEmail] = useState<string | null>(null);
+  const [lastExportedAt, setLastExportedAt] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth()); // 0-indexed
   const { toast } = useToast();
+
+  const FRENCH_MONTHS_UI = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const CURRENT_YEAR = new Date().getFullYear();
 
   // Extract spreadsheet ID from a Google Sheets URL or plain ID
   const parseSheetId = (input: string): string | null => {
@@ -87,45 +94,40 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
     return null;
   };
 
-  const handleExportToSheets = async (testMode = false) => {
+  const callExportFunction = async (action?: "export_summary") => {
     const spreadsheetId = parseSheetId(sheetIdInput) ?? undefined;
-    setExporting(true);
+    const isSummaryOnly = action === "export_summary";
+    if (isSummaryOnly) setExportingSummary(true); else setExporting(true);
     try {
       const { data, error } = await supabase.functions.invoke("export-invoicing-sheet", {
-        body: { test: testMode, spreadsheet_id: spreadsheetId },
+        body: { year: selectedYear, month: selectedMonth, spreadsheet_id: spreadsheetId, action: isSummaryOnly ? "export_summary" : undefined },
       });
-
-      // Extract the real error message from the function response body
       if (error) {
         let detail = error.message;
         let saEmail: string | null = null;
         try {
-          // FunctionsHttpError carries the response body in error.context
-          const body = await (error as any).context?.json?.();
-          if (body?.error) detail = body.error;
-          if (body?.service_account_email) saEmail = body.service_account_email;
-        } catch {
-          // ignore — use the original error.message
-        }
+          const b = await (error as any).context?.json?.();
+          if (b?.error) detail = b.error;
+          if (b?.service_account_email) saEmail = b.service_account_email;
+        } catch { /* ignore */ }
         if (saEmail) setServiceAccountEmail(saEmail);
         throw new Error(detail);
       }
-
       const result = data as { url: string; orders_exported: number; month: string; service_account_email?: string };
       if (result.service_account_email) setServiceAccountEmail(result.service_account_email);
       setSheetUrl(result.url);
+      setLastExportedAt(new Date().toISOString());
       toast({
-        title: "Exported to Google Sheets",
-        description: `${result.orders_exported} orders exported for ${result.month}.`,
+        title: isSummaryOnly ? "Résumé annuel mis à jour ✅" : "Export terminé ✅",
+        description: isSummaryOnly
+          ? "Le résumé annuel a été mis à jour dans Google Sheets."
+          : `${result.orders_exported} commande${result.orders_exported !== 1 ? "s" : ""} exportée${result.orders_exported !== 1 ? "s" : ""} — ${result.month}.`,
       });
     } catch (err) {
-      toast({
-        title: "Export failed",
-        description: err instanceof Error ? err.message : String(err),
-        variant: "destructive",
-      });
+      toast({ title: "Export échoué", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setExporting(false);
+      setExportingSummary(false);
     }
   };
 
@@ -214,50 +216,89 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
           </div>
         </div>
 
-        {/* Google Sheets connect banner — shown until a sheet URL is returned */}
-        {!sheetUrl && (
-          <div className="rounded-lg border border-border bg-muted/30 p-4">
-            <div className="flex items-start gap-3">
-              <Sheet className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground mb-1">Connect a Google Sheet</p>
-                <ol className="text-xs text-muted-foreground mb-3 space-y-1 list-decimal list-inside">
-                  <li>Create a new Google Sheet in your Drive</li>
-                  <li>
-                    Click <strong>Share</strong> and add{" "}
-                    {serviceAccountEmail ? (
-                      <code className="bg-muted px-1 py-0.5 rounded text-foreground font-mono select-all">{serviceAccountEmail}</code>
-                    ) : (
-                      <strong>the service account email</strong>
-                    )}{" "}
-                    as <strong>Editor</strong>
-                  </li>
-                  <li>Paste the sheet URL below and click <strong>Export to Sheets</strong></li>
-                </ol>
-                {!serviceAccountEmail && (
-                  <p className="text-xs text-amber-600 mb-2 flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    Try exporting once to see the service account email you need to share with.
-                  </p>
-                )}
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="https://docs.google.com/spreadsheets/d/…"
-                    value={sheetIdInput}
-                    onChange={(e) => setSheetIdInput(e.target.value)}
-                    className="text-sm flex-1"
-                  />
-                  {sheetIdInput && !parseSheetId(sheetIdInput) && (
-                    <p className="text-xs text-destructive self-center whitespace-nowrap">Invalid URL</p>
-                  )}
-                </div>
-                {parseSheetId(sheetIdInput) && (
-                  <p className="text-xs text-green-600 mt-1.5">✓ Sheet ID detected: {parseSheetId(sheetIdInput)}</p>
-                )}
-              </div>
-            </div>
+        {/* ── Google Sheets Export Panel ─────────────────────────────────────── */}
+        <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Sheet className="w-5 h-5 text-green-600 shrink-0" />
+            <p className="text-sm font-semibold text-foreground">Export Google Sheet</p>
+            {sheetUrl && (
+              <Button variant="ghost" size="sm" className="ml-auto gap-1.5 text-green-600 hover:text-green-700 text-xs" asChild>
+                <a href={sheetUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="w-3.5 h-3.5" /> Ouvrir le Google Sheet ↗
+                </a>
+              </Button>
+            )}
           </div>
-        )}
+
+          {/* Period picker */}
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted-foreground shrink-0">Période :</p>
+            <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {FRENCH_MONTHS_UI.map((m, i) => (
+                  <SelectItem key={i} value={String(i)}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+              <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Sheet URL input — shown only when no sheet connected yet */}
+          {!sheetUrl && (
+            <div className="space-y-2">
+              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>Créez un Google Sheet dans votre Drive</li>
+                <li>
+                  Partagez-le avec{" "}
+                  {serviceAccountEmail
+                    ? <code className="bg-muted px-1 py-0.5 rounded text-foreground font-mono select-all text-xs">{serviceAccountEmail}</code>
+                    : <strong>le compte de service</strong>
+                  }{" "}en tant qu'<strong>Éditeur</strong>
+                </li>
+                <li>Collez l'URL ci-dessous et cliquez sur <strong>Exporter le mois</strong></li>
+              </ol>
+              {!serviceAccountEmail && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Essayez d'exporter une fois pour voir l'email du compte de service.
+                </p>
+              )}
+              <Input
+                placeholder="https://docs.google.com/spreadsheets/d/…"
+                value={sheetIdInput}
+                onChange={(e) => setSheetIdInput(e.target.value)}
+                className="text-sm"
+              />
+              {sheetIdInput && !parseSheetId(sheetIdInput) && <p className="text-xs text-destructive">URL invalide</p>}
+              {parseSheetId(sheetIdInput) && <p className="text-xs text-green-600">✓ ID détecté : {parseSheetId(sheetIdInput)}</p>}
+            </div>
+          )}
+
+          {/* Export buttons */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button size="sm" className="gap-2" disabled={exporting || exportingSummary} onClick={() => void callExportFunction()}>
+              {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sheet className="w-4 h-4" />}
+              {exporting ? "Export en cours…" : "Exporter le mois"}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" disabled={exporting || exportingSummary} onClick={() => void callExportFunction("export_summary")}>
+              {exportingSummary ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {exportingSummary ? "Mise à jour…" : "Mettre à jour le résumé annuel"}
+            </Button>
+            {lastExportedAt && (
+              <p className="text-xs text-muted-foreground ml-auto">
+                Dernier export : {new Date(lastExportedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
@@ -291,42 +332,6 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Export to Google Sheets */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={exporting}
-              onClick={() => void handleExportToSheets(false)}
-            >
-              {exporting
-                ? <RefreshCw className="w-4 h-4 animate-spin" />
-                : <Sheet className="w-4 h-4 text-green-600" />}
-              {exporting ? "Exporting…" : "Export to Sheets"}
-            </Button>
-
-            {/* Test mode — all statuses, for verifying Google credentials */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-muted-foreground text-xs"
-              disabled={exporting}
-              onClick={() => void handleExportToSheets(true)}
-            >
-              {exporting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sheet className="w-3 h-3" />}
-              Test export
-            </Button>
-
-            {/* Link to last exported sheet */}
-            {sheetUrl && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-green-600 hover:text-green-700" asChild>
-                <a href={sheetUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Open Sheet
-                </a>
-              </Button>
-            )}
-
             {selectedIds.size > 0 && (
               <Button
                 size="sm"
