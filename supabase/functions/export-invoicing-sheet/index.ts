@@ -53,6 +53,13 @@ async function getGoogleAccessToken(serviceEmail: string, privateKeyPem: string)
 
 // ── Sheets REST helpers ───────────────────────────────────────────────────────
 
+class SheetsPermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SheetsPermissionError";
+  }
+}
+
 async function sheetsApi(token: string, method: string, path: string, body?: unknown): Promise<unknown> {
   const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets${path}`, {
     method,
@@ -60,7 +67,10 @@ async function sheetsApi(token: string, method: string, path: string, body?: unk
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await resp.text();
-  if (!resp.ok) throw new Error(`Sheets ${method} ${path} → ${resp.status}: ${text}`);
+  if (!resp.ok) {
+    if (resp.status === 403) throw new SheetsPermissionError(text);
+    throw new Error(`Sheets ${method} ${path} → ${resp.status}: ${text}`);
+  }
   return text ? JSON.parse(text) : null;
 }
 
@@ -133,8 +143,10 @@ type Profile = { id: string; full_name: string | null; email: string | null };
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Declare outside try so the catch block can reference it in permission error messages
+  const serviceEmail = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
+
   try {
-    const serviceEmail = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
     const privateKey = Deno.env.get("GOOGLE_PRIVATE_KEY");
     if (!serviceEmail || !privateKey) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY");
 
@@ -305,11 +317,21 @@ Deno.serve(async (req: Request) => {
     await db.from("sheet_exports").update({ last_exported_at: now.toISOString(), orders_count: orders.length }).eq("month_key", monthKey);
 
     return new Response(
-      JSON.stringify({ url: spreadsheetUrl, orders_exported: orderIds.length, month: monthLabel }),
+      JSON.stringify({ url: spreadsheetUrl, orders_exported: orderIds.length, month: monthLabel, service_account_email: serviceEmail }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error("[export-invoicing-sheet]", err);
+    if (err instanceof SheetsPermissionError) {
+      const email = serviceEmail ?? "the service account";
+      return new Response(
+        JSON.stringify({
+          error: `Google Sheets permission denied. The sheet hasn't been shared with the service account.\n\nTo fix: open your Google Sheet → Share → add "${email}" as Editor → try again.`,
+          service_account_email: serviceEmail ?? null,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -72,6 +72,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
   const [exporting, setExporting] = useState(false);
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
   const [sheetIdInput, setSheetIdInput] = useState("");
+  const [serviceAccountEmail, setServiceAccountEmail] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Extract spreadsheet ID from a Google Sheets URL or plain ID
@@ -97,17 +98,21 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
       // Extract the real error message from the function response body
       if (error) {
         let detail = error.message;
+        let saEmail: string | null = null;
         try {
           // FunctionsHttpError carries the response body in error.context
           const body = await (error as any).context?.json?.();
           if (body?.error) detail = body.error;
+          if (body?.service_account_email) saEmail = body.service_account_email;
         } catch {
           // ignore — use the original error.message
         }
+        if (saEmail) setServiceAccountEmail(saEmail);
         throw new Error(detail);
       }
 
-      const result = data as { url: string; orders_exported: number; month: string };
+      const result = data as { url: string; orders_exported: number; month: string; service_account_email?: string };
+      if (result.service_account_email) setServiceAccountEmail(result.service_account_email);
       setSheetUrl(result.url);
       toast({
         title: "Exported to Google Sheets",
@@ -216,9 +221,25 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
               <Sheet className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground mb-1">Connect a Google Sheet</p>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Create a Google Sheet in your Drive, share it with the service account as <strong>Editor</strong>, then paste the URL below.
-                </p>
+                <ol className="text-xs text-muted-foreground mb-3 space-y-1 list-decimal list-inside">
+                  <li>Create a new Google Sheet in your Drive</li>
+                  <li>
+                    Click <strong>Share</strong> and add{" "}
+                    {serviceAccountEmail ? (
+                      <code className="bg-muted px-1 py-0.5 rounded text-foreground font-mono select-all">{serviceAccountEmail}</code>
+                    ) : (
+                      <strong>the service account email</strong>
+                    )}{" "}
+                    as <strong>Editor</strong>
+                  </li>
+                  <li>Paste the sheet URL below and click <strong>Export to Sheets</strong></li>
+                </ol>
+                {!serviceAccountEmail && (
+                  <p className="text-xs text-amber-600 mb-2 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Try exporting once to see the service account email you need to share with.
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <Input
                     placeholder="https://docs.google.com/spreadsheets/d/…"
