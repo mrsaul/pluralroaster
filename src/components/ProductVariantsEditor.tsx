@@ -16,13 +16,12 @@ type Variant = {
 
 interface ProductVariantsEditorProps {
   productId: string;
-  productName: string;
-  basePricePerKg: number;
 }
 
 export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps) {
   const [variants, setVariants] = useState<Variant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,20 +32,24 @@ export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps)
       .select("id, size_label, size_kg, price, sku, is_active, source, sellsy_declination_id")
       .eq("product_id", productId)
       .order("size_kg", { ascending: true })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!cancelled) {
-          setVariants(
-            (data ?? []).map((v) => ({
-              id: v.id,
-              size_label: v.size_label,
-              size_kg: Number(v.size_kg),
-              price: Number(v.price),
-              sku: v.sku ?? null,
-              is_active: v.is_active,
-              source: v.source ?? "manual",
-              sellsy_declination_id: v.sellsy_declination_id ?? null,
-            })),
-          );
+          if (error) {
+            setFetchError("Failed to load variants.");
+          } else {
+            setVariants(
+              (data ?? []).map((v) => ({
+                id: v.id,
+                size_label: v.size_label,
+                size_kg: Number(v.size_kg),
+                price: Number(v.price),
+                sku: v.sku ?? null,
+                is_active: v.is_active,
+                source: v.source ?? "manual",
+                sellsy_declination_id: v.sellsy_declination_id ?? null,
+              })),
+            );
+          }
           setLoading(false);
         }
       });
@@ -59,8 +62,14 @@ export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps)
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading variants…
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading variants…
       </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <p className="text-sm text-destructive py-4">{fetchError}</p>
     );
   }
 
@@ -71,7 +80,7 @@ export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps)
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-foreground">Bag Sizes & Pricing</p>
         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <ExternalLink className="w-3 h-3" />
+          <ExternalLink className="w-3 h-3" aria-hidden="true" />
           Managed in Sellsy
         </span>
       </div>
@@ -94,9 +103,11 @@ export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps)
                   <span className="ml-2 font-mono text-[11px]">{variant.sku}</span>
                 )}
               </div>
-              <Badge variant="secondary" className="text-[10px]">
-                #{variant.sellsy_declination_id}
-              </Badge>
+              {variant.sellsy_declination_id != null && (
+                <Badge variant="secondary" className="text-[10px]">
+                  #{variant.sellsy_declination_id}
+                </Badge>
+              )}
             </div>
           ))}
         </div>
