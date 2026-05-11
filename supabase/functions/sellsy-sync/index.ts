@@ -1262,15 +1262,17 @@ async function handleCreateInvoice(
     });
   }
 
-  // 3. Build invoice rows
+  // 3. Build invoice rows (Sellsy v2 format)
+  // Catalog product: type="product", related=[{type:"item",id:<sellsy_id>}]
+  // Free-form line:  type="service", no related
   const items: JsonRecord[] = ((order as any).order_items ?? []).map((item: any) => {
     const product = item.products ?? {};
     const hasItem = Boolean(product.sellsy_id);
 
     if (hasItem) {
       const row: JsonRecord = {
-        type: "item",
-        item_id: String(product.sellsy_id),
+        type: "product",
+        related: [{ type: "item", id: Number(product.sellsy_id) }],
         description: String(item.product_name ?? product.name ?? ""),
         unit_amount: Number(item.price_per_kg),
         quantity: Number(item.quantity),
@@ -1283,8 +1285,9 @@ async function handleCreateInvoice(
       return row;
     }
 
+    // Free-form line item (product not in Sellsy catalog)
     return {
-      type: "once",
+      type: "service",
       description: String(item.product_name ?? "Product"),
       unit_amount: Number(item.price_per_kg),
       quantity: Number(item.quantity),
