@@ -597,6 +597,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const loadLatestProductSync = async () => {
     setSyncRunError(null);
+    setProductCount(null);
+    setVariantCount(null);
     try {
       const { data, error } = await supabase
         .from("sync_runs")
@@ -609,7 +611,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (error) throw new Error(error.message);
       setSyncRun((data as SyncRunRow | null) ?? null);
 
-      const [{ count: pCount }, { count: vCount }] = await Promise.all([
+      const [{ count: pCount, error: pErr }, { count: vCount, error: vErr }] = await Promise.all([
         supabase
           .from("products")
           .select("*", { count: "exact", head: true })
@@ -621,6 +623,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           .eq("is_active", true),
       ]);
 
+      if (pErr) throw new Error(pErr.message);
+      if (vErr) throw new Error(vErr.message);
       setProductCount(pCount);
       setVariantCount(vCount);
     } catch (err) {
