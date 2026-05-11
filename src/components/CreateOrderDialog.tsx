@@ -195,7 +195,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
       let variantIdMap: Record<string, string> = {}; // "productId::sizeLabel" → variant UUID
 
       if (sellsyItems.length > 0) {
-        const { data: variantRows } = await supabase
+        const { data: variantRows, error: variantErr } = await supabase
           .from("product_variants")
           .select("id, product_id, size_label")
           .eq("source", "sellsy")
@@ -204,6 +204,11 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
             "product_id",
             [...new Set(sellsyItems.map((i) => i.product.id))],
           );
+
+        if (variantErr) {
+          console.warn("[CreateOrderDialog] variant lookup failed:", variantErr.message);
+          // Proceed with null product_variant_id for all items — order creation continues
+        }
 
         for (const v of variantRows ?? []) {
           variantIdMap[`${v.product_id}::${v.size_label}`] = v.id;
