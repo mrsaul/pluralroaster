@@ -8,7 +8,10 @@ const corsHeaders = {
 
 // ── Google JWT auth ───────────────────────────────────────────────────────────
 function base64url(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 function strToBase64url(s: string): string {
   return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
@@ -121,6 +124,16 @@ type ClientGroup = {
   contactName: string | null;
   orders: RawOrder[];
 };
+type YearSummaryOrder = {
+  id: string;
+  user_id: string | null;
+  company_id: string | null;
+  delivery_date: string;
+  total_price: number;
+  invoicing_status: string;
+  order_items: Pick<OrderItem, "price_per_kg" | "quantity">[];
+  companies: { id: string; name: string | null } | null;
+};
 function emptyCells(n: number): string[] { return Array(n).fill(""); }
 
 // ── Data fetch ────────────────────────────────────────────────────────────────
@@ -129,8 +142,8 @@ async function fetchOrdersForMonth(
   year: number,
   month: number, // 0-indexed
 ): Promise<ClientGroup[]> {
-  const monthStart = new Date(year, month, 1).toISOString().slice(0, 10);
-  const monthEnd = new Date(year, month + 1, 0).toISOString().slice(0, 10);
+  const monthStart = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const monthEnd = new Date(Date.UTC(year, month + 1, 0)).toISOString().slice(0, 10);
 
   const { data: ordersRaw, error } = await (db as any)
     .from("orders")
@@ -152,10 +165,11 @@ async function fetchOrdersForMonth(
   const companyIds = [...new Set(orders.map((o) => o.company_id).filter(Boolean))] as string[];
   const contactMap = new Map<string, string>();
   if (companyIds.length > 0) {
-    const { data: contacts } = await db.from("contacts")
+    const { data: contacts, error: contactsError } = await db.from("contacts")
       .select("company_id, first_name, last_name")
       .eq("is_primary", true)
       .in("company_id", companyIds);
+    if (contactsError) throw contactsError;
     for (const c of (contacts ?? []) as { company_id: string; first_name: string | null; last_name: string | null }[]) {
       const name = [c.first_name, c.last_name].filter(Boolean).join(" ");
       if (name) contactMap.set(c.company_id, name);
@@ -166,7 +180,8 @@ async function fetchOrdersForMonth(
   const userIds = [...new Set(orders.filter((o) => o.user_id && !o.company_id).map((o) => o.user_id!))] as string[];
   const profileMap = new Map<string, { full_name: string | null; email: string | null }>();
   if (userIds.length > 0) {
-    const { data: profiles } = await db.from("profiles").select("id, full_name, email").in("id", userIds);
+    const { data: profiles, error: profilesError } = await db.from("profiles").select("id, full_name, email").in("id", userIds);
+    if (profilesError) throw profilesError;
     for (const p of (profiles ?? []) as { id: string; full_name: string | null; email: string | null }[]) {
       profileMap.set(p.id, p);
     }
@@ -199,7 +214,7 @@ async function fetchOrdersForMonth(
 async function fetchAllOrdersForYear(
   db: ReturnType<typeof createClient>,
   year: number,
-): Promise<RawOrder[]> {
+): Promise<YearSummaryOrder[]> {
   const { data, error } = await (db as any)
     .from("orders")
     .select(`id, user_id, company_id, delivery_date, total_price, invoicing_status, order_items ( price_per_kg, quantity ), companies ( id, name )`)
@@ -207,7 +222,7 @@ async function fetchAllOrdersForYear(
     .gte("delivery_date", `${year}-01-01`)
     .lte("delivery_date", `${year}-12-31`);
   if (error) throw error;
-  return (data ?? []) as RawOrder[];
+  return (data ?? []) as YearSummaryOrder[];
 }
 
 // ── PLACEHOLDER — functions added in later tasks ──────────────────────────────
