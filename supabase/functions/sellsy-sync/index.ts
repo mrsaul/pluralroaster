@@ -469,22 +469,18 @@ async function fetchDeclinationsForItem(
   accessToken: string,
   itemId: number,
 ): Promise<RawDeclination[]> {
-  const url = `https://api.sellsy.com/v2/items/${itemId}/declinations`;
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const { response: resp, payload } = await fetchSellsy(`/v2/items/${itemId}/declinations`, accessToken, { method: "GET" });
 
   if (!resp.ok) {
-    const body = await resp.text();
-    console.error(`[declinations] item ${itemId} → HTTP ${resp.status}: ${body}`);
+    console.error(`[declinations] item ${itemId} → HTTP ${resp.status}: ${payload.text}`);
     return [];
   }
 
-  const json = await resp.json();
+  const json = payload.data;
 
-  // PROBE: log the full raw response for item 126 so we can verify structure
+  // TODO: Remove this probe log once the Sellsy declination API structure is confirmed
   if (itemId === 126) {
-    console.log("[PROBE] Raw /declinations response for item 126:", JSON.stringify(json, null, 2));
+    console.log("[PROBE] Raw /declinations for item 126:", JSON.stringify(json, null, 2));
   }
 
   // Sellsy v2 lists come back as { data: [...], pagination: {...} }
@@ -506,6 +502,7 @@ function parseSizeWeightGrams(label: string | null): number {
   if (kgMatch) return Math.round(parseFloat(kgMatch[1]) * 1000);
   const gMatch = lower.match(/^(\d+(?:\.\d+)?)\s*g/);
   if (gMatch) return Math.round(parseFloat(gMatch[1]));
+  console.warn(`[parseSizeWeightGrams] Unrecognized size label: "${label}" — defaulting to 9999g`);
   return 9999;
 }
 
@@ -529,6 +526,7 @@ type VariantRow = {
 function normalizeDeclination(
   raw: RawDeclination,
   productId: string,           // UUID from our products table
+  syncedAt: string,
 ): VariantRow | null {
   // Extract the first attribute value as the size label (e.g. "250g", "1kg")
   const sizeLabel = raw.values?.[0]?.value_label?.trim() ?? null;
@@ -550,7 +548,7 @@ function normalizeDeclination(
     sku: raw.reference ?? null,
     is_active: raw.is_active,
     source: "sellsy",
-    synced_at: new Date().toISOString(),
+    synced_at: syncedAt,
   };
 }
 
@@ -919,10 +917,7 @@ function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): Jso
 }
 
 async function handleProductSync(user: AuthenticatedUser, accessToken: string): Promise<Response> {
-  const db = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const db = createServiceSupabaseClient();
 
   const startedAt = new Date().toISOString();
   console.log("[sync] Starting product + declination sync");
@@ -932,9 +927,10 @@ async function handleProductSync(user: AuthenticatedUser, accessToken: string): 
   console.log(`[sync] Fetched ${rawProducts.length} items from Sellsy`);
 
   // ── 2. Normalize + upsert products ────────────────────────────────────────
-  const productRows = rawProducts.map((p) => normalizeProduct(p).row);
-  const parseErrorsFromProducts: ProductParseError[] = rawProducts
-    .map((p) => normalizeProduct(p).parseError)
+  const normalized = rawProducts.map(normalizeProduct);
+  const productRows = normalized.map((n) => n.row);
+  const parseErrorsFromProducts: ProductParseError[] = normalized
+    .map((n) => n.parseError)
     .filter((e): e is ProductParseError => e !== null);
   await syncProductsToDatabase(productRows);
 
@@ -973,7 +969,7 @@ async function handleProductSync(user: AuthenticatedUser, accessToken: string): 
     const variantRows: VariantRow[] = [];
 
     for (const dec of declinations) {
-      const row = normalizeDeclination(dec, entry.uuid);
+      const row = normalizeDeclination(dec, entry.uuid, startedAt);
       if (!row) {
         parseErrors.push(`item ${raw.id} declination ${dec.id}: no size label`);
         continue;
@@ -1007,15 +1003,14 @@ async function handleProductSync(user: AuthenticatedUser, accessToken: string): 
   }
 
   // ── 5. Log sync run ───────────────────────────────────────────────────────
-  await db.from("sync_runs").insert({
-    source: "sellsy",
-    sync_type: "products",
+  await logSyncRun({
+    userId: user.userId,
     status: parseErrors.length > 0 ? "partial" : "success",
-    synced_count: productRows.length,
-    parse_errors: parseErrors.length > 0 ? parseErrors : null,
-    started_at: startedAt,
-    completed_at: new Date().toISOString(),
-    created_by: user.userId,
+    syncedCount: productRows.length,
+    parseErrors: parseErrorsFromProducts,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    syncType: "products",
   });
 
   console.log(
