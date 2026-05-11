@@ -1230,24 +1230,28 @@ async function handleCreateInvoice(
     companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id ?? null;
     contactSellsyId = (contactRow as any)?.sellsy_contact_id ?? null;
   } else if ((order as any).company_id) {
-    // Sellsy-only client: look up company directly
-    const { data: companyRow, error: companyErr } = await supabaseClient
+    // Sellsy-only client: look up company directly via two separate queries
+    const companyId = (order as any).company_id as string;
+
+    const { data: companyRow } = await supabaseClient
       .from("companies")
-      .select("sellsy_id, contacts ( sellsy_contact_id, is_primary )")
-      .eq("id", (order as any).company_id)
+      .select("sellsy_id")
+      .eq("id", companyId)
       .maybeSingle();
 
-    if (companyErr) {
-      return new Response(JSON.stringify({ success: false, error: companyErr.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     companySellsyId = (companyRow as any)?.sellsy_id ?? null;
-    const primaryContact = ((companyRow as any)?.contacts ?? []).find((c: any) => c.is_primary)
-      ?? ((companyRow as any)?.contacts ?? [])[0]
+
+    // Find primary contact's Sellsy contact ID
+    const { data: contactRows } = await supabaseClient
+      .from("contacts")
+      .select("sellsy_contact_id, is_primary")
+      .eq("company_id", companyId)
+      .order("is_primary", { ascending: false });
+
+    const primaryContact = ((contactRows ?? []) as any[]).find((c) => c.is_primary)
+      ?? (contactRows ?? [])[0]
       ?? null;
-    contactSellsyId = primaryContact?.sellsy_contact_id ?? null;
+    contactSellsyId = (primaryContact as any)?.sellsy_contact_id ?? null;
   }
 
   if (!companySellsyId) {
