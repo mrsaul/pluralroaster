@@ -22,6 +22,10 @@ import {
 } from "@/components/ui/dialog";
 import { ORDER_STATUS_CLASS, ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/orderStatuses";
 
+/* ─── Constants ─── */
+const FRENCH_MONTHS_UI = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+const CURRENT_YEAR = new Date().getFullYear();
+
 /* ─── Types ─── */
 
 export type InvoicingStatus = "not_sent" | "sent" | "error";
@@ -78,9 +82,6 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth()); // 0-indexed
   const { toast } = useToast();
-
-  const FRENCH_MONTHS_UI = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-  const CURRENT_YEAR = new Date().getFullYear();
 
   // Extract spreadsheet ID from a Google Sheets URL or plain ID
   const parseSheetId = (input: string): string | null => {
