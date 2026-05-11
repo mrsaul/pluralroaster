@@ -400,6 +400,7 @@ function ensureResumeTab(token: string, spreadsheetId: string, allSheets: SheetM
   return ensureTab(token, spreadsheetId, allSheets, "Résumé Annuel", 0);
 }
 
+// Precondition: ensureResumeTab must have been called first so "Résumé Annuel" occupies index 0.
 function ensureMonthTab(token: string, spreadsheetId: string, allSheets: SheetMeta[], tabName: string): Promise<number> {
   const nonResume = allSheets.filter((s) => s.properties.title !== "Résumé Annuel").length;
   return ensureTab(token, spreadsheetId, allSheets, tabName, 1 + nonResume);
@@ -468,7 +469,7 @@ async function writeResumeAnnuel(
   for (const o of allOrders) {
     const key = (o.company_id ?? o.user_id) ?? "unknown";
     const name = o.companies?.name ?? key.slice(0, 8);
-    const m = new Date(o.delivery_date).getMonth();
+    const m = parseInt(o.delivery_date.split("-")[1], 10) - 1; // timezone-safe month extraction
     const ht = (o.order_items ?? []).reduce((s, i) => s + Number(i.quantity) * Number(i.price_per_kg), 0) || Number(o.total_price);
     clientNames.set(key, name);
     if (!clientMonthHt.has(key)) clientMonthHt.set(key, new Map());
@@ -520,7 +521,11 @@ async function writeResumeAnnuel(
   for (let m = 0; m < 12; m++) grandRow.push(monthTotalsHt[m] > 0 ? monthTotalsHt[m] * (1 + VAT_RATE / 100) : "");
   grandRow.push(grandHt * (1 + VAT_RATE / 100));
   rows.push(grandRow);
-  fmtReqs.push({ repeatCell: { range: { sheetId: resumeSheetId, startRowIndex: grandRowIdx, endRowIndex: grandRowIdx + 1 }, cell: { userEnteredFormat: { backgroundColor: COLOR_INVOICED_GREEN, textFormat: { bold: true, fontSize: 11 }, numberFormat: { type: "CURRENCY", pattern: "#,##0.00 €" } } }, fields: "userEnteredFormat(backgroundColor,textFormat,numberFormat)" } });
+  // Apply background + text to entire row, currency format only to numeric columns (B–N, indices 1–13)
+  fmtReqs.push(
+    { repeatCell: { range: { sheetId: resumeSheetId, startRowIndex: grandRowIdx, endRowIndex: grandRowIdx + 1 }, cell: { userEnteredFormat: { backgroundColor: COLOR_INVOICED_GREEN, textFormat: { bold: true, fontSize: 11 } } }, fields: "userEnteredFormat(backgroundColor,textFormat)" } },
+    { repeatCell: { range: { sheetId: resumeSheetId, startRowIndex: grandRowIdx, endRowIndex: grandRowIdx + 1, startColumnIndex: 1, endColumnIndex: 14 }, cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: "#,##0.00 €" } } }, fields: "userEnteredFormat.numberFormat" } },
+  );
 
   rows.push([""], [""]); // spacers
 
