@@ -768,24 +768,6 @@ function normalizeProduct(product: JsonRecord) {
   };
 }
 
-function normalizeProducts(products: JsonRecord[]) {
-  return products.reduce(
-    (acc, product) => {
-      // Skip items with no usable name
-      const rawName = product.name ?? product.label ?? product.designation;
-      if (!rawName) return acc;
-
-      const normalized = normalizeProduct(product);
-      acc.rows.push(normalized.row);
-      if (normalized.parseError) {
-        acc.parseErrors.push(normalized.parseError);
-      }
-      return acc;
-    },
-    { rows: [] as ProductRow[], parseErrors: [] as ProductParseError[] },
-  );
-}
-
 function normalizeClient(client: JsonRecord): AdminClientRow {
   const addressRecord = (client.addresses ?? client.address ?? client.main_address ?? null) as JsonRecord | JsonRecord[] | null;
   const primaryAddress = Array.isArray(addressRecord)
