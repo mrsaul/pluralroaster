@@ -224,7 +224,9 @@ export type Database = {
       }
       orders: {
         Row: {
+          company_id: string | null
           created_at: string
+          delivery_address_id: string | null
           delivery_date: string
           delivery_discount_percent: number
           discount_percent: number
@@ -234,16 +236,20 @@ export type Database = {
           is_packed: boolean
           is_roasted: boolean
           last_invoice_sync: string | null
+          notes: string | null
           pricing_tier_name: string | null
+          reordered_from: string | null
           sellsy_id: string | null
           status: string
           total_kg: number
           total_price: number
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
+          delivery_address_id?: string | null
           delivery_date: string
           delivery_discount_percent?: number
           discount_percent?: number
@@ -253,16 +259,20 @@ export type Database = {
           is_packed?: boolean
           is_roasted?: boolean
           last_invoice_sync?: string | null
+          notes?: string | null
           pricing_tier_name?: string | null
+          reordered_from?: string | null
           sellsy_id?: string | null
           status?: string
           total_kg?: number
           total_price?: number
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
+          company_id?: string | null
           created_at?: string
+          delivery_address_id?: string | null
           delivery_date?: string
           delivery_discount_percent?: number
           discount_percent?: number
@@ -272,13 +282,15 @@ export type Database = {
           is_packed?: boolean
           is_roasted?: boolean
           last_invoice_sync?: string | null
+          notes?: string | null
           pricing_tier_name?: string | null
+          reordered_from?: string | null
           sellsy_id?: string | null
           status?: string
           total_kg?: number
           total_price?: number
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }

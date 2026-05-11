@@ -1191,7 +1191,9 @@ async function handleCreateInvoice(
   }
 
   // 1. Load order + order_items + products
-  const { data: order, error: orderErr } = await supabaseClient
+  // Cast to `any` on from() to bypass generated-type validation for columns
+  // added via migration (company_id, notes, reordered_from) not yet in types.
+  const { data: order, error: orderErr } = await (supabaseClient as any)
     .from("orders")
     .select(`
       id, user_id, company_id, created_at, total_price,
