@@ -1,20 +1,30 @@
 -- Add Sellsy declination tracking to product_variants
 ALTER TABLE product_variants
   ADD COLUMN IF NOT EXISTS sellsy_declination_id INTEGER,
-  ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual',
+  ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual'
+    CHECK (source IN ('manual', 'sellsy')),
   ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ;
 
--- Mark ALL existing variants as manual and inactive
--- (they will be replaced by Sellsy-synced ones)
+-- One-time deactivation: all pre-Sellsy variants are manual and inactive;
+-- Sellsy sync will create fresh 'sellsy'-sourced rows.
 UPDATE product_variants
-  SET source = 'manual', is_active = false
+  SET is_active = false
   WHERE source = 'manual';
 
 -- Add unique constraint for Sellsy upsert conflict key
 -- (nullable so manual rows don't conflict)
-ALTER TABLE product_variants
-  ADD CONSTRAINT product_variants_sellsy_declination_id_key
-  UNIQUE (sellsy_declination_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'product_variants_sellsy_declination_id_key'
+  ) THEN
+    ALTER TABLE product_variants
+      ADD CONSTRAINT product_variants_sellsy_declination_id_key
+      UNIQUE (sellsy_declination_id);
+  END IF;
+END;
+$$;
 
 -- Add variant tracking to order_items
 ALTER TABLE order_items
