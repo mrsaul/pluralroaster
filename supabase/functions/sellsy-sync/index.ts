@@ -1263,16 +1263,17 @@ async function handleCreateInvoice(
   }
 
   // 3. Build invoice rows (Sellsy v2 format)
-  // Row type is inferred by Sellsy from the presence of `related` (catalog item)
-  // vs description-only (free-form). Do NOT send a `type` field — Sellsy rejects
-  // all known type string values ("product","item","line","service") with 400.
+  // Valid row types per Sellsy v2 OpenAPI spec:
+  //   "catalog" — linked catalog item (requires related[].type = "product")
+  //   "single"  — free-form line item
   const items: JsonRecord[] = ((order as any).order_items ?? []).map((item: any) => {
     const product = item.products ?? {};
     const hasItem = Boolean(product.sellsy_id);
 
     if (hasItem) {
       const row: JsonRecord = {
-        related: [{ type: "item", id: Number(product.sellsy_id) }],
+        type: "catalog",
+        related: [{ type: "product", id: Number(product.sellsy_id) }],
         description: String(item.product_name ?? product.name ?? ""),
         unit_amount: Number(item.price_per_kg),
         quantity: Number(item.quantity),
@@ -1287,6 +1288,7 @@ async function handleCreateInvoice(
 
     // Free-form line item (product not in Sellsy catalog)
     return {
+      type: "single",
       description: String(item.product_name ?? "Product"),
       unit_amount: Number(item.price_per_kg),
       quantity: Number(item.quantity),
