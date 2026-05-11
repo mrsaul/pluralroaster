@@ -207,15 +207,24 @@ Deno.serve(async (req: Request) => {
 
     let spreadsheetId: string;
     let spreadsheetUrl: string;
-    const isExisting = Boolean(existingExport);
 
-    if (existingExport) {
+    // If the caller provides a sheet URL, always use it (allows correcting a bad stored ID).
+    // Otherwise fall back to whatever was stored for this month.
+    const isExisting = Boolean(existingExport);
+    const useProvided = Boolean(bodySpreadsheetId);
+
+    if (useProvided) {
+      spreadsheetId = bodySpreadsheetId!;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+      if (existingExport) {
+        // Update stored record to the newly provided sheet
+        await db.from("sheet_exports").update({ spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl }).eq("month_key", monthKey);
+      } else {
+        await db.from("sheet_exports").insert({ month_key: monthKey, spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl, orders_count: orders.length });
+      }
+    } else if (existingExport) {
       spreadsheetId = existingExport.spreadsheet_id;
       spreadsheetUrl = existingExport.spreadsheet_url;
-    } else if (bodySpreadsheetId) {
-      spreadsheetId = bodySpreadsheetId;
-      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-      await db.from("sheet_exports").insert({ month_key: monthKey, spreadsheet_id: spreadsheetId, spreadsheet_url: spreadsheetUrl, orders_count: orders.length });
     } else {
       throw new Error(
         `No Google Sheet connected for ${monthLabel}. Create a Google Sheet, share it with the service account (${serviceEmail}) as Editor, then paste the URL in the "Connect a Google Sheet" field.`
