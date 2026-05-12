@@ -255,12 +255,24 @@ export default function CatalogPage({
       return;
     }
 
-    const { data: variantsData } = await supabase
-      .from("product_variants")
-      .select("id, product_id, size_label, size_kg, price, sku, is_active, source, sellsy_declination_id")
-      .eq("is_active", true)
-      .eq("source", "sellsy")
-      .order("size_kg", { ascending: true });
+    const [{ data: variantsData }, { data: stockData }] = await Promise.all([
+      supabase
+        .from("product_variants")
+        .select("id, product_id, size_label, size_kg, price, sku, is_active, source, sellsy_declination_id")
+        .eq("is_active", true)
+        .eq("source", "sellsy")
+        .order("size_kg", { ascending: true }),
+      supabase
+        .from("roasted_stock")
+        .select("product_id, quantity_kg"),
+    ]);
+
+    // Build a set of product IDs that have stock available (quantity_kg > 0)
+    const inStockProductIds = new Set<string>(
+      ((stockData ?? []) as any[])
+        .filter((s) => Number(s.quantity_kg) > 0)
+        .map((s) => s.product_id as string),
+    );
 
     const variantsByProduct = new Map<string, ProductVariant[]>();
     ((variantsData ?? []) as any[]).forEach((v) => {
@@ -279,9 +291,12 @@ export default function CatalogPage({
       variantsByProduct.set(v.product_id, list);
     });
 
-    const remoteProducts = (data ?? []).map((p) =>
-      mapProductRow(p as unknown as ProductRow, variantsByProduct.get(p.id)),
-    );
+    const remoteProducts = (data ?? []).map((p) => {
+      const product = mapProductRow(p as unknown as ProductRow, variantsByProduct.get(p.id));
+      // Hide products with no stock from B2B clients
+      product.available = product.available && inStockProductIds.has(p.id);
+      return product;
+    });
     setProducts(remoteProducts.length > 0 ? remoteProducts : []);
     setLoadingProducts(false);
   }, []);

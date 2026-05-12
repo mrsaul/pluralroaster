@@ -479,6 +479,43 @@ type RawDeclination = {
   }> | null;
 };
 
+// Cache: declination_id → price (fetched from /v2/items/{id}/declinations/{decId}/prices)
+const _declinationPriceCache = new Map<number, number>();
+
+/**
+ * Fetch the selling price (excl. tax) for a single declination.
+ * Tries GET /v2/items/{itemId}/declinations/{decId}/prices first;
+ * if that fails or returns no useful price, returns 0.
+ */
+async function fetchDeclinationPrice(
+  accessToken: string,
+  itemId: number,
+  decId: number,
+): Promise<number> {
+  const { response: resp, payload } = await fetchSellsy(
+    `/v2/items/${itemId}/declinations/${decId}/prices`,
+    accessToken,
+    { method: "GET" },
+  );
+
+  if (!resp.ok) {
+    console.warn(`[dec-prices] item ${itemId} dec ${decId} → HTTP ${resp.status}`);
+    return 0;
+  }
+
+  const json = payload.data as any;
+  const rows: any[] = Array.isArray(json) ? json
+    : Array.isArray(json?.data) ? json.data
+    : [];
+
+  for (const row of rows) {
+    // Sellsy returns { rate_category_id, amount_excl_tax, amount_incl_tax }
+    const price = parseFloat(row.amount_excl_tax ?? row.unit_amount ?? row.amount ?? "0");
+    if (Number.isFinite(price) && price > 0) return price;
+  }
+  return 0;
+}
+
 async function fetchDeclinationsForItem(
   accessToken: string,
   itemId: number,
@@ -490,20 +527,23 @@ async function fetchDeclinationsForItem(
     return [];
   }
 
-  const json = payload.data;
+  const json = payload.data as any;
 
-  // TODO: Remove this probe log once the Sellsy declination API structure is confirmed
-  if (itemId === 126) {
-    console.log("[PROBE] Raw /declinations for item 126:", JSON.stringify(json, null, 2));
-  }
-
-  // Sellsy v2 lists come back as { data: [...], pagination: {...} }
-  // or sometimes as a bare array — handle both
   const items: RawDeclination[] = Array.isArray(json)
     ? json
     : Array.isArray(json?.data)
     ? json.data
     : [];
+
+  // Fetch the selling price for each declination individually
+  await Promise.all(
+    items.map(async (dec) => {
+      const price = await fetchDeclinationPrice(accessToken, itemId, dec.id);
+      if (price > 0) {
+        _declinationPriceCache.set(dec.id, price);
+      }
+    }),
+  );
 
   return items;
 }
@@ -525,6 +565,20 @@ function gramsToKg(grams: number): number {
   return grams / 1000;
 }
 
+/**
+ * Extract a canonical weight label ("1kg", "250g") from an arbitrary string.
+ * Used when the Sellsy declination name includes the product name, e.g. "Test Produit  1kg".
+ * Returns null if no weight pattern is found.
+ */
+function extractWeightLabel(text: string): string | null {
+  const lower = text.toLowerCase().trim();
+  const kgMatch = lower.match(/(\d+(?:\.\d+)?)\s*kg\b/);
+  if (kgMatch) return `${kgMatch[1]}kg`;
+  const gMatch = lower.match(/(\d+(?:\.\d+)?)\s*g\b/);
+  if (gMatch) return `${gMatch[1]}g`;
+  return null;
+}
+
 type VariantRow = {
   product_id: string;       // UUID from our products table
   sellsy_declination_id: number;
@@ -537,19 +591,80 @@ type VariantRow = {
   synced_at: string;        // ISO timestamp
 };
 
+function extractSizeLabel(raw: RawDeclination): string | null {
+  const r = raw as any;
+
+  // Try every known Sellsy v2 field variant for the size/attribute value label
+  const candidates: Array<string | null | undefined> = [
+    // Standard: values[0].value_label
+    raw.values?.[0]?.value_label,
+    // Alt: values[0].value
+    r.values?.[0]?.value,
+    // Alt: attribute_values array
+    r.attribute_values?.[0]?.value_label,
+    r.attribute_values?.[0]?.value,
+    r.attribute_values?.[0]?.label,
+    // Alt: attributes array
+    r.attributes?.[0]?.value_label,
+    r.attributes?.[0]?.value,
+    r.attributes?.[0]?.label,
+    // Alt: declination_attributes
+    r.declination_attributes?.[0]?.value_label,
+    r.declination_attributes?.[0]?.value,
+    // Alt: options array
+    r.options?.[0]?.value_label,
+    r.options?.[0]?.value,
+    r.options?.[0]?.label,
+    // Alt: direct fields
+    r.label,
+    r.name,
+    r.reference,   // last resort — might contain "250g" or "1kg"
+  ];
+
+  for (const c of candidates) {
+    const s = typeof c === "string" ? c.trim() : null;
+    if (s) return s;
+  }
+  return null;
+}
+
 function normalizeDeclination(
   raw: RawDeclination,
   productId: string,           // UUID from our products table
   syncedAt: string,
 ): VariantRow | null {
-  // Extract the first attribute value as the size label (e.g. "250g", "1kg")
-  const sizeLabel = raw.values?.[0]?.value_label?.trim() ?? null;
-  if (!sizeLabel) {
-    // Declination without a size attribute — skip (will get default variant in ensureDefaultVariant)
+  // Extract the size label (e.g. "250g", "1kg") from whichever field Sellsy uses.
+  // If the raw label contains the product name (e.g. "Test Produit  1kg"), pull out just the weight part.
+  const rawSizeLabel = extractSizeLabel(raw);
+  if (!rawSizeLabel) {
+    console.warn(`[normalizeDeclination] dec ${raw.id}: no size label found. Keys: ${Object.keys(raw as any).join(", ")}`);
     return null;
   }
+  const sizeLabel = extractWeightLabel(rawSizeLabel) ?? rawSizeLabel;
 
-  const priceHT = raw.price?.default_amount ?? 0;
+  const r = raw as any;
+
+  // Try every known Sellsy v2 field for "Prix de vente HT" on a declination.
+  // Price comes from the per-declination prices endpoint (populated in fetchDeclinationsForItem).
+  // Fall back to inline fields if the cache missed (e.g. endpoint returned no data).
+  let priceHT = _declinationPriceCache.get(raw.id) ?? 0;
+  if (!priceHT) {
+    const inlinePrice =
+      raw.price?.default_amount ??
+      r.unit_amount ??
+      r.selling_price ??
+      r.reference_price ??
+      r.price_excl_tax ??
+      r.price_tax_exc ??
+      r.price_ht ??
+      r.amount;
+    const parsed = typeof inlinePrice === "number" ? inlinePrice
+      : typeof inlinePrice === "string" ? parseFloat(inlinePrice.replace(",", ".")) : NaN;
+    if (!isNaN(parsed) && parsed > 0) priceHT = parsed;
+  }
+  if (!priceHT) {
+    console.warn(`[normalizeDeclination] dec ${raw.id}: no price found`);
+  }
   const weightGrams = parseSizeWeightGrams(sizeLabel);
   const sizeKg = gramsToKg(weightGrams);
 
@@ -560,7 +675,7 @@ function normalizeDeclination(
     size_kg: sizeKg,
     price: priceHT,
     sku: raw.reference ?? null,
-    is_active: raw.is_active,
+    is_active: (raw as any).is_active !== false,  // default true; Sellsy may omit this field
     source: "sellsy",
     synced_at: syncedAt,
   };
