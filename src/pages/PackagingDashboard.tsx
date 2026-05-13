@@ -20,27 +20,44 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
-          order_items ( product_name, quantity, price_per_kg )
+          id, user_id, company_id, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
+          order_items ( product_name, product_sku, quantity, price_per_kg, size_label, size_kg ),
+          companies ( name )
         `)
         .order("delivery_date", { ascending: true });
       if (error) throw error;
+
+      // Resolve client names for auth users via profiles
+      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
+      const { data: profiles } = userIds.length > 0
+        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+        : { data: [] };
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+
       setOrders(
-        (data ?? []).map((o: any) => ({
-          id: o.id,
-          client_name: null,
-          delivery_date: o.delivery_date,
-          total_kg: Number(o.total_kg),
-          status: normalizeOrderStatus(o.status),
-          is_roasted: Boolean(o.is_roasted),
-          is_packed: Boolean(o.is_packed),
-          is_labeled: Boolean(o.is_labeled),
-          items: (o.order_items ?? []).map((i: any) => ({
-            product_name: i.product_name,
-            quantity: Number(i.quantity),
-            price_per_kg: Number(i.price_per_kg),
-          })),
-        })),
+        ((data ?? []) as any[]).map((o) => {
+          const profile = o.user_id ? profileMap.get(o.user_id) : null;
+          const clientName = profile?.full_name || profile?.email
+            || (o.companies as any)?.name || null;
+          return {
+            id: o.id,
+            client_name: clientName,
+            delivery_date: o.delivery_date,
+            total_kg: Number(o.total_kg),
+            status: normalizeOrderStatus(o.status),
+            is_roasted: Boolean(o.is_roasted),
+            is_packed: Boolean(o.is_packed),
+            is_labeled: Boolean(o.is_labeled),
+            items: (o.order_items ?? []).map((i: any) => ({
+              product_name: i.product_name,
+              product_sku: i.product_sku ?? null,
+              quantity: Number(i.quantity),
+              price_per_kg: Number(i.price_per_kg),
+              size_label: i.size_label ?? null,
+              size_kg: i.size_kg != null ? Number(i.size_kg) : null,
+            })),
+          };
+        }),
       );
     } catch (err) {
       toast({ title: "Failed to load orders", description: String(err), variant: "destructive" });
