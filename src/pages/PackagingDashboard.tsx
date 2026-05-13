@@ -37,8 +37,8 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       setOrders(
         ((data ?? []) as any[]).map((o) => {
           const profile = o.user_id ? profileMap.get(o.user_id) : null;
-          const clientName = profile?.full_name || profile?.email
-            || (o.companies as any)?.name || null;
+          const clientName = (o.companies as any)?.name
+            || profile?.full_name || profile?.email || null;
           return {
             id: o.id,
             client_name: clientName,
