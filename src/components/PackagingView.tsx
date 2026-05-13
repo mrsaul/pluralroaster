@@ -17,6 +17,15 @@ import {
   type OrderStatus, type PriorityLevel,
 } from "@/lib/orderStatuses";
 
+export type PackagingItem = {
+  product_name: string;
+  product_sku: string | null;
+  quantity: number;
+  price_per_kg: number;
+  size_label: string | null;
+  size_kg: number | null;
+};
+
 export type PackagingOrder = {
   id: string;
   client_name: string | null;
@@ -26,7 +35,7 @@ export type PackagingOrder = {
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
-  items: { product_name: string; quantity: number; price_per_kg: number }[];
+  items: PackagingItem[];
 };
 
 type ViewMode = "orders" | "grouped";
@@ -64,15 +73,23 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
     [orders]
   );
 
-  // Group by product for batch view
+  // Group by product + size for batch view (keeps 250g and 1kg separate)
   const productGroups = useMemo(() => {
-    const map = new Map<string, { product_name: string; total_kg: number; orders: { orderId: string; client_name: string | null; quantity: number }[] }>();
+    const map = new Map<string, {
+      product_name: string;
+      size_label: string | null;
+      total_kg: number;
+      orders: { orderId: string; client_name: string | null; quantity: number; size_label: string | null; size_kg: number | null }[];
+    }>();
     for (const order of packagingOrders) {
       for (const item of order.items) {
-        const existing = map.get(item.product_name) ?? { product_name: item.product_name, total_kg: 0, orders: [] };
-        existing.total_kg += item.quantity;
-        existing.orders.push({ orderId: order.id, client_name: order.client_name, quantity: item.quantity });
-        map.set(item.product_name, existing);
+        const key = `${item.product_name}||${item.size_label ?? ""}`;
+        const existing = map.get(key) ?? { product_name: item.product_name, size_label: item.size_label, total_kg: 0, orders: [] };
+        // total_kg = bags × kg-per-bag; fall back to treating quantity as kg if size_kg unknown
+        const itemKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
+        existing.total_kg += itemKg;
+        existing.orders.push({ orderId: order.id, client_name: order.client_name, quantity: item.quantity, size_label: item.size_label, size_kg: item.size_kg });
+        map.set(key, existing);
       }
     }
     return Array.from(map.values()).sort((a, b) => b.total_kg - a.total_kg);
@@ -192,12 +209,26 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
                   <div className="px-4 pb-4 space-y-4 border-t border-border">
                     {/* Items */}
                     <div className="mt-3">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between py-1.5 text-sm">
-                          <span className="text-foreground">{item.product_name}</span>
-                          <span className="tabular-nums text-muted-foreground">{item.quantity} kg</span>
-                        </div>
-                      ))}
+                      {order.items.map((item, idx) => {
+                        const totalKg = item.size_kg != null
+                          ? item.quantity * item.size_kg
+                          : item.quantity;
+                        return (
+                          <div key={idx} className="flex items-center justify-between py-1.5 text-sm gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-foreground truncate">{item.product_name}</span>
+                              {item.size_label && (
+                                <Badge variant="secondary" className="text-[10px] shrink-0">{item.size_label}</Badge>
+                              )}
+                            </div>
+                            <span className="tabular-nums text-muted-foreground shrink-0">
+                              {item.size_kg != null
+                                ? `${item.quantity} × ${item.size_label ?? `${item.size_kg}kg`} = ${totalKg.toFixed(2)} kg`
+                                : `${item.quantity} kg`}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Checklist */}
@@ -247,22 +278,24 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
                 <TableHead>Product</TableHead>
+                <TableHead>Size</TableHead>
                 <TableHead className="text-right">Total kg</TableHead>
                 <TableHead className="text-right">Orders</TableHead>
                 <TableHead>Breakdown</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {productGroups.map((group) => (
-                <TableRow key={group.product_name}>
+              {productGroups.map((group, gi) => (
+                <TableRow key={gi}>
                   <TableCell className="font-medium text-foreground">{group.product_name}</TableCell>
-                  <TableCell className="text-right tabular-nums text-foreground font-medium">{group.total_kg.toFixed(0)} kg</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{group.size_label ?? "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums text-foreground font-medium">{group.total_kg.toFixed(2)} kg</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{group.orders.length}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {group.orders.map((o, idx) => (
                         <Badge key={idx} variant="secondary" className="text-[10px]">
-                          {o.client_name ?? o.orderId.slice(0, 6)} · {o.quantity}kg
+                          {o.client_name ?? o.orderId.slice(0, 6)} · {o.quantity}×{o.size_label ?? `${o.size_kg ?? o.quantity}kg`}
                         </Badge>
                       ))}
                     </div>
