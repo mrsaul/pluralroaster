@@ -659,10 +659,14 @@ async function syncDeclinationsToDatabase(
 ): Promise<{ synced: number; errors: string[] }> {
   if (rows.length === 0) return { synced: 0, errors: [] };
 
+  // Upsert on (product_id, size_label): this handles both new variants and
+  // existing manual variants that share the same product+size. When a manual
+  // variant exists (sellsy_declination_id=null), it gets updated with the real
+  // Sellsy declination ID, price, and source=sellsy.
   const { error, count } = await db
     .from("product_variants")
     .upsert(rows, {
-      onConflict: "sellsy_declination_id",
+      onConflict: "product_id,size_label",
       count: "exact",
     });
 
@@ -1710,6 +1714,7 @@ Deno.serve(async (req) => {
     if (body?.mode === "sync-products") {
       return await handleProductSync(user, accessToken);
     }
+
 
     if (body?.mode === "list-clients") {
       return await handleClientList(user, accessToken);
