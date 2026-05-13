@@ -1547,8 +1547,8 @@ async function handleCreateInvoice(
     .select(`
       id, user_id, company_id, created_at, total_price,
       order_items (
-        id, product_name, quantity, price_per_kg,
-        products ( sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
+        id, product_name, quantity, price_per_kg, size_label,
+        products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
       )
     `)
     .eq("id", orderId)
@@ -1611,6 +1611,27 @@ async function handleCreateInvoice(
     });
   }
 
+  // 2b. Load Sellsy declination IDs for products in this order
+  // Products with Sellsy variants require `declination_id` in the catalog row's `related` field.
+  // Fetch all active variants that have a sellsy_declination_id for the products in this order.
+  const orderItems: any[] = (order as any).order_items ?? [];
+  const productIds = [...new Set(orderItems.map((i: any) => i.products?.id).filter(Boolean))];
+  let variantsByProductId: Map<string, { size_label: string | null; price: number; declination_id: number }[]> = new Map();
+  if (productIds.length > 0) {
+    const { data: variants } = await supabaseClient
+      .from("product_variants")
+      .select("product_id, sellsy_declination_id, size_label, price")
+      .in("product_id", productIds)
+      .not("sellsy_declination_id", "is", null)
+      .eq("is_active", true);
+    for (const v of (variants ?? []) as any[]) {
+      const list = variantsByProductId.get(v.product_id) ?? [];
+      list.push({ size_label: v.size_label, price: Number(v.price), declination_id: v.sellsy_declination_id });
+      variantsByProductId.set(v.product_id, list);
+    }
+    console.log(`[invoice] loaded declination IDs for ${variantsByProductId.size} products`);
+  }
+
   // 3. Build invoice rows (Sellsy v2 format)
   // Per Sellsy v2 OpenAPI spec (InvoiceOne / EstimateCreate row oneOf):
   //   "catalog" — linked catalog item; `related` is a plain OBJECT {id, type}, NOT an array
@@ -1618,16 +1639,39 @@ async function handleCreateInvoice(
   //   `quantity` and `unit_amount` must be STRINGS, not numbers
   //   `additionalProperties: false` — no extra fields (no discount, discount_type, etc.)
   //   `tax_id` must be a NUMBER when present
-  console.log(`[invoice] building rows for ${((order as any).order_items ?? []).length} order items`);
-  const items: JsonRecord[] = ((order as any).order_items ?? []).map((item: any) => {
+  console.log(`[invoice] building rows for ${orderItems.length} order items`);
+  const items: JsonRecord[] = orderItems.map((item: any) => {
     const product = item.products ?? {};
     const hasItem = Boolean(product.sellsy_id);
 
     if (hasItem) {
+      // Resolve declination_id: products with Sellsy variants require it.
+      // Match by size_label first, then fall back to closest price match.
+      const productVariants = variantsByProductId.get(product.id) ?? [];
+      let declinationId: number | null = null;
+      if (productVariants.length > 0) {
+        const bySize = item.size_label
+          ? productVariants.find((v) => v.size_label === item.size_label) ?? null
+          : null;
+        if (bySize) {
+          declinationId = bySize.declination_id;
+        } else {
+          // No size_label on order item — pick variant whose price matches price_per_kg
+          const itemPrice = Number(item.price_per_kg ?? 0);
+          const byPrice = productVariants.find((v) => Math.abs(v.price - itemPrice) < 0.01) ?? null;
+          declinationId = byPrice?.declination_id ?? productVariants[0].declination_id;
+        }
+      }
+
       // Catalog row: related is a plain object per spec
+      const related: JsonRecord = { type: "product", id: Number(product.sellsy_id) };
+      if (declinationId != null) {
+        related.declination_id = declinationId;
+      }
+
       const row: JsonRecord = {
         type: "catalog",
-        related: { type: "product", id: Number(product.sellsy_id) },
+        related,
         description: String(item.product_name ?? product.name ?? ""),
         unit_amount: String(item.price_per_kg ?? 0),
         quantity: String(item.quantity ?? 1),
@@ -1636,7 +1680,7 @@ async function handleCreateInvoice(
       if (product.sellsy_tax_id) {
         row.tax_id = Number(product.sellsy_tax_id);
       }
-      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} qty=${row.quantity} unit=${row.unit_amount}`);
+      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} declination_id=${declinationId} qty=${row.quantity} unit=${row.unit_amount}`);
       return row;
     }
 
