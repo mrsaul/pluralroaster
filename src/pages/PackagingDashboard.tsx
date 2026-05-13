@@ -39,7 +39,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
           const profile = profileMap.get(o.user_id);
           const companyName = (o.companies as any)?.name ?? null;
           const clientName =
-            profile?.full_name ?? profile?.email ?? companyName ?? null;
+            companyName ?? profile?.full_name ?? profile?.email ?? null;
           return {
             id: o.id,
             client_name: clientName,

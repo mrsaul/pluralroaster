@@ -218,9 +218,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
         const profile = o.user_id ? profileMap.get(o.user_id) : null;
-        // Fallback chain: auth profile → joined company → nothing
-        const clientName = profile?.full_name || profile?.email
-          || (o.companies as any)?.name || (o.companies as any)?.email || null;
+        // Fallback chain: company name (always the client identity) → auth profile → nothing
+        const clientName = (o.companies as any)?.name
+          || profile?.full_name || profile?.email
+          || (o.companies as any)?.email || null;
         const userEmail = profile?.email || (o.companies as any)?.email || null;
         return {
           id: o.id,
