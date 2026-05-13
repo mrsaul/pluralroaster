@@ -1526,6 +1526,19 @@ async function handleCreateInvoice(
     });
   }
 
+  // 0. Idempotency — if invoice already created, return early
+  const { data: existingOrder } = await (supabaseClient as any)
+    .from("orders")
+    .select("sellsy_invoice_id")
+    .eq("id", orderId)
+    .single();
+  if (existingOrder?.sellsy_invoice_id) {
+    console.log(`[invoice] order ${orderId} already has invoice ${existingOrder.sellsy_invoice_id}, skipping`);
+    return new Response(JSON.stringify({ success: true, invoice_id: existingOrder.sellsy_invoice_id, already_exists: true }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // 1. Load order + order_items + products
   // Cast to `any` on from() to bypass generated-type validation for columns
   // added via migration (company_id, notes, reordered_from) not yet in types.
@@ -1599,37 +1612,41 @@ async function handleCreateInvoice(
   }
 
   // 3. Build invoice rows (Sellsy v2 format)
-  // Valid row types per Sellsy v2 OpenAPI spec:
-  //   "catalog" — linked catalog item (requires related[].type = "product")
-  //   "single"  — free-form line item
+  // Per Sellsy v2 OpenAPI spec (InvoiceOne / EstimateCreate row oneOf):
+  //   "catalog" — linked catalog item; `related` is a plain OBJECT {id, type}, NOT an array
+  //   "single"  — free-form line item; no `related` field
+  //   `quantity` and `unit_amount` must be STRINGS, not numbers
+  //   `additionalProperties: false` — no extra fields (no discount, discount_type, etc.)
+  //   `tax_id` must be a NUMBER when present
+  console.log(`[invoice] building rows for ${((order as any).order_items ?? []).length} order items`);
   const items: JsonRecord[] = ((order as any).order_items ?? []).map((item: any) => {
     const product = item.products ?? {};
     const hasItem = Boolean(product.sellsy_id);
 
     if (hasItem) {
+      // Catalog row: related is a plain object per spec
       const row: JsonRecord = {
         type: "catalog",
-        related: [{ type: "product", id: Number(product.sellsy_id) }],
+        related: { type: "product", id: Number(product.sellsy_id) },
         description: String(item.product_name ?? product.name ?? ""),
-        unit_amount: Number(item.price_per_kg),
-        quantity: Number(item.quantity),
-        discount: 0,
-        discount_type: "percent",
+        unit_amount: String(item.price_per_kg ?? 0),
+        quantity: String(item.quantity ?? 1),
       };
+      // tax_id must be a number (integer) when present, not a string
       if (product.sellsy_tax_id) {
-        row.tax_id = String(product.sellsy_tax_id);
+        row.tax_id = Number(product.sellsy_tax_id);
       }
+      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} qty=${row.quantity} unit=${row.unit_amount}`);
       return row;
     }
 
     // Free-form line item (product not in Sellsy catalog)
+    console.log(`[invoice] single row: "${item.product_name}" qty=${item.quantity} unit=${item.price_per_kg}`);
     return {
       type: "single",
       description: String(item.product_name ?? "Product"),
-      unit_amount: Number(item.price_per_kg),
-      quantity: Number(item.quantity),
-      discount: 0,
-      discount_type: "percent",
+      unit_amount: String(item.price_per_kg ?? 0),
+      quantity: String(item.quantity ?? 1),
     };
   });
 
@@ -1660,6 +1677,7 @@ async function handleCreateInvoice(
   // 5. POST to Sellsy
   const token = accessToken;
 
+  console.log(`[invoice] POST /v2/invoices payload: ${JSON.stringify(invoicePayload)}`);
   const sellsyResult = await fetchSellsy("/v2/invoices", token, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1669,6 +1687,7 @@ async function handleCreateInvoice(
   if (!sellsyResult.response.ok) {
     const errText = sellsyResult.payload.text ?? JSON.stringify(sellsyResult.payload);
     const errMsg = `Sellsy API error ${sellsyResult.response.status}: ${errText}`;
+    console.error(`[invoice] ${errMsg}`);
     await supabaseClient.from("orders").update({
       sellsy_invoice_status: "error",
       sellsy_invoice_error: errMsg,
@@ -1682,6 +1701,7 @@ async function handleCreateInvoice(
   const invoiceObj = (sellsyData?.id != null ? sellsyData : (sellsyData as any)?.data) as JsonRecord | null ?? {};
   const invoiceId = String(invoiceObj?.id ?? "");
   const invoiceUrl = String((invoiceObj as any)?._links?.self?.href ?? "");
+  console.log(`[invoice] created Sellsy invoice ${invoiceId} for order ${orderId}`);
 
   // 6. Update orders row
   await supabaseClient.from("orders").update({
