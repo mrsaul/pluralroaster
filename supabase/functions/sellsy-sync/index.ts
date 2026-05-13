@@ -1093,9 +1093,21 @@ async function handleProductSync(user: AuthenticatedUser, accessToken: string): 
     totalVariantsSynced += synced;
     parseErrors.push(...errors);
 
-    // If no valid declinations, ensure a default "Standard" variant exists
     if (variantRows.length === 0) {
+      // No real declinations — ensure a fallback "Standard" variant exists
       await ensureDefaultVariant(db, entry.uuid, entry.pricePerKg);
+    } else {
+      // Real declinations landed — retire any orphaned "Standard" fallback for this product
+      const { error: cleanupErr } = await db
+        .from("product_variants")
+        .update({ is_active: false })
+        .eq("product_id", entry.uuid)
+        .eq("source", "sellsy")
+        .eq("size_label", "Standard")
+        .is("sellsy_declination_id", null);
+      if (cleanupErr) {
+        console.error(`[sync] Cleanup Standard fallback for ${entry.uuid}:`, cleanupErr.message);
+      }
     }
   }
 
