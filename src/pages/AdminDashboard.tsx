@@ -642,7 +642,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || "Sync failed");
       await Promise.all([loadProducts(), loadLatestProductSync()]);
-      toast({ title: "Product sync completed", description: `${data.syncedCount ?? 0} products refreshed.` });
+      toast({ title: "Product sync completed", description: `${data.syncedCount ?? 0} products, ${data.variantsSynced ?? 0} variants refreshed.` });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setProductError(msg);
