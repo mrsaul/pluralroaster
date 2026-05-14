@@ -1561,26 +1561,13 @@ async function handleCreateInvoice(
   }
 
   // 2. Resolve company sellsy_id + contact sellsy_contact_id
-  // Prefer lookup via user_id (auth clients); fall back to company_id for Sellsy-only clients
+  // Always use company_id path when available — avoids multi-row crash when a
+  // single user_id is linked to multiple companies. Fall back to user_id only
+  // for legacy orders with no company_id.
   let companySellsyId: unknown = null;
   let contactSellsyId: string | null = null;
 
-  if ((order as any).user_id) {
-    const { data: contactRow, error: contactErr } = await supabaseClient
-      .from("contacts")
-      .select("sellsy_contact_id, companies ( sellsy_id )")
-      .eq("user_id", (order as any).user_id)
-      .maybeSingle();
-
-    if (contactErr) {
-      return new Response(JSON.stringify({ success: false, error: contactErr.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id ?? null;
-    contactSellsyId = (contactRow as any)?.sellsy_contact_id ?? null;
-  } else if ((order as any).company_id) {
+  if ((order as any).company_id) {
     // Sellsy-only client: look up company directly via two separate queries
     const companyId = (order as any).company_id as string;
 
@@ -1603,6 +1590,22 @@ async function handleCreateInvoice(
       ?? (contactRows ?? [])[0]
       ?? null;
     contactSellsyId = (primaryContact as any)?.sellsy_contact_id ?? null;
+    console.log(`[invoice] resolved via company_id: companySellsyId=${companySellsyId} contactSellsyId=${contactSellsyId}`);
+  } else if ((order as any).user_id) {
+    // Legacy: order has no company_id — look up via user_id with limit(1)
+    const { data: contactRow, error: contactErr } = await supabaseClient
+      .from("contacts")
+      .select("sellsy_contact_id, companies ( sellsy_id )")
+      .eq("user_id", (order as any).user_id)
+      .limit(1)
+      .maybeSingle();
+    if (contactErr) {
+      return new Response(JSON.stringify({ success: false, error: contactErr.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id ?? null;
+    contactSellsyId = (contactRow as any)?.sellsy_contact_id ?? null;
   }
 
   if (!companySellsyId) {
