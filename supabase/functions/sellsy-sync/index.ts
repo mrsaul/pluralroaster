@@ -483,9 +483,10 @@ type RawDeclination = {
 const _declinationPriceCache = new Map<number, number>();
 
 /**
- * Fetch the selling price (excl. tax) for a single declination.
- * Tries GET /v2/items/{itemId}/declinations/{decId}/prices first;
- * if that fails or returns no useful price, returns 0.
+ * Fetch the selling price excl. tax for a single declination.
+ * Sellsy does not include price in the declination list response — it must be
+ * fetched separately from GET /v2/items/{itemId}/declinations/{decId}/prices.
+ * Returns 0 if the endpoint fails or returns no usable price.
  */
 async function fetchDeclinationPrice(
   accessToken: string,
@@ -529,45 +530,26 @@ async function fetchDeclinationsForItem(
 
   const json = payload.data as any;
 
+  // Sellsy v2 lists come back as { data: [...], pagination: {...} } or a bare array
   const items: RawDeclination[] = Array.isArray(json)
     ? json
     : Array.isArray(json?.data)
     ? json.data
     : [];
 
-  // Fetch the selling price for each declination individually
+  // Fetch the selling price for each declination individually (not in list response)
   await Promise.all(
     items.map(async (dec) => {
       const price = await fetchDeclinationPrice(accessToken, itemId, dec.id);
-      if (price > 0) {
-        _declinationPriceCache.set(dec.id, price);
-      }
+      if (price > 0) _declinationPriceCache.set(dec.id, price);
     }),
   );
 
   return items;
 }
 
-/** Parse a size label like "250g", "1kg", "3kg" into grams for sort ordering. */
-function parseSizeWeightGrams(label: string | null): number {
-  if (!label) return 9999;
-  const lower = label.toLowerCase().trim();
-  const kgMatch = lower.match(/^(\d+(?:\.\d+)?)\s*kg/);
-  if (kgMatch) return Math.round(parseFloat(kgMatch[1]) * 1000);
-  const gMatch = lower.match(/^(\d+(?:\.\d+)?)\s*g/);
-  if (gMatch) return Math.round(parseFloat(gMatch[1]));
-  console.warn(`[parseSizeWeightGrams] Unrecognized size label: "${label}" — defaulting to 9999g`);
-  return 9999;
-}
-
-/** Convert grams to kg for size_kg column (e.g. 250 → 0.25, 1000 → 1). */
-function gramsToKg(grams: number): number {
-  return grams / 1000;
-}
-
 /**
- * Extract a canonical weight label ("1kg", "250g") from an arbitrary string.
- * Used when the Sellsy declination name includes the product name, e.g. "Test Produit  1kg".
+ * Extract a canonical weight label ("250g", "1kg") from an arbitrary string.
  * Returns null if no weight pattern is found.
  */
 function extractWeightLabel(text: string): string | null {
@@ -577,6 +559,45 @@ function extractWeightLabel(text: string): string | null {
   const gMatch = lower.match(/(\d+(?:\.\d+)?)\s*g\b/);
   if (gMatch) return `${gMatch[1]}g`;
   return null;
+}
+
+/** Parse a size label like "250g", "1kg", "3kg" into grams for sort ordering. */
+function parseSizeWeightGrams(label: string | null): number {
+  if (!label) return 9999;
+  const lower = label.toLowerCase().trim();
+  const kgMatch = lower.match(/(\d+(?:\.\d+)?)\s*kg\b/);
+  if (kgMatch) return Math.round(parseFloat(kgMatch[1]) * 1000);
+  const gMatch = lower.match(/(\d+(?:\.\d+)?)\s*g\b/);
+  if (gMatch) return Math.round(parseFloat(gMatch[1]));
+  console.warn(`[parseSizeWeightGrams] Unrecognized size label: "${label}" — defaulting to 9999g`);
+  return 9999;
+}
+
+/**
+ * Extract the best available size label from a Sellsy declination.
+ * Tries attribute values first, then falls back to name/reference.
+ */
+function extractSizeLabel(raw: RawDeclination): string | null {
+  const r = raw as any;
+  const candidates: (string | null | undefined)[] = [
+    r.values?.[0]?.value_label,
+    r.values?.[0]?.value,
+    r.attribute_values?.[0]?.value_label,
+    r.attribute_values?.[0]?.value,
+    r.options?.[0]?.label,
+    r.options?.[0]?.value,
+    r.name,
+    r.reference,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return null;
+}
+
+/** Convert grams to kg for size_kg column (e.g. 250 → 0.25, 1000 → 1). */
+function gramsToKg(grams: number): number {
+  return grams / 1000;
 }
 
 type VariantRow = {
@@ -591,80 +612,30 @@ type VariantRow = {
   synced_at: string;        // ISO timestamp
 };
 
-function extractSizeLabel(raw: RawDeclination): string | null {
-  const r = raw as any;
-
-  // Try every known Sellsy v2 field variant for the size/attribute value label
-  const candidates: Array<string | null | undefined> = [
-    // Standard: values[0].value_label
-    raw.values?.[0]?.value_label,
-    // Alt: values[0].value
-    r.values?.[0]?.value,
-    // Alt: attribute_values array
-    r.attribute_values?.[0]?.value_label,
-    r.attribute_values?.[0]?.value,
-    r.attribute_values?.[0]?.label,
-    // Alt: attributes array
-    r.attributes?.[0]?.value_label,
-    r.attributes?.[0]?.value,
-    r.attributes?.[0]?.label,
-    // Alt: declination_attributes
-    r.declination_attributes?.[0]?.value_label,
-    r.declination_attributes?.[0]?.value,
-    // Alt: options array
-    r.options?.[0]?.value_label,
-    r.options?.[0]?.value,
-    r.options?.[0]?.label,
-    // Alt: direct fields
-    r.label,
-    r.name,
-    r.reference,   // last resort — might contain "250g" or "1kg"
-  ];
-
-  for (const c of candidates) {
-    const s = typeof c === "string" ? c.trim() : null;
-    if (s) return s;
-  }
-  return null;
-}
-
 function normalizeDeclination(
   raw: RawDeclination,
   productId: string,           // UUID from our products table
   syncedAt: string,
 ): VariantRow | null {
-  // Extract the size label (e.g. "250g", "1kg") from whichever field Sellsy uses.
-  // If the raw label contains the product name (e.g. "Test Produit  1kg"), pull out just the weight part.
+  // Extract size label from attribute values, name, or reference
   const rawSizeLabel = extractSizeLabel(raw);
   if (!rawSizeLabel) {
-    console.warn(`[normalizeDeclination] dec ${raw.id}: no size label found. Keys: ${Object.keys(raw as any).join(", ")}`);
+    // Declination without any usable size label — skip
     return null;
   }
+
+  // Prefer a clean canonical weight label ("1kg", "250g") extracted from the raw label.
+  // If the raw label is already clean (e.g. "1kg"), extractWeightLabel returns it directly.
+  // If it's embedded in a longer string (e.g. "Colombie - Guadalupe 1kg"), we strip the noise.
   const sizeLabel = extractWeightLabel(rawSizeLabel) ?? rawSizeLabel;
 
-  const r = raw as any;
-
-  // Try every known Sellsy v2 field for "Prix de vente HT" on a declination.
-  // Price comes from the per-declination prices endpoint (populated in fetchDeclinationsForItem).
-  // Fall back to inline fields if the cache missed (e.g. endpoint returned no data).
+  // Price from the per-declination cache populated by fetchDeclinationsForItem
   let priceHT = _declinationPriceCache.get(raw.id) ?? 0;
-  if (!priceHT) {
-    const inlinePrice =
-      raw.price?.default_amount ??
-      r.unit_amount ??
-      r.selling_price ??
-      r.reference_price ??
-      r.price_excl_tax ??
-      r.price_tax_exc ??
-      r.price_ht ??
-      r.amount;
-    const parsed = typeof inlinePrice === "number" ? inlinePrice
-      : typeof inlinePrice === "string" ? parseFloat(inlinePrice.replace(",", ".")) : NaN;
-    if (!isNaN(parsed) && parsed > 0) priceHT = parsed;
+  // Fallback to any inline price fields Sellsy may include in future API versions
+  if (priceHT === 0) {
+    priceHT = raw.price?.default_amount ?? raw.price?.default_amount_taxes_inc ?? 0;
   }
-  if (!priceHT) {
-    console.warn(`[normalizeDeclination] dec ${raw.id}: no price found`);
-  }
+
   const weightGrams = parseSizeWeightGrams(sizeLabel);
   const sizeKg = gramsToKg(weightGrams);
 
@@ -675,7 +646,8 @@ function normalizeDeclination(
     size_kg: sizeKg,
     price: priceHT,
     sku: raw.reference ?? null,
-    is_active: (raw as any).is_active !== false,  // default true; Sellsy may omit this field
+    // Sellsy sometimes omits is_active — default to true
+    is_active: (raw as any).is_active !== false,
     source: "sellsy",
     synced_at: syncedAt,
   };
@@ -687,10 +659,14 @@ async function syncDeclinationsToDatabase(
 ): Promise<{ synced: number; errors: string[] }> {
   if (rows.length === 0) return { synced: 0, errors: [] };
 
+  // Upsert on (product_id, size_label): this handles both new variants and
+  // existing manual variants that share the same product+size. When a manual
+  // variant exists (sellsy_declination_id=null), it gets updated with the real
+  // Sellsy declination ID, price, and source=sellsy.
   const { error, count } = await db
     .from("product_variants")
     .upsert(rows, {
-      onConflict: "sellsy_declination_id",
+      onConflict: "product_id,size_label",
       count: "exact",
     });
 
@@ -1093,20 +1069,21 @@ async function handleProductSync(user: AuthenticatedUser, accessToken: string): 
     totalVariantsSynced += synced;
     parseErrors.push(...errors);
 
+    // If no valid declinations, ensure a default "Standard" variant exists.
+    // If real declinations arrived, retire any lingering Standard fallback variant.
     if (variantRows.length === 0) {
-      // No real declinations — ensure a fallback "Standard" variant exists
       await ensureDefaultVariant(db, entry.uuid, entry.pricePerKg);
     } else {
-      // Real declinations landed — retire any orphaned "Standard" fallback for this product
-      const { error: cleanupErr } = await db
+      // Retire the Standard fallback: real declinations supersede it
+      const { error: retireErr } = await db
         .from("product_variants")
         .update({ is_active: false })
         .eq("product_id", entry.uuid)
         .eq("source", "sellsy")
         .eq("size_label", "Standard")
         .is("sellsy_declination_id", null);
-      if (cleanupErr) {
-        console.error(`[sync] Cleanup Standard fallback for ${entry.uuid}:`, cleanupErr.message);
+      if (retireErr) {
+        console.warn(`[sync] retire Standard variant for ${entry.uuid}:`, retireErr.message);
       }
     }
   }
@@ -1549,6 +1526,19 @@ async function handleCreateInvoice(
     });
   }
 
+  // 0. Idempotency — if invoice already created, return early
+  const { data: existingOrder } = await (supabaseClient as any)
+    .from("orders")
+    .select("sellsy_invoice_id")
+    .eq("id", orderId)
+    .single();
+  if (existingOrder?.sellsy_invoice_id) {
+    console.log(`[invoice] order ${orderId} already has invoice ${existingOrder.sellsy_invoice_id}, skipping`);
+    return new Response(JSON.stringify({ success: true, invoice_id: existingOrder.sellsy_invoice_id, already_exists: true }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // 1. Load order + order_items + products
   // Cast to `any` on from() to bypass generated-type validation for columns
   // added via migration (company_id, notes, reordered_from) not yet in types.
@@ -1557,8 +1547,8 @@ async function handleCreateInvoice(
     .select(`
       id, user_id, company_id, created_at, total_price,
       order_items (
-        id, product_name, quantity, price_per_kg,
-        products ( sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
+        id, product_name, quantity, price_per_kg, size_label,
+        products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
       )
     `)
     .eq("id", orderId)
@@ -1571,40 +1561,15 @@ async function handleCreateInvoice(
   }
 
   // 2. Resolve company sellsy_id + contact sellsy_contact_id
-  // Prefer company_id path when set (most reliable — orders always have company_id).
-  // Fall back to user_id path only for legacy orders without company_id.
+  // Prefer lookup via user_id (auth clients); fall back to company_id for Sellsy-only clients
   let companySellsyId: unknown = null;
   let contactSellsyId: string | null = null;
 
-  if ((order as any).company_id) {
-    // Primary path: use company_id directly — avoids multi-row issues when a
-    // single user_id is linked to multiple companies.
-    const companyId = (order as any).company_id as string;
-
-    const { data: companyRow } = await supabaseClient
-      .from("companies")
-      .select("sellsy_id")
-      .eq("id", companyId)
-      .maybeSingle();
-    companySellsyId = (companyRow as any)?.sellsy_id ?? null;
-
-    // Find the primary contact for this company to link the invoice
-    const { data: contactRows } = await supabaseClient
-      .from("contacts")
-      .select("sellsy_contact_id, is_primary")
-      .eq("company_id", companyId)
-      .order("is_primary", { ascending: false });
-    const primaryContact = ((contactRows ?? []) as any[]).find((c) => c.is_primary)
-      ?? (contactRows ?? [])[0] ?? null;
-    contactSellsyId = (primaryContact as any)?.sellsy_contact_id ?? null;
-    console.log(`[invoice] resolved via company_id: companySellsyId=${companySellsyId} contactSellsyId=${contactSellsyId}`);
-  } else if ((order as any).user_id) {
-    // Legacy path: order has no company_id, look up via user_id
+  if ((order as any).user_id) {
     const { data: contactRow, error: contactErr } = await supabaseClient
       .from("contacts")
       .select("sellsy_contact_id, companies ( sellsy_id )")
       .eq("user_id", (order as any).user_id)
-      .limit(1)
       .maybeSingle();
 
     if (contactErr) {
@@ -1615,7 +1580,29 @@ async function handleCreateInvoice(
 
     companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id ?? null;
     contactSellsyId = (contactRow as any)?.sellsy_contact_id ?? null;
-    console.log(`[invoice] resolved via user_id: companySellsyId=${companySellsyId}`);
+  } else if ((order as any).company_id) {
+    // Sellsy-only client: look up company directly via two separate queries
+    const companyId = (order as any).company_id as string;
+
+    const { data: companyRow } = await supabaseClient
+      .from("companies")
+      .select("sellsy_id")
+      .eq("id", companyId)
+      .maybeSingle();
+
+    companySellsyId = (companyRow as any)?.sellsy_id ?? null;
+
+    // Find primary contact's Sellsy contact ID
+    const { data: contactRows } = await supabaseClient
+      .from("contacts")
+      .select("sellsy_contact_id, is_primary")
+      .eq("company_id", companyId)
+      .order("is_primary", { ascending: false });
+
+    const primaryContact = ((contactRows ?? []) as any[]).find((c) => c.is_primary)
+      ?? (contactRows ?? [])[0]
+      ?? null;
+    contactSellsyId = (primaryContact as any)?.sellsy_contact_id ?? null;
   }
 
   if (!companySellsyId) {
@@ -1624,38 +1611,86 @@ async function handleCreateInvoice(
     });
   }
 
+  // 2b. Load Sellsy declination IDs for products in this order
+  // Products with Sellsy variants require `declination_id` in the catalog row's `related` field.
+  // Fetch all active variants that have a sellsy_declination_id for the products in this order.
+  const orderItems: any[] = (order as any).order_items ?? [];
+  const productIds = [...new Set(orderItems.map((i: any) => i.products?.id).filter(Boolean))];
+  let variantsByProductId: Map<string, { size_label: string | null; price: number; declination_id: number }[]> = new Map();
+  if (productIds.length > 0) {
+    const { data: variants } = await supabaseClient
+      .from("product_variants")
+      .select("product_id, sellsy_declination_id, size_label, price")
+      .in("product_id", productIds)
+      .not("sellsy_declination_id", "is", null)
+      .eq("is_active", true);
+    for (const v of (variants ?? []) as any[]) {
+      const list = variantsByProductId.get(v.product_id) ?? [];
+      list.push({ size_label: v.size_label, price: Number(v.price), declination_id: v.sellsy_declination_id });
+      variantsByProductId.set(v.product_id, list);
+    }
+    console.log(`[invoice] loaded declination IDs for ${variantsByProductId.size} products`);
+  }
+
   // 3. Build invoice rows (Sellsy v2 format)
-  // Valid row types per Sellsy v2 OpenAPI spec:
-  //   "catalog" — linked catalog item (requires related[].type = "product")
-  //   "single"  — free-form line item
-  const items: JsonRecord[] = ((order as any).order_items ?? []).map((item: any) => {
+  // Per Sellsy v2 OpenAPI spec (InvoiceOne / EstimateCreate row oneOf):
+  //   "catalog" — linked catalog item; `related` is a plain OBJECT {id, type}, NOT an array
+  //   "single"  — free-form line item; no `related` field
+  //   `quantity` and `unit_amount` must be STRINGS, not numbers
+  //   `additionalProperties: false` — no extra fields (no discount, discount_type, etc.)
+  //   `tax_id` must be a NUMBER when present
+  console.log(`[invoice] building rows for ${orderItems.length} order items`);
+  const items: JsonRecord[] = orderItems.map((item: any) => {
     const product = item.products ?? {};
     const hasItem = Boolean(product.sellsy_id);
 
     if (hasItem) {
+      // Resolve declination_id: products with Sellsy variants require it.
+      // Match by size_label first, then fall back to closest price match.
+      const productVariants = variantsByProductId.get(product.id) ?? [];
+      let declinationId: number | null = null;
+      if (productVariants.length > 0) {
+        const bySize = item.size_label
+          ? productVariants.find((v) => v.size_label === item.size_label) ?? null
+          : null;
+        if (bySize) {
+          declinationId = bySize.declination_id;
+        } else {
+          // No size_label on order item — pick variant whose price matches price_per_kg
+          const itemPrice = Number(item.price_per_kg ?? 0);
+          const byPrice = productVariants.find((v) => Math.abs(v.price - itemPrice) < 0.01) ?? null;
+          declinationId = byPrice?.declination_id ?? productVariants[0].declination_id;
+        }
+      }
+
+      // Catalog row: related is a plain object per spec
+      const related: JsonRecord = { type: "product", id: Number(product.sellsy_id) };
+      if (declinationId != null) {
+        related.declination_id = declinationId;
+      }
+
       const row: JsonRecord = {
         type: "catalog",
-        related: [{ type: "product", id: Number(product.sellsy_id) }],
+        related,
         description: String(item.product_name ?? product.name ?? ""),
-        unit_amount: Number(item.price_per_kg),
-        quantity: Number(item.quantity),
-        discount: 0,
-        discount_type: "percent",
+        unit_amount: String(item.price_per_kg ?? 0),
+        quantity: String(item.quantity ?? 1),
       };
+      // tax_id must be a number (integer) when present, not a string
       if (product.sellsy_tax_id) {
-        row.tax_id = String(product.sellsy_tax_id);
+        row.tax_id = Number(product.sellsy_tax_id);
       }
+      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} declination_id=${declinationId} qty=${row.quantity} unit=${row.unit_amount}`);
       return row;
     }
 
     // Free-form line item (product not in Sellsy catalog)
+    console.log(`[invoice] single row: "${item.product_name}" qty=${item.quantity} unit=${item.price_per_kg}`);
     return {
       type: "single",
       description: String(item.product_name ?? "Product"),
-      unit_amount: Number(item.price_per_kg),
-      quantity: Number(item.quantity),
-      discount: 0,
-      discount_type: "percent",
+      unit_amount: String(item.price_per_kg ?? 0),
+      quantity: String(item.quantity ?? 1),
     };
   });
 
@@ -1686,6 +1721,7 @@ async function handleCreateInvoice(
   // 5. POST to Sellsy
   const token = accessToken;
 
+  console.log(`[invoice] POST /v2/invoices payload: ${JSON.stringify(invoicePayload)}`);
   const sellsyResult = await fetchSellsy("/v2/invoices", token, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1695,6 +1731,7 @@ async function handleCreateInvoice(
   if (!sellsyResult.response.ok) {
     const errText = sellsyResult.payload.text ?? JSON.stringify(sellsyResult.payload);
     const errMsg = `Sellsy API error ${sellsyResult.response.status}: ${errText}`;
+    console.error(`[invoice] ${errMsg}`);
     await supabaseClient.from("orders").update({
       sellsy_invoice_status: "error",
       sellsy_invoice_error: errMsg,
@@ -1708,6 +1745,7 @@ async function handleCreateInvoice(
   const invoiceObj = (sellsyData?.id != null ? sellsyData : (sellsyData as any)?.data) as JsonRecord | null ?? {};
   const invoiceId = String(invoiceObj?.id ?? "");
   const invoiceUrl = String((invoiceObj as any)?._links?.self?.href ?? "");
+  console.log(`[invoice] created Sellsy invoice ${invoiceId} for order ${orderId}`);
 
   // 6. Update orders row
   await supabaseClient.from("orders").update({
@@ -1740,6 +1778,7 @@ Deno.serve(async (req) => {
     if (body?.mode === "sync-products") {
       return await handleProductSync(user, accessToken);
     }
+
 
     if (body?.mode === "list-clients") {
       return await handleClientList(user, accessToken);
