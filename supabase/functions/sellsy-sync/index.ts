@@ -1571,15 +1571,40 @@ async function handleCreateInvoice(
   }
 
   // 2. Resolve company sellsy_id + contact sellsy_contact_id
-  // Prefer lookup via user_id (auth clients); fall back to company_id for Sellsy-only clients
+  // Prefer company_id path when set (most reliable — orders always have company_id).
+  // Fall back to user_id path only for legacy orders without company_id.
   let companySellsyId: unknown = null;
   let contactSellsyId: string | null = null;
 
-  if ((order as any).user_id) {
+  if ((order as any).company_id) {
+    // Primary path: use company_id directly — avoids multi-row issues when a
+    // single user_id is linked to multiple companies.
+    const companyId = (order as any).company_id as string;
+
+    const { data: companyRow } = await supabaseClient
+      .from("companies")
+      .select("sellsy_id")
+      .eq("id", companyId)
+      .maybeSingle();
+    companySellsyId = (companyRow as any)?.sellsy_id ?? null;
+
+    // Find the primary contact for this company to link the invoice
+    const { data: contactRows } = await supabaseClient
+      .from("contacts")
+      .select("sellsy_contact_id, is_primary")
+      .eq("company_id", companyId)
+      .order("is_primary", { ascending: false });
+    const primaryContact = ((contactRows ?? []) as any[]).find((c) => c.is_primary)
+      ?? (contactRows ?? [])[0] ?? null;
+    contactSellsyId = (primaryContact as any)?.sellsy_contact_id ?? null;
+    console.log(`[invoice] resolved via company_id: companySellsyId=${companySellsyId} contactSellsyId=${contactSellsyId}`);
+  } else if ((order as any).user_id) {
+    // Legacy path: order has no company_id, look up via user_id
     const { data: contactRow, error: contactErr } = await supabaseClient
       .from("contacts")
       .select("sellsy_contact_id, companies ( sellsy_id )")
       .eq("user_id", (order as any).user_id)
+      .limit(1)
       .maybeSingle();
 
     if (contactErr) {
@@ -1590,29 +1615,7 @@ async function handleCreateInvoice(
 
     companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id ?? null;
     contactSellsyId = (contactRow as any)?.sellsy_contact_id ?? null;
-  } else if ((order as any).company_id) {
-    // Sellsy-only client: look up company directly via two separate queries
-    const companyId = (order as any).company_id as string;
-
-    const { data: companyRow } = await supabaseClient
-      .from("companies")
-      .select("sellsy_id")
-      .eq("id", companyId)
-      .maybeSingle();
-
-    companySellsyId = (companyRow as any)?.sellsy_id ?? null;
-
-    // Find primary contact's Sellsy contact ID
-    const { data: contactRows } = await supabaseClient
-      .from("contacts")
-      .select("sellsy_contact_id, is_primary")
-      .eq("company_id", companyId)
-      .order("is_primary", { ascending: false });
-
-    const primaryContact = ((contactRows ?? []) as any[]).find((c) => c.is_primary)
-      ?? (contactRows ?? [])[0]
-      ?? null;
-    contactSellsyId = (primaryContact as any)?.sellsy_contact_id ?? null;
+    console.log(`[invoice] resolved via user_id: companySellsyId=${companySellsyId}`);
   }
 
   if (!companySellsyId) {
