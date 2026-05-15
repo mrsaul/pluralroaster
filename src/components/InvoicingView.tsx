@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Send, RefreshCw, ExternalLink, AlertCircle, CheckCircle2, Search, X, Filter, AlertTriangle,
   Sheet,
@@ -21,6 +21,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { ORDER_STATUS_CLASS, ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/orderStatuses";
+import { useUrlState } from "@/hooks/useUrlState";
 
 /* ─── Constants ─── */
 const FRENCH_MONTHS_UI = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -68,8 +69,8 @@ const INVOICING_STATUS_CLASS: Record<InvoicingStatus, string> = {
 /* ─── Component ─── */
 
 export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, sendingIds }: InvoicingViewProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [invoicingFilter, setInvoicingFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useUrlState("iq", "");
+  const [invoicingFilter, setInvoicingFilter] = useUrlState("if", "all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailOrder, setDetailOrder] = useState<InvoicingOrder | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
@@ -79,8 +80,12 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
   const [sheetIdInput, setSheetIdInput] = useState("");
   const [serviceAccountEmail, setServiceAccountEmail] = useState<string | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth()); // 0-indexed
+  const [selectedYearStr, setSelectedYearStr] = useUrlState("iy", String(new Date().getFullYear()));
+  const [selectedMonthStr, setSelectedMonthStr] = useUrlState("im", String(new Date().getMonth()));
+  const selectedYear = Number(selectedYearStr);
+  const selectedMonth = Number(selectedMonthStr);
+  const setSelectedYear = useCallback((y: number) => setSelectedYearStr(String(y)), [setSelectedYearStr]);
+  const setSelectedMonth = useCallback((m: number) => setSelectedMonthStr(String(m)), [setSelectedMonthStr]);
   const { toast } = useToast();
 
   // Extract spreadsheet ID from a Google Sheets URL or plain ID
