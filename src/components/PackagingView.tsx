@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { useUrlState } from "@/hooks/useUrlState";
+import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { format, parseISO } from "date-fns";
 import {
   Package, CheckSquare, ChevronDown, ChevronRight,
@@ -47,16 +49,34 @@ interface PackagingViewProps {
 }
 
 export function PackagingView({ orders, onStatusChange, onChecklistChange }: PackagingViewProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("orders");
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // Persist view mode to URL so returning to the tab restores it
+  const [viewModeRaw, setViewMode] = useUrlState("pv", "orders");
+  const viewMode = (viewModeRaw === "grouped" ? "grouped" : "orders") as ViewMode;
 
-  const toggleExpand = (id: string) => {
+  // Persist expanded order IDs to sessionStorage
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem("packaging-expanded");
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
+
+  // Sync expanded IDs to sessionStorage on every change
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("packaging-expanded", JSON.stringify([...expandedIds]));
+    } catch { /* ignore */ }
+  }, [expandedIds]);
+
+  useScrollRestoration("admin-packaging", orders.length > 0);
+
+  const toggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
   // Filter to packaging-relevant statuses
   const packagingOrders = useMemo(() =>
