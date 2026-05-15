@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useUrlState } from "@/hooks/useUrlState";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { Loader2, AlertTriangle, Pencil, History, Search, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -240,8 +241,10 @@ function StockTableSkeleton() {
 type Filter = "all" | "low";
 
 export function StockView() {
-  const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
+  const [filterRaw, setFilterRaw] = useUrlState("sf", "all");
+  const filter = (filterRaw === "low" ? "low" : "all") as Filter;
+  const setFilter = (v: Filter) => setFilterRaw(v);
+  const [search, setSearch] = useUrlState("sq", "");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [historyName, setHistoryName] = useState("");

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useUrlState, useUrlBoolState } from "@/hooks/useUrlState";
+import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import { PricingTiersView } from "@/components/PricingTiersView";
 import { UserManagementView } from "@/components/UserManagementView";
@@ -161,10 +163,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [exportingPackaging, setExportingPackaging] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState<"created_at" | "delivery_date" | "total_price">("created_at");
-  const [sortAsc, setSortAsc] = useState(false);
+
+  // ── URL-persisted filter state (survives tab discards & reloads) ──────────
+  const [statusFilter, setStatusFilter] = useUrlState("status", "all");
+  const [searchQuery, setSearchQuery] = useUrlState("q", "");
+  const [sortField, setSortField] = useUrlState("sort", "created_at") as [
+    "created_at" | "delivery_date" | "total_price",
+    (v: "created_at" | "delivery_date" | "total_price") => void,
+  ];
+  const [sortAsc, setSortAsc] = useUrlBoolState("asc", false);
+
+  // ── Last-updated tracking for the "last refreshed X ago" badge ────────────
+  const [dataLastUpdated, setDataLastUpdated] = useState<Date | null>(null);
 
   // Clients
   const [clients, setClients] = useState<AppClient[]>([]);
@@ -193,6 +203,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [selectedProduct, setSelectedProduct] = useState<AdminProduct | null>(null);
 
   const { toast } = useToast();
+  // Stable ref so loadOrders never gets a new identity when toast changes,
+  // preventing the data-loading useEffect from re-running on every render.
+  const toastRef = useRef(toast);
+  useEffect(() => { toastRef.current = toast; });
 
   /* ── Load orders ── */
   const loadOrders = useCallback(async () => {
@@ -252,12 +266,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       });
 
       setAdminOrders(mapped);
+      setDataLastUpdated(new Date());
     } catch (err) {
-      toast({ title: "Failed to load orders", description: String(err), variant: "destructive" });
+      toastRef.current({ title: "Failed to load orders", description: String(err), variant: "destructive" });
     } finally {
       setLoadingOrders(false);
     }
-  }, [toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // stable — toast accessed via ref
 
   /* ── Change order status ── */
   const changeOrderStatus = useCallback(async (orderId: string, newStatus: OrderStatus) => {
@@ -719,6 +735,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
+  /* ── Scroll restoration (survives tab discards) ── */
+  useScrollRestoration(`admin-${activeSection}`, !loadingOrders);
+
   /* ── Init + Realtime ── */
   useEffect(() => {
     void loadOrders();
@@ -1079,7 +1098,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <Plus className="w-4 h-4" /> New Order
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => void loadOrders()} className="gap-2">
-                      <RefreshCw className="w-4 h-4" /> Refresh
+                      <RefreshCw className="w-4 h-4" />
+                      Refresh
+                      {dataLastUpdated && (
+                        <span className="text-[10px] text-muted-foreground font-normal ml-1">
+                          {formatDistanceToNow(dataLastUpdated, { addSuffix: true })}
+                        </span>
+                      )}
                     </Button>
                     {receivedCount > 0 && (
                       <Button
