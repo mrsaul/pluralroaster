@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Plus, Minus, Trash2, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
+import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 
 export type SimpleClient = {
   /** Company UUID — always unique, used as the Select identifier */
@@ -92,11 +93,25 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     setValue: setForm,
     clearDraft,
     discardDraft,
+    flushDraft,
     savedAt: draftSavedAt,
     showBanner: showDraftBanner,
   } = useDraftPersistence<OrderDraftForm>("create-order", ORDER_DRAFT_DEFAULT);
 
   const { selectedCompanyId, deliveryDateStr, notes, lineItems, clientTier } = form;
+
+  // Derived dirty flag: form has meaningful content
+  const isDirty = selectedCompanyId !== "" || deliveryDateStr !== null || lineItems.length > 0 || notes !== "";
+
+  // Flush draft immediately on tab hide (before the 500ms debounce fires)
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") flushDraft(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [flushDraft]);
+
+  // Warn before closing/reloading the browser tab with unsaved content
+  useBeforeUnload(isDirty);
 
   // Derived: rehydrate Date from stored ISO string
   const deliveryDate: Date | undefined = deliveryDateStr ? new Date(deliveryDateStr) : undefined;
