@@ -26,7 +26,9 @@ export type PackagingItem = {
   size_label: string | null;
   size_kg: number | null;
   grind_type: string | null;
-  product_variant_id: string | null;
+  /** Resolved from product_variants (source=sellsy) by matching product_id + size_kg.
+   *  null means no Sellsy declination is mapped for this product/size combination. */
+  sellsy_declination_id: number | null;
 };
 
 export type PackagingOrder = {
@@ -163,7 +165,10 @@ function LineRow({
   const grind = inferGrind(item.product_name, item.grind_type);
   const sizeDisplay = normalizeSize(item.size_label, item.size_kg);
   const hasSize = !!sizeDisplay;
-  const missingVariant = hasSize && !item.product_variant_id;
+  // Warning fires only when a size is present but no Sellsy declination is mapped for
+  // this product+size. Resolved via product_variants (source=sellsy) in AdminDashboard —
+  // never from order_items.product_variant_id which is structurally never populated.
+  const missingVariant = hasSize && item.sellsy_declination_id == null;
   const totalKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
 
   return (
@@ -220,7 +225,7 @@ function LineRow({
           {missingVariant && (
             <span className="inline-flex items-center gap-1 rounded border border-dashed border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:border-amber-700 dark:text-amber-400">
               <AlertTriangle className="w-3 h-3" />
-              Variation manquante — vérifier Sellsy
+              Variante Sellsy non liée
             </span>
           )}
         </div>
