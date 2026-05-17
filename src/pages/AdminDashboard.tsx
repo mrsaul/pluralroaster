@@ -161,6 +161,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  // Map of "productId::sizeKg" → sellsy_declination_id, built from product_variants
+  // where source='sellsy'. Used to resolve variant presence per packaging line item.
+  const [sellsyVariantMap, setSellsyVariantMap] = useState<Map<string, number>>(new Map());
 
   // Packaging sheet export
   const [packagingSheetIdInput, setPackagingSheetIdInput] = useState("");
@@ -277,6 +280,23 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       setAdminOrders(mapped);
       setDataLastUpdated(new Date());
+
+      // Build Sellsy variant map for packaging view — keyed by "productId::sizeKg".
+      // We fetch only source='sellsy' variants (those have sellsy_declination_id populated).
+      // Matching by size_kg (numeric) avoids label-string mismatches ("Standard" vs "1000g").
+      const { data: variantRows } = await supabase
+        .from("product_variants")
+        .select("product_id, size_kg, sellsy_declination_id")
+        .eq("source", "sellsy")
+        .not("sellsy_declination_id", "is", null);
+
+      const vMap = new Map<string, number>();
+      for (const v of variantRows ?? []) {
+        if (v.product_id && v.size_kg != null && v.sellsy_declination_id != null) {
+          vMap.set(`${v.product_id}::${Number(v.size_kg)}`, v.sellsy_declination_id);
+        }
+      }
+      setSellsyVariantMap(vMap);
     } catch (err) {
       toastRef.current({ title: "Failed to load orders", description: String(err), variant: "destructive" });
     } finally {
@@ -884,19 +904,29 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       is_packed: o.is_packed,
       is_labeled: o.is_labeled,
       notes: o.notes,
-      items: o.items.map((i) => ({
-        id: i.id,
-        product_name: i.product_name,
-        product_sku: i.product_sku,
-        quantity: i.quantity,
-        price_per_kg: i.price_per_kg,
-        size_label: i.size_label,
-        size_kg: i.size_kg,
-        grind_type: i.grind_type,
-        product_variant_id: i.product_variant_id,
-      })),
+      items: o.items.map((i) => {
+        // Resolve sellsy_declination_id by matching product_id + size_kg in the variant map.
+        // This is more robust than matching by size_label ("Standard" vs "1000g" are both 1 kg).
+        const variantKey = i.product_id && i.size_kg != null
+          ? `${i.product_id}::${i.size_kg}`
+          : null;
+        const sellsy_declination_id = variantKey
+          ? (sellsyVariantMap.get(variantKey) ?? null)
+          : null;
+        return {
+          id: i.id,
+          product_name: i.product_name,
+          product_sku: i.product_sku,
+          quantity: i.quantity,
+          price_per_kg: i.price_per_kg,
+          size_label: i.size_label,
+          size_kg: i.size_kg,
+          grind_type: i.grind_type,
+          sellsy_declination_id,
+        };
+      }),
     })),
-    [adminOrders],
+    [adminOrders, sellsyVariantMap],
   );
 
   /* ── Roaster orders mapped ── */
