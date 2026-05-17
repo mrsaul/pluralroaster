@@ -402,8 +402,8 @@ const Index = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4 text-sm text-muted-foreground">
-        Checking authentication…
+      <div className="min-h-screen bg-[#FAF6F0] flex items-center justify-center">
+        <p className="text-sm text-[#9E9E93]">PluralRoaster</p>
       </div>
     );
   }
@@ -530,7 +530,13 @@ const Index = () => {
     case "packaging_dashboard":
       return <Suspense fallback={fallback}><PackagingDashboard onLogout={handleLogout} /></Suspense>;
     default:
-      return null;
+      // Safety net: view is somehow unmapped — redirect to home rather than rendering null.
+      setView("home");
+      return (
+        <div className="min-h-screen bg-[#FAF6F0] flex items-center justify-center">
+          <p className="text-sm text-[#9E9E93]">PluralRoaster</p>
+        </div>
+      );
   }
 };
 
