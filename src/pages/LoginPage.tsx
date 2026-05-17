@@ -65,7 +65,8 @@ export default function LoginPage() {
         throw signInError;
       }
 
-      await supabase.rpc("ensure_current_user_role");
+      // onAuthStateChange in Index.tsx fires SIGNED_IN and calls syncUserRole,
+      // which already invokes ensure_current_user_role. No need to call it here.
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : "Authentication failed.");
     } finally {
