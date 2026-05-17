@@ -96,6 +96,10 @@ type AdminOrderItem = {
   product_sku: string | null;
   quantity: number;
   price_per_kg: number;
+  size_label: string | null;
+  size_kg: number | null;
+  grind_type: string | null;
+  product_variant_id: string | null;
 };
 
 type AdminOrder = {
@@ -110,6 +114,7 @@ type AdminOrder = {
   status: OrderStatus;
   sellsy_id: string | null;
   created_at: string;
+  notes: string | null;
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
@@ -216,8 +221,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .from("orders")
         .select(`
           id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync,
-          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg ),
+          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes,
+          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg, size_label, size_kg, grind_type, product_variant_id ),
           companies ( name, email )
         `)
         .order("created_at", { ascending: false });
@@ -249,6 +254,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           status: normalizeOrderStatus(o.status),
           sellsy_id: o.sellsy_id,
           created_at: o.created_at,
+          notes: o.notes ?? null,
           is_roasted: Boolean(o.is_roasted),
           is_packed: Boolean(o.is_packed),
           is_labeled: Boolean(o.is_labeled),
@@ -261,6 +267,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             product_sku: i.product_sku,
             quantity: Number(i.quantity),
             price_per_kg: Number(i.price_per_kg),
+            size_label: i.size_label ?? null,
+            size_kg: i.size_kg != null ? Number(i.size_kg) : null,
+            grind_type: i.grind_type ?? null,
+            product_variant_id: i.product_variant_id ?? null,
           })),
         };
       });
@@ -873,7 +883,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       is_roasted: o.is_roasted,
       is_packed: o.is_packed,
       is_labeled: o.is_labeled,
-      items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
+      notes: o.notes,
+      items: o.items.map((i) => ({
+        id: i.id,
+        product_name: i.product_name,
+        product_sku: i.product_sku,
+        quantity: i.quantity,
+        price_per_kg: i.price_per_kg,
+        size_label: i.size_label,
+        size_kg: i.size_kg,
+        grind_type: i.grind_type,
+        product_variant_id: i.product_variant_id,
+      })),
     })),
     [adminOrders],
   );
