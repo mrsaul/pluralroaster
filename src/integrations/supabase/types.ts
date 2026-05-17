@@ -460,6 +460,7 @@ export type Database = {
       order_items: {
         Row: {
           created_at: string
+          grind_type: string | null
           id: string
           order_id: string
           price_per_kg: number
@@ -473,6 +474,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          grind_type?: string | null
           id?: string
           order_id: string
           price_per_kg?: number
@@ -486,6 +488,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          grind_type?: string | null
           id?: string
           order_id?: string
           price_per_kg?: number

@@ -1,31 +1,32 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useUrlState } from "@/hooks/useUrlState";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isToday, isTomorrow, startOfDay } from "date-fns";
+import { fr } from "date-fns/locale";
 import {
-  Package, CheckSquare, ChevronDown, ChevronRight,
-  Layers, Clock3, Weight,
+  Package, CheckSquare, ChevronDown, ChevronRight, Layers,
+  AlertTriangle, Coffee, Wind, Droplets, Circle,
+  CheckCircle2, Clock, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
-  ORDER_STATUS_LABEL, ORDER_STATUS_CLASS,
-  getOrderPriority, PRIORITY_CLASS, PRIORITY_LABEL,
-  type OrderStatus, type PriorityLevel,
+  getOrderPriority, type OrderStatus, type PriorityLevel,
 } from "@/lib/orderStatuses";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 export type PackagingItem = {
+  id: string;
   product_name: string;
   product_sku: string | null;
   quantity: number;
   price_per_kg: number;
   size_label: string | null;
   size_kg: number | null;
+  grind_type: string | null;
+  product_variant_id: string | null;
 };
 
 export type PackagingOrder = {
@@ -37,10 +38,14 @@ export type PackagingOrder = {
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
+  notes: string | null;
   items: PackagingItem[];
 };
 
-type ViewMode = "orders" | "grouped";
+type ViewMode = "orders" | "reference";
+type StatusFilter = "todo" | "all";
+type DateFilter = "today2" | "week" | "all";
+type PackagingState = "todo" | "in_progress" | "ready";
 
 interface PackagingViewProps {
   orders: PackagingOrder[];
@@ -48,295 +53,785 @@ interface PackagingViewProps {
   onChecklistChange: (orderId: string, field: "is_roasted" | "is_packed" | "is_labeled", value: boolean) => void;
 }
 
-export function PackagingView({ orders, onStatusChange, onChecklistChange }: PackagingViewProps) {
-  // Persist view mode to URL so returning to the tab restores it
-  const [viewModeRaw, setViewMode] = useUrlState("pv", "orders");
-  const viewMode = (viewModeRaw === "grouped" ? "grouped" : "orders") as ViewMode;
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-  // Persist expanded order IDs to sessionStorage
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
-    try {
-      const raw = sessionStorage.getItem("packaging-expanded");
-      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
-    } catch { return new Set<string>(); }
-  });
+const GRIND_LABEL: Record<string, string> = {
+  whole_bean: "Grain entier",
+  espresso: "Espresso",
+  filter: "Filtre",
+  french_press: "Piston",
+  custom: "Personnalisé",
+};
 
-  // Sync expanded IDs to sessionStorage on every change
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("packaging-expanded", JSON.stringify([...expandedIds]));
-    } catch { /* ignore */ }
-  }, [expandedIds]);
+const GRIND_ICON: Record<string, React.ReactNode> = {
+  whole_bean: <Circle className="w-3 h-3" />,
+  espresso: <Wind className="w-3 h-3" />,
+  filter: <Droplets className="w-3 h-3" />,
+  french_press: <Coffee className="w-3 h-3" />,
+  custom: <Coffee className="w-3 h-3" />,
+};
 
-  useScrollRestoration("admin-packaging", orders.length > 0);
+/** Infer grind from product name — returns the grind key + whether it's inferred */
+function inferGrind(productName: string, grindType: string | null): { key: string | null; inferred: boolean } {
+  if (grindType) return { key: grindType, inferred: false };
+  const lower = productName.toLowerCase();
+  if (lower.includes("piston") || lower.includes("french press")) return { key: "french_press", inferred: true };
+  if (lower.includes("filtre") || lower.includes("filter")) return { key: "filter", inferred: true };
+  if (lower.includes("espresso")) return { key: "espresso", inferred: true };
+  return { key: null, inferred: false }; // whole bean assumed, no badge shown
+}
 
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
+/** Normalize size_label for display — "Standard" → "1 kg", "1000g" → "1 kg", etc. */
+function normalizeSize(label: string | null, sizeKg: number | null): string | null {
+  if (!label && !sizeKg) return null;
+  if (!label || label === "Standard") {
+    if (sizeKg === 1) return "1 kg";
+    if (sizeKg === 0.25) return "250 g";
+    if (sizeKg) return `${sizeKg < 1 ? sizeKg * 1000 + " g" : sizeKg + " kg"}`;
+    return "1 kg";
+  }
+  if (label === "1000g") return "1 kg";
+  if (label === "250g") return "250 g";
+  if (label === "500g") return "500 g";
+  return label;
+}
 
-  // Filter to packaging-relevant statuses
-  const packagingOrders = useMemo(() =>
-    orders
-      .filter((o) => o.status === "packaging")
-      .sort((a, b) => {
-        // Sort by priority (urgent first), then by delivery date
-        const pa = getOrderPriority(a.delivery_date);
-        const pb = getOrderPriority(b.delivery_date);
-        const priorityOrder: Record<PriorityLevel, number> = { urgent: 0, normal: 1, low: 2 };
-        if (priorityOrder[pa] !== priorityOrder[pb]) return priorityOrder[pa] - priorityOrder[pb];
-        return new Date(a.delivery_date).getTime() - new Date(b.delivery_date).getTime();
-      }),
-    [orders]
+function getSizeChipClass(label: string | null, sizeKg: number | null): string {
+  const kg = sizeKg ?? (label === "1000g" || label === "Standard" ? 1 : label === "250g" ? 0.25 : null);
+  if (kg === 0.25) return "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300";
+  if (kg === 1) return "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300";
+  return "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300";
+}
+
+function getPackagingState(order: PackagingOrder, packedLineIds: Set<string>): PackagingState {
+  if (order.status === "ready_for_delivery") return "ready";
+  if (order.is_packed && order.is_labeled) return "ready";
+  const anyDone = order.is_roasted || order.is_packed || order.is_labeled ||
+    order.items.some(i => packedLineIds.has(i.id));
+  return anyDone ? "in_progress" : "todo";
+}
+
+const STATE_LABEL: Record<PackagingState, string> = {
+  todo: "À préparer",
+  in_progress: "En cours",
+  ready: "Prêt",
+};
+
+const STATE_CLASS: Record<PackagingState, string> = {
+  todo: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300",
+  in_progress: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300",
+  ready: "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300",
+};
+
+function formatDayLabel(dateStr: string): string {
+  const date = parseISO(dateStr);
+  if (isToday(date)) return "Aujourd'hui";
+  if (isTomorrow(date)) return "Demain";
+  return format(date, "EEEE d MMMM", { locale: fr });
+}
+
+function formatDeliveryDate(dateStr: string): string {
+  const date = parseISO(dateStr);
+  return format(date, "EEE d MMM", { locale: fr });
+}
+
+// ── SessionStorage for per-line packed state ──────────────────────────────────
+const PACKED_KEY = "packaging-packed-lines";
+
+function loadPackedIds(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(PACKED_KEY);
+    return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+  } catch { return new Set<string>(); }
+}
+
+function savePackedIds(ids: Set<string>): void {
+  try { sessionStorage.setItem(PACKED_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
+}
+
+// ── LineRow ───────────────────────────────────────────────────────────────────
+
+function LineRow({
+  item,
+  isPacked,
+  onToggle,
+}: {
+  item: PackagingItem;
+  isPacked: boolean;
+  onToggle: (id: string) => void;
+}) {
+  const grind = inferGrind(item.product_name, item.grind_type);
+  const sizeDisplay = normalizeSize(item.size_label, item.size_kg);
+  const hasSize = !!sizeDisplay;
+  const missingVariant = hasSize && !item.product_variant_id;
+  const totalKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
+
+  return (
+    <div className={cn(
+      "flex items-start gap-3 py-3 border-b border-border/50 last:border-0",
+      isPacked && "opacity-50",
+    )}>
+      {/* Checkbox — large touch target */}
+      <button
+        type="button"
+        onClick={() => onToggle(item.id)}
+        className="mt-0.5 flex-shrink-0 w-12 h-12 -m-2 flex items-center justify-center rounded-lg hover:bg-muted/40 transition-colors"
+        aria-label={isPacked ? "Marquer comme non conditionné" : "Marquer comme conditionné"}
+      >
+        {isPacked
+          ? <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+          : <div className="w-6 h-6 rounded-full border-2 border-border" />}
+      </button>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        {/* Product name */}
+        <p className={cn(
+          "text-base font-semibold text-foreground leading-tight",
+          isPacked && "line-through text-muted-foreground",
+        )}>
+          {item.product_name}
+        </p>
+        {item.product_sku && (
+          <p className="text-xs text-muted-foreground mt-0.5">SKU {item.product_sku}</p>
+        )}
+
+        {/* Chips row */}
+        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+          {hasSize && (
+            <span className={cn(
+              "inline-flex items-center rounded border px-2 py-0.5 text-xs font-semibold",
+              getSizeChipClass(item.size_label, item.size_kg),
+            )}>
+              {sizeDisplay}
+            </span>
+          )}
+          {grind.key && (
+            <span className={cn(
+              "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium",
+              "bg-muted/50 border-border text-muted-foreground",
+              grind.inferred && "border-dashed",
+            )}>
+              {GRIND_ICON[grind.key]}
+              {GRIND_LABEL[grind.key]}
+              {grind.inferred && <span className="opacity-60 text-[10px] ml-0.5">≈</span>}
+            </span>
+          )}
+          {missingVariant && (
+            <span className="inline-flex items-center gap-1 rounded border border-dashed border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:border-amber-700 dark:text-amber-400">
+              <AlertTriangle className="w-3 h-3" />
+              Variation manquante — vérifier Sellsy
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Quantity + weight */}
+      <div className="text-right flex-shrink-0">
+        <p className="text-base font-semibold tabular-nums text-foreground">
+          × {item.quantity}
+        </p>
+        <p className="text-xs tabular-nums text-muted-foreground mt-0.5">
+          {totalKg % 1 === 0 ? totalKg : totalKg.toFixed(2)} kg
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── OrderCard ─────────────────────────────────────────────────────────────────
+
+function OrderCard({
+  order,
+  packedLineIds,
+  onToggleLine,
+  onChecklistChange,
+  onStatusChange,
+  defaultExpanded,
+}: {
+  order: PackagingOrder;
+  packedLineIds: Set<string>;
+  onToggleLine: (itemId: string) => void;
+  onChecklistChange: (orderId: string, field: "is_roasted" | "is_packed" | "is_labeled", value: boolean) => void;
+  onStatusChange: (orderId: string, newStatus: OrderStatus) => void;
+  defaultExpanded: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const state = getPackagingState(order, packedLineIds);
+  const priority = getOrderPriority(order.delivery_date);
+  const allLinesPacked = order.items.every(i => packedLineIds.has(i.id));
+  const canMarkReady = allLinesPacked && order.is_roasted && order.is_packed && order.is_labeled;
+
+  const borderClass = cn(
+    "bg-card border rounded-xl overflow-hidden transition-all",
+    state === "ready" && "border-emerald-200 dark:border-emerald-800 opacity-75",
+    state === "in_progress" && "border-blue-200 dark:border-blue-800",
+    state === "todo" && priority === "urgent" && "border-destructive/40",
+    state === "todo" && priority !== "urgent" && "border-border",
   );
 
-  // Group by product + size for batch view
-  const productGroups = useMemo(() => {
-    type Group = {
-      product_name: string;
-      size_label: string | null;
-      total_kg: number;
-      orders: { orderId: string; client_name: string | null; quantity: number; size_label: string | null }[];
-    };
-    const map = new Map<string, Group>();
-    for (const order of packagingOrders) {
+  return (
+    <div className={borderClass}>
+      {/* ── Card header — always visible ── */}
+      <div className="p-4 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            {/* Priority + state badges */}
+            <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+              {priority === "urgent" && state !== "ready" && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
+                  URGENT
+                </span>
+              )}
+              <span className={cn(
+                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+                STATE_CLASS[state],
+              )}>
+                {state === "ready" && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                {state === "in_progress" && <RotateCcw className="w-3 h-3 mr-1" />}
+                {STATE_LABEL[state]}
+              </span>
+            </div>
+
+            {/* Client name — large */}
+            <h3 className="text-xl font-bold text-foreground leading-tight truncate">
+              {order.client_name ?? <span className="text-muted-foreground italic">{order.id.slice(0, 8)} <span className="text-xs font-normal">(client non identifié)</span></span>}
+            </h3>
+
+            {/* Date + summary */}
+            <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                {formatDeliveryDate(order.delivery_date)}
+              </span>
+              <span className="text-border">·</span>
+              <span>{order.items.length} ligne{order.items.length !== 1 ? "s" : ""} · {order.total_kg.toFixed(order.total_kg % 1 === 0 ? 0 : 2)} kg</span>
+            </div>
+          </div>
+
+          {/* Checklist dots + expand toggle */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-1" title="Torréfié · Conditionné · Étiqueté">
+              <div className={cn("w-2.5 h-2.5 rounded-full", order.is_roasted ? "bg-emerald-500" : "bg-border")} />
+              <div className={cn("w-2.5 h-2.5 rounded-full", order.is_packed ? "bg-emerald-500" : "bg-border")} />
+              <div className={cn("w-2.5 h-2.5 rounded-full", order.is_labeled ? "bg-emerald-500" : "bg-border")} />
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(v => !v)}
+              className="p-1.5 rounded-lg hover:bg-muted/40 transition-colors"
+              aria-label={expanded ? "Réduire" : "Développer"}
+            >
+              {expanded
+                ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Primary action button — visible in header when collapsed */}
+        {!expanded && state !== "ready" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setExpanded(true)}
+            className="mt-3 w-full gap-2 h-10 text-sm font-medium"
+          >
+            <ChevronDown className="w-4 h-4" />
+            {state === "todo" ? "Commencer la préparation" : "Reprendre la préparation"}
+          </Button>
+        )}
+      </div>
+
+      {/* ── Expanded content ── */}
+      {expanded && (
+        <div className="border-t border-border">
+          {/* Line items */}
+          <div className="px-4 pt-2 pb-1">
+            {order.items.map(item => (
+              <LineRow
+                key={item.id}
+                item={item}
+                isPacked={packedLineIds.has(item.id)}
+                onToggle={onToggleLine}
+              />
+            ))}
+          </div>
+
+          {/* Checklist */}
+          <div className="mx-4 mb-4 rounded-lg bg-muted/30 border border-border/50 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+              Étapes de préparation
+            </p>
+            <div className="space-y-2">
+              {(["is_roasted", "is_packed", "is_labeled"] as const).map((field) => {
+                const labels = { is_roasted: "Torréfié", is_packed: "Conditionné", is_labeled: "Étiqueté" };
+                return (
+                  <label key={field} className="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                    <Checkbox
+                      checked={order[field]}
+                      onCheckedChange={(v) => onChecklistChange(order.id, field, Boolean(v))}
+                      className="w-5 h-5"
+                    />
+                    <span className={cn(
+                      "text-sm font-medium",
+                      order[field] && "line-through text-muted-foreground",
+                    )}>
+                      {labels[field]}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Notes */}
+          {order.notes && (
+            <div className="mx-4 mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 dark:bg-amber-950 dark:border-amber-800">
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Note</p>
+              <p className="text-sm text-amber-800 dark:text-amber-300">{order.notes}</p>
+            </div>
+          )}
+
+          {/* Primary action */}
+          <div className="px-4 pb-4">
+            {order.status === "packaging" && (
+              <Button
+                size="lg"
+                onClick={() => onStatusChange(order.id, "ready_for_delivery")}
+                disabled={!canMarkReady}
+                className={cn(
+                  "w-full gap-2 h-12 text-base font-semibold",
+                  canMarkReady && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                )}
+                title={!canMarkReady ? "Cochez toutes les lignes et les étapes de préparation" : undefined}
+              >
+                <CheckSquare className="w-5 h-5" />
+                Marquer comme prêt pour livraison
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── DaySection ────────────────────────────────────────────────────────────────
+
+function DaySection({
+  dateStr,
+  orders,
+  packedLineIds,
+  onToggleLine,
+  onChecklistChange,
+  onStatusChange,
+}: {
+  dateStr: string;
+  orders: PackagingOrder[];
+  packedLineIds: Set<string>;
+  onToggleLine: (itemId: string) => void;
+  onChecklistChange: (orderId: string, field: "is_roasted" | "is_packed" | "is_labeled", value: boolean) => void;
+  onStatusChange: (orderId: string, newStatus: OrderStatus) => void;
+}) {
+  const [showDone, setShowDone] = useState(false);
+  const activeOrders = orders.filter(o => getPackagingState(o, packedLineIds) !== "ready");
+  const doneOrders = orders.filter(o => getPackagingState(o, packedLineIds) === "ready");
+  const totalKg = orders.reduce((s, o) => s + o.total_kg, 0);
+
+  return (
+    <div className="space-y-3">
+      {/* Day header */}
+      <div className="flex items-center gap-3 pt-2">
+        <h2 className="text-sm font-semibold text-foreground capitalize">
+          {formatDayLabel(dateStr)}
+        </h2>
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {orders.length} commande{orders.length !== 1 ? "s" : ""} · {totalKg.toFixed(totalKg % 1 === 0 ? 0 : 1)} kg
+        </span>
+      </div>
+
+      {/* Active orders */}
+      {activeOrders.map(order => (
+        <OrderCard
+          key={order.id}
+          order={order}
+          packedLineIds={packedLineIds}
+          onToggleLine={onToggleLine}
+          onChecklistChange={onChecklistChange}
+          onStatusChange={onStatusChange}
+          defaultExpanded={activeOrders.length === 1}
+        />
+      ))}
+
+      {/* Done orders — collapsed summary */}
+      {doneOrders.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowDone(v => !v)}
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+          >
+            {showDone ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+            {doneOrders.length} commande{doneOrders.length !== 1 ? "s" : ""} prête{doneOrders.length !== 1 ? "s" : ""}
+          </button>
+          {showDone && doneOrders.map(order => (
+            <OrderCard
+              key={order.id}
+              order={order}
+              packedLineIds={packedLineIds}
+              onToggleLine={onToggleLine}
+              onChecklistChange={onChecklistChange}
+              onStatusChange={onStatusChange}
+              defaultExpanded={false}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── BatchView (Par référence) ─────────────────────────────────────────────────
+
+function BatchView({ orders, packedLineIds, onToggleLine }: {
+  orders: PackagingOrder[];
+  packedLineIds: Set<string>;
+  onToggleLine: (itemId: string) => void;
+}) {
+  type BatchGroup = {
+    key: string;
+    product_name: string;
+    size_label: string | null;
+    size_kg: number | null;
+    grind_type: string | null;
+    total_bags: number;
+    total_kg: number;
+    lines: { orderId: string; client_name: string | null; item: PackagingItem }[];
+  };
+
+  const groups = useMemo(() => {
+    const map = new Map<string, BatchGroup>();
+    for (const order of orders) {
       for (const item of order.items) {
-        const key = `${item.product_name}||${item.size_label ?? ""}`;
-        const existing = map.get(key) ?? { product_name: item.product_name, size_label: item.size_label, total_kg: 0, orders: [] };
-        // total_kg = units × size_kg (if known), else treat quantity as kg
+        const grind = inferGrind(item.product_name, item.grind_type);
+        const key = `${item.product_name}||${item.size_label ?? ""}||${grind.key ?? ""}`;
+        const existing = map.get(key) ?? {
+          key,
+          product_name: item.product_name,
+          size_label: item.size_label,
+          size_kg: item.size_kg,
+          grind_type: grind.key,
+          total_bags: 0,
+          total_kg: 0,
+          lines: [],
+        };
         const itemKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
+        existing.total_bags += item.quantity;
         existing.total_kg += itemKg;
-        existing.orders.push({ orderId: order.id, client_name: order.client_name, quantity: item.quantity, size_label: item.size_label });
+        existing.lines.push({ orderId: order.id, client_name: order.client_name, item });
         map.set(key, existing);
       }
     }
     return Array.from(map.values()).sort((a, b) => b.total_kg - a.total_kg);
+  }, [orders]);
+
+  return (
+    <div className="space-y-4">
+      {groups.map(group => {
+        const sizeDisplay = normalizeSize(group.size_label, group.size_kg);
+        const grindLabel = group.grind_type ? GRIND_LABEL[group.grind_type] : null;
+        const allDone = group.lines.every(l => packedLineIds.has(l.item.id));
+        return (
+          <div key={group.key} className={cn(
+            "bg-card border border-border rounded-xl overflow-hidden",
+            allDone && "opacity-60",
+          )}>
+            <div className="p-4 pb-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className={cn("text-base font-bold text-foreground", allDone && "line-through text-muted-foreground")}>
+                    {group.product_name}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    {sizeDisplay && (
+                      <span className={cn(
+                        "inline-flex items-center rounded border px-2 py-0.5 text-xs font-semibold",
+                        getSizeChipClass(group.size_label, group.size_kg),
+                      )}>
+                        {sizeDisplay}
+                      </span>
+                    )}
+                    {grindLabel && (
+                      <span className="inline-flex items-center gap-1 rounded border border-border bg-muted/50 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        {group.grind_type && GRIND_ICON[group.grind_type]}
+                        {grindLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold tabular-nums text-foreground">{group.total_bags} sacs</p>
+                  <p className="text-xs tabular-nums text-muted-foreground">{group.total_kg.toFixed(group.total_kg % 1 === 0 ? 0 : 2)} kg</p>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border divide-y divide-border/50">
+              {group.lines.map(({ orderId, client_name, item }) => (
+                <div key={item.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => onToggleLine(item.id)}
+                    className="flex-shrink-0 w-10 h-10 -m-1 flex items-center justify-center rounded-lg hover:bg-muted/40 transition-colors"
+                  >
+                    {packedLineIds.has(item.id)
+                      ? <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      : <div className="w-5 h-5 rounded-full border-2 border-border" />}
+                  </button>
+                  <span className={cn(
+                    "flex-1 text-sm font-medium text-foreground",
+                    packedLineIds.has(item.id) && "line-through text-muted-foreground",
+                  )}>
+                    {client_name ?? orderId.slice(0, 8)}
+                  </span>
+                  <span className="text-sm tabular-nums text-muted-foreground">× {item.quantity}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main PackagingView ────────────────────────────────────────────────────────
+
+export function PackagingView({ orders, onStatusChange, onChecklistChange }: PackagingViewProps) {
+  const [viewModeRaw, setViewMode] = useUrlState("pv", "orders");
+  const viewMode = (viewModeRaw === "reference" ? "reference" : "orders") as ViewMode;
+
+  const [statusFilterRaw, setStatusFilter] = useUrlState("ps", "todo");
+  const statusFilter = (statusFilterRaw === "all" ? "all" : "todo") as StatusFilter;
+
+  const [dateFilterRaw, setDateFilter] = useUrlState("pd", "today2");
+  const dateFilter = (["today2", "week", "all"].includes(dateFilterRaw) ? dateFilterRaw : "today2") as DateFilter;
+
+  // Per-line local packed state — sessionStorage, survives tab switches
+  const [packedLineIds, setPackedLineIds] = useState<Set<string>>(loadPackedIds);
+
+  useEffect(() => { savePackedIds(packedLineIds); }, [packedLineIds]);
+
+  const toggleLine = useCallback((itemId: string) => {
+    setPackedLineIds(prev => {
+      const next = new Set(prev);
+      next.has(itemId) ? next.delete(itemId) : next.add(itemId);
+      return next;
+    });
+  }, []);
+
+  useScrollRestoration("admin-packaging", orders.length > 0);
+
+  // Filter orders to packaging status
+  const packagingOrders = useMemo(() => {
+    const now = new Date();
+    const todayStart = startOfDay(now);
+
+    return orders
+      .filter(o => {
+        if (o.status !== "packaging" && o.status !== "ready_for_delivery") return false;
+
+        // Date filter
+        const delivery = startOfDay(parseISO(o.delivery_date));
+        const diffDays = Math.round((delivery.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+        if (dateFilter === "today2" && diffDays > 2) return false;
+        if (dateFilter === "week" && diffDays > 7) return false;
+
+        // Status filter
+        if (statusFilter === "todo") {
+          const state = getPackagingState(o, packedLineIds);
+          return state !== "ready";
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const da = new Date(a.delivery_date).getTime();
+        const db = new Date(b.delivery_date).getTime();
+        if (da !== db) return da - db;
+        return (a.client_name ?? "").localeCompare(b.client_name ?? "", "fr");
+      });
+  }, [orders, dateFilter, statusFilter, packedLineIds]);
+
+  // Group by date
+  const dayGroups = useMemo(() => {
+    const map = new Map<string, PackagingOrder[]>();
+    for (const o of packagingOrders) {
+      const key = o.delivery_date;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(o);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [packagingOrders]);
 
   // Stats
-  const totalKgInPackaging = packagingOrders.reduce((s, o) => s + o.total_kg, 0);
-  const urgentCount = packagingOrders.filter((o) => getOrderPriority(o.delivery_date) === "urgent").length;
+  const totalKg = packagingOrders.reduce((s, o) => s + o.total_kg, 0);
+  const urgentCount = packagingOrders.filter(o =>
+    getOrderPriority(o.delivery_date) === "urgent" && getPackagingState(o, packedLineIds) !== "ready"
+  ).length;
+  const readyCount = packagingOrders.filter(o => getPackagingState(o, packedLineIds) === "ready").length;
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-5">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Orders to pack</p>
-          <p className="text-2xl font-medium tabular-nums text-foreground">{packagingOrders.length}</p>
+          <p className="text-xs text-muted-foreground mb-1.5">À préparer</p>
+          <p className="text-2xl font-bold tabular-nums text-foreground">
+            {packagingOrders.length - readyCount}
+          </p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Total kg</p>
-          <p className="text-2xl font-medium tabular-nums text-foreground">{totalKgInPackaging.toFixed(0)}</p>
+          <p className="text-xs text-muted-foreground mb-1.5">Total kg</p>
+          <p className="text-2xl font-bold tabular-nums text-foreground">
+            {totalKg.toFixed(totalKg % 1 === 0 ? 0 : 1)}
+          </p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Urgent</p>
-          <p className={cn("text-2xl font-medium tabular-nums", urgentCount > 0 ? "text-destructive" : "text-foreground")}>
+          <p className="text-xs text-muted-foreground mb-1.5">Urgent</p>
+          <p className={cn("text-2xl font-bold tabular-nums", urgentCount > 0 ? "text-destructive" : "text-foreground")}>
             {urgentCount}
           </p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Products to batch</p>
-          <p className="text-2xl font-medium tabular-nums text-foreground">{productGroups.length}</p>
+          <p className="text-xs text-muted-foreground mb-1.5">Prêtes</p>
+          <p className="text-2xl font-bold tabular-nums text-emerald-600">{readyCount}</p>
         </div>
       </div>
 
-      {/* View toggle */}
-      <div className="flex gap-2">
-        <Button
-          variant={viewMode === "orders" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setViewMode("orders")}
-          className={cn("gap-1.5", viewMode === "orders" && "bg-cyan-700 opacity-95")}
-        >
-          <CheckSquare className="w-4 h-4" /> Order view
-        </Button>
-        <Button
-          variant={viewMode === "grouped" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setViewMode("grouped")}
-          className={cn("gap-1.5", viewMode === "grouped" && "bg-cyan-700 opacity-95")}
-        >
-          <Layers className="w-4 h-4" /> Product grouping
-        </Button>
-      </div>
-
-      {packagingOrders.length === 0 ? (
-        <div className="bg-card border border-border rounded-lg p-8 text-center text-muted-foreground">
-          <Package className="w-8 h-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No orders ready for packaging</p>
-        </div>
-      ) : viewMode === "orders" ? (
-        /* ── Order List View ── */
-        <div className="space-y-3">
-          {packagingOrders.map((order) => {
-            const priority = getOrderPriority(order.delivery_date);
-            const isExpanded = expandedIds.has(order.id);
-
+      {/* Filter bar */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* Date filter */}
+        <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+          {(["today2", "week", "all"] as DateFilter[]).map(v => {
+            const labels = { today2: "Auj. + 2 j.", week: "Cette semaine", all: "Tout" };
             return (
-              <div
-                key={order.id}
+              <button
+                key={v}
+                type="button"
+                onClick={() => setDateFilter(v)}
                 className={cn(
-                  "bg-card border rounded-lg overflow-hidden transition-colors",
-                  priority === "urgent" && "border-destructive/30",
-                  priority === "normal" && "border-warning/30",
-                  priority === "low" && "border-border",
+                  "px-3 py-1.5 font-medium transition-colors",
+                  dateFilter === v
+                    ? "bg-foreground text-background"
+                    : "bg-card text-muted-foreground hover:bg-muted/50",
+                  v !== "today2" && "border-l border-border",
                 )}
               >
-                {/* Header */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(order.id)}
-                  className="flex w-full items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-foreground text-sm">{order.client_name ?? order.id.slice(0, 8)}</span>
-                      <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium", PRIORITY_CLASS[priority])}>
-                        {PRIORITY_LABEL[priority]}
-                      </span>
-                      <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium", ORDER_STATUS_CLASS[order.status])}>
-                        {ORDER_STATUS_LABEL[order.status]}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock3 className="w-3 h-3" />
-                        {format(parseISO(order.delivery_date), "EEE d MMM")}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Weight className="w-3 h-3" />
-                        {order.total_kg.toFixed(0)} kg
-                      </span>
-                      <span>{order.items.length} item{order.items.length !== 1 ? "s" : ""}</span>
-                    </div>
-                  </div>
-
-                  {/* Checklist indicators */}
-                  <div className="flex items-center gap-1.5 mr-2">
-                    <div className={cn("w-2 h-2 rounded-full", order.is_roasted ? "bg-success" : "bg-border")} title="Roasted" />
-                    <div className={cn("w-2 h-2 rounded-full", order.is_packed ? "bg-success" : "bg-border")} title="Packed" />
-                    <div className={cn("w-2 h-2 rounded-full", order.is_labeled ? "bg-success" : "bg-border")} title="Labeled" />
-                  </div>
-
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-                </button>
-
-                {/* Expanded */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 space-y-4 border-t border-border">
-                    {/* Items */}
-                    <div className="mt-3 divide-y divide-border/60">
-                      {order.items.map((item, idx) => {
-                        const totalKg = item.size_kg != null
-                          ? item.quantity * item.size_kg
-                          : item.quantity;
-                        const hasSize = item.size_label && item.size_label !== "Standard";
-                        return (
-                          <div key={idx} className="flex items-center gap-3 py-2 text-sm">
-                            <span className="flex-1 text-foreground font-medium">{item.product_name}</span>
-                            {hasSize && (
-                              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground">
-                                {item.size_label}
-                              </span>
-                            )}
-                            <span className="shrink-0 tabular-nums text-muted-foreground">
-                              {hasSize
-                                ? `${item.quantity} × ${item.size_label}`
-                                : `${totalKg.toFixed(totalKg % 1 === 0 ? 0 : 2)} kg`}
-                            </span>
-                            <span className="shrink-0 tabular-nums font-medium text-foreground w-16 text-right">
-                              {totalKg.toFixed(totalKg % 1 === 0 ? 0 : 2)} kg
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Checklist */}
-                    <div className="rounded-lg bg-muted/40 p-3 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Checklist</p>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox
-                          checked={order.is_roasted}
-                          onCheckedChange={(v) => onChecklistChange(order.id, "is_roasted", Boolean(v))}
-                        />
-                        <span className={cn(order.is_roasted && "line-through text-muted-foreground")}>Roasted</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox
-                          checked={order.is_packed}
-                          onCheckedChange={(v) => onChecklistChange(order.id, "is_packed", Boolean(v))}
-                        />
-                        <span className={cn(order.is_packed && "line-through text-muted-foreground")}>Packed</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox
-                          checked={order.is_labeled}
-                          onCheckedChange={(v) => onChecklistChange(order.id, "is_labeled", Boolean(v))}
-                        />
-                        <span className={cn(order.is_labeled && "line-through text-muted-foreground")}>Labeled</span>
-                      </label>
-                    </div>
-
-                    {/* Quick actions */}
-                    <div className="flex gap-2">
-                      {order.status === "packaging" && (
-                        <Button size="sm" onClick={() => onStatusChange(order.id, "ready_for_delivery")} className="gap-1.5">
-                          <CheckSquare className="w-3.5 h-3.5" /> Mark as Ready for Delivery
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+                {labels[v]}
+              </button>
             );
           })}
         </div>
-      ) : (
-        /* ── Product Grouping View ── */
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Total kg</TableHead>
-                <TableHead className="text-right">Orders</TableHead>
-                <TableHead>Breakdown</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {productGroups.map((group, i) => (
-                <TableRow key={i}>
-                  <TableCell className="font-medium text-foreground">
-                    <div>{group.product_name}</div>
-                    {group.size_label && group.size_label !== "Standard" && (
-                      <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {group.size_label}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-foreground font-medium">
-                    {group.total_kg.toFixed(group.total_kg % 1 === 0 ? 0 : 2)} kg
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">{group.orders.length}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {group.orders.map((o, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-[10px]">
-                          {o.client_name ?? o.orderId.slice(0, 6)} · {o.quantity}{o.size_label && o.size_label !== "Standard" ? `×${o.size_label}` : "kg"}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+
+        {/* Status filter */}
+        <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+          {(["todo", "all"] as StatusFilter[]).map(v => {
+            const labels = { todo: "À préparer", all: "Tous" };
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setStatusFilter(v)}
+                className={cn(
+                  "px-3 py-1.5 font-medium transition-colors",
+                  statusFilter === v
+                    ? "bg-foreground text-background"
+                    : "bg-card text-muted-foreground hover:bg-muted/50",
+                  v !== "todo" && "border-l border-border",
+                )}
+              >
+                {labels[v]}
+              </button>
+            );
+          })}
         </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* View toggle */}
+        <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+          <button
+            type="button"
+            onClick={() => setViewMode("orders")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors",
+              viewMode === "orders"
+                ? "bg-foreground text-background"
+                : "bg-card text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            Par commande
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("reference")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors border-l border-border",
+              viewMode === "reference"
+                ? "bg-foreground text-background"
+                : "bg-card text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Par référence
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {packagingOrders.length === 0 ? (
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <Package className="w-10 h-10 mx-auto mb-4 opacity-30" />
+          <p className="text-base font-medium text-foreground mb-1">Aucune commande à préparer</p>
+          <p className="text-sm text-muted-foreground">
+            {statusFilter === "todo" && dateFilter === "today2"
+              ? "Toutes les commandes des prochains jours sont prêtes ou aucune n'est en attente."
+              : "Modifiez les filtres pour voir d'autres commandes."}
+          </p>
+          {statusFilter === "todo" && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              className="mt-3 text-sm text-primary hover:underline"
+            >
+              Voir toutes les commandes →
+            </button>
+          )}
+        </div>
+      ) : viewMode === "orders" ? (
+        <div className="space-y-6">
+          {dayGroups.map(([dateStr, dayOrders]) => (
+            <DaySection
+              key={dateStr}
+              dateStr={dateStr}
+              orders={dayOrders}
+              packedLineIds={packedLineIds}
+              onToggleLine={toggleLine}
+              onChecklistChange={onChecklistChange}
+              onStatusChange={onStatusChange}
+            />
+          ))}
+        </div>
+      ) : (
+        <BatchView
+          orders={packagingOrders}
+          packedLineIds={packedLineIds}
+          onToggleLine={toggleLine}
+        />
       )}
     </section>
   );
