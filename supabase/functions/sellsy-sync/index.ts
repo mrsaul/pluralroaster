@@ -42,6 +42,7 @@ type ProductRow = {
   synced_at: string;
   sellsy_tax_id: string | null;
   sellsy_tax_rate: number | null;
+  kind: 'coffee' | 'service';
 };
 
 type ProductParseError = {
@@ -855,6 +856,9 @@ function normalizeProduct(product: JsonRecord) {
     ? (Number.isFinite(Number(firstTax.rate)) ? Number(firstTax.rate) : null)
     : null;
 
+  const sellsyType = typeof product.type === 'string' ? product.type : null;
+  const kind: 'coffee' | 'service' = sellsyType === 'service' ? 'service' : 'coffee';
+
   return {
     row: {
       sellsy_id: sellsyId,
@@ -868,6 +872,7 @@ function normalizeProduct(product: JsonRecord) {
       synced_at: new Date().toISOString(),
       sellsy_tax_id: sellsyTaxId,
       sellsy_tax_rate: sellsyTaxRate,
+      kind,
     } satisfies ProductRow,
     parseError,
   };
