@@ -1553,7 +1553,7 @@ async function handleCreateInvoice(
       id, user_id, company_id, created_at, total_price,
       order_items (
         id, product_name, quantity, price_per_kg, size_label,
-        products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
+        products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name, kind )
       )
     `)
     .eq("id", orderId)
@@ -1653,6 +1653,23 @@ async function handleCreateInvoice(
     const hasItem = Boolean(product.sellsy_id);
 
     if (hasItem) {
+      // ── Service item (delivery) ─────────────────────────────────────────────
+      if (product.kind === 'service') {
+        const row: JsonRecord = {
+          type: 'catalog',
+          related: { type: 'item', id: Number(product.sellsy_id) },
+          description: String(item.product_name ?? product.name ?? ''),
+          unit_amount: String(item.price_per_kg ?? 0),
+          quantity: String(item.quantity ?? 1),
+        };
+        if (product.sellsy_tax_id) {
+          row.tax_id = Number(product.sellsy_tax_id);
+        }
+        console.log(`[invoice] service row: sellsy_id=${product.sellsy_id} unit=${row.unit_amount}`);
+        return row;
+      }
+
+      // ── Coffee / catalog item ───────────────────────────────────────────────
       // Resolve declination_id: products with Sellsy variants require it.
       // Match by size_label first, then fall back to closest price match.
       const productVariants = variantsByProductId.get(product.id) ?? [];
