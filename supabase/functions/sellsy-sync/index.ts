@@ -1655,17 +1655,30 @@ async function handleCreateInvoice(
     if (hasItem) {
       // ── Service item (delivery) ─────────────────────────────────────────────
       if (product.kind === 'service') {
+        const numericSellsyId = Number(product.sellsy_id);
+        if (!Number.isFinite(numericSellsyId)) {
+          console.error(`[invoice] service item skipped: non-numeric sellsy_id="${product.sellsy_id}", falling back to free-form`);
+          return {
+            type: 'single',
+            description: String(item.product_name ?? product.name ?? ''),
+            // price_per_kg is repurposed here to hold the flat service fee (e.g. 20 €) for delivery items
+            unit_amount: String(item.price_per_kg ?? 0),
+            quantity: String(item.quantity ?? 1),
+          };
+        }
         const row: JsonRecord = {
           type: 'catalog',
-          related: { type: 'item', id: Number(product.sellsy_id) },
+          // Sellsy v2: services are catalogued as "item" objects, not "product" objects — this is intentional
+          related: { type: 'item', id: numericSellsyId },
           description: String(item.product_name ?? product.name ?? ''),
+          // price_per_kg is repurposed here to hold the flat service fee (e.g. 20 €) for delivery items
           unit_amount: String(item.price_per_kg ?? 0),
           quantity: String(item.quantity ?? 1),
         };
         if (product.sellsy_tax_id) {
           row.tax_id = Number(product.sellsy_tax_id);
         }
-        console.log(`[invoice] service row: sellsy_id=${product.sellsy_id} unit=${row.unit_amount}`);
+        console.log(`[invoice] service row: sellsy_id=${numericSellsyId} unit=${row.unit_amount}`);
         return row;
       }
 
