@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound.tsx";
 const Index = lazy(() => import("./pages/Index.tsx"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.tsx"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback.tsx"));
+const OrderReceiptPage = lazy(() => import("./pages/OrderReceiptPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/order-receipt" element={<OrderReceiptPage />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

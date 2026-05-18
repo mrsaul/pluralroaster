@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   getOrderPriority, type OrderStatus, type PriorityLevel,
 } from "@/lib/orderStatuses";
+import { inferGrind } from "@/lib/orderUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,16 +73,6 @@ const GRIND_ICON: Record<string, React.ReactNode> = {
   french_press: <Coffee className="w-3 h-3" />,
   custom: <Coffee className="w-3 h-3" />,
 };
-
-/** Infer grind from product name — returns the grind key + whether it's inferred */
-function inferGrind(productName: string, grindType: string | null): { key: string | null; inferred: boolean } {
-  if (grindType) return { key: grindType, inferred: false };
-  const lower = productName.toLowerCase();
-  if (lower.includes("piston") || lower.includes("french press")) return { key: "french_press", inferred: true };
-  if (lower.includes("filtre") || lower.includes("filter")) return { key: "filter", inferred: true };
-  if (lower.includes("espresso")) return { key: "espresso", inferred: true };
-  return { key: null, inferred: false }; // whole bean assumed, no badge shown
-}
 
 /** Normalize size_label for display — "Standard" → "1 kg", "1000g" → "1 kg", etc. */
 function normalizeSize(label: string | null, sizeKg: number | null): string | null {
