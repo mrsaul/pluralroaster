@@ -131,7 +131,7 @@ export default function CheckoutPage({
     };
 
     const handlePdf = () => {
-      sessionStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
+      localStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       window.open("/order-receipt", "_blank", "noopener");
     };
 

@@ -10,7 +10,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 
-const SESSION_KEY = "plural_order_receipt";
+const RECEIPT_KEY = "plural_order_receipt";
 
 const GRIND_LABEL: Record<string, string> = {
   espresso: "Espresso",
@@ -60,13 +60,15 @@ export default function OrderReceiptPage() {
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(RECEIPT_KEY);
     if (!raw) {
       setMissing(true);
       return;
     }
     try {
       setData(JSON.parse(raw) as OrderReceiptData);
+      // Clean up so stale data doesn't appear on future direct navigations
+      localStorage.removeItem(RECEIPT_KEY);
     } catch {
       setMissing(true);
       return;
