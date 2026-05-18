@@ -1,11 +1,12 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, AlertCircle, Package, RotateCcw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, AlertCircle, Package, RotateCcw, Share2, FileText, Copy, Check } from "lucide-react";
 import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CartItem } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { type OrderReceiptData, buildPlainTextSummary } from "@/lib/orderUtils";
 
 interface CheckoutPageProps {
   items: CartItem[];
@@ -58,6 +59,8 @@ export default function CheckoutPage({
   const [confirmedOrderId, setConfirmedOrderId] = useState<string | null>(null);
   const [confirmedItems, setConfirmedItems] = useState<CartItem[]>([]);
   const [confirmedTotal, setConfirmedTotal] = useState(0);
+  const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const vatAmount = totalPrice * VAT;
   const totalTTC = totalPrice + vatAmount;
@@ -72,6 +75,7 @@ export default function CheckoutPage({
     setOrderError(null);
     try {
       const { orderId } = await onConfirm(deliveryDate, notes.trim() || undefined);
+      setConfirmedAt(new Date().toISOString());
       setConfirmedItems(snap);
       setConfirmedTotal(snapTotal);
       setConfirmedOrderId(orderId);
@@ -90,6 +94,53 @@ export default function CheckoutPage({
     const snapHT = confirmedTotal;
     const snapVAT = snapHT * VAT;
     const snapTTC = snapHT + snapVAT;
+
+    const receiptData: OrderReceiptData = {
+      orderId:      confirmedOrderId ?? "",
+      placedAt:     confirmedAt ?? new Date().toISOString(),
+      deliveryDate: deliveryDate ?? "",
+      notes:        notes.trim() || null,
+      items: confirmedItems.map(item => ({
+        name:       item.product.name,
+        sizeLabel:  item.sizeLabel ?? null,
+        sizeKg:     item.sizeKg ?? null,
+        quantity:   item.quantity,
+        unitPrice:  item.unitPrice ?? null,
+        pricePerKg: item.product.pricePerKg,
+      })),
+      totalHT:  confirmedTotal,
+      vatRate:  0.20,
+      totalTTC: confirmedTotal * 1.20,
+    };
+
+    const handleShare = async () => {
+      const text = buildPlainTextSummary(receiptData);
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "Commande Plural Café", text });
+        } catch (err) {
+          if (err instanceof Error && err.name !== "AbortError") {
+            await navigator.clipboard.writeText(text).catch(() => {});
+          }
+        }
+      } else {
+        await navigator.clipboard.writeText(text).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    };
+
+    const handlePdf = () => {
+      sessionStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
+      window.open("/order-receipt", "_blank", "noopener");
+    };
+
+    const handleCopy = async () => {
+      const text = buildPlainTextSummary(receiptData);
+      await navigator.clipboard.writeText(text).catch(() => {});
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
 
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -164,6 +215,23 @@ export default function CheckoutPage({
                 <span className="tabular-nums">€{snapTTC.toFixed(2)}</span>
               </div>
             </div>
+          </div>
+
+          {/* ── Share actions ── */}
+          <div className="grid grid-cols-3 gap-2">
+            <Button variant="outline" size="sm" onClick={() => void handleShare()}>
+              <Share2 className="w-4 h-4 mr-1.5" />
+              Partager
+            </Button>
+            <Button variant="outline" size="sm" onClick={handlePdf}>
+              <FileText className="w-4 h-4 mr-1.5" />
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void handleCopy()} disabled={copied}>
+              {copied
+                ? <><Check className="w-4 h-4 mr-1.5" />Copié !</>
+                : <><Copy className="w-4 h-4 mr-1.5" />Copier</>}
+            </Button>
           </div>
 
           <Button className="w-full" size="lg" onClick={onBack}>
