@@ -230,6 +230,10 @@ type MonthlyTabData = {
   rows: unknown[][];
   formatRequests: unknown[];
   checkboxRanges: { startRow: number; endRow: number }[];
+  /** Freeze request must be applied in a separate batchUpdate AFTER all mergeCells
+   *  requests — Google Sheets rejects merges that span frozen/non-frozen columns
+   *  when both operations are in the same batch. */
+  freezeRequest: unknown;
 };
 
 function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTabData {
@@ -240,6 +244,16 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
 
   // ── Global column header row ──────────────────────────────────────────────
   rows.push(["Produit","Variante","SKU / Réf","Quantité","Prix unit. HT","Total HT","TVA %","Total TTC","Facturé Sellsy","N° Facture Sellsy","Notes","Vérifié ✓"]);
+  // Freeze is intentionally NOT pushed into formatRequests — it must be applied in a
+  // separate batchUpdate after all mergeCells calls, otherwise Google Sheets returns
+  // INVALID_ARGUMENT: "You can't merge frozen and non-frozen columns."
+  const freezeRequest = {
+    updateSheetProperties: {
+      properties: { sheetId, gridProperties: { frozenRowCount: 1, frozenColumnCount: 1 } },
+      fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
+    },
+  };
+
   formatRequests.push(
     {
       repeatCell: {
@@ -250,12 +264,6 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
           horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
         }},
         fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
-      },
-    },
-    {
-      updateSheetProperties: {
-        properties: { sheetId, gridProperties: { frozenRowCount: 1, frozenColumnCount: 1 } },
-        fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
       },
     },
   );
@@ -383,7 +391,7 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
     rows.push(emptyCells(COLS));
   });
 
-  return { rows, formatRequests, checkboxRanges };
+  return { rows, formatRequests, checkboxRanges, freezeRequest };
 }
 
 // ── Tab management ────────────────────────────────────────────────────────────
@@ -416,7 +424,7 @@ async function writeMonthlyTab(
   // Clear first
   await clearRange(token, spreadsheetId, `'${tabName}'!A1:ZZ10000`);
 
-  const { rows, formatRequests, checkboxRanges } = buildMonthlyTabRows(sheetId, groups);
+  const { rows, formatRequests, checkboxRanges, freezeRequest } = buildMonthlyTabRows(sheetId, groups);
 
   await writeValues(token, spreadsheetId, `'${tabName}'!A1`, rows);
 
@@ -446,6 +454,9 @@ async function writeMonthlyTab(
   };
 
   await batchUpdate(token, spreadsheetId, [...formatRequests, ...checkboxRequests, ...widthRequests, rowHeightReq]);
+  // Apply freeze in a separate batch — Google Sheets rejects mergeCells that span
+  // frozen/non-frozen columns when freeze and merge are in the same batchUpdate.
+  await batchUpdate(token, spreadsheetId, [freezeRequest]);
 }
 
 // ── Résumé Annuel tab writer ──────────────────────────────────────────────────
@@ -578,16 +589,20 @@ async function writeResumeAnnuel(
     fmtReqs.push({ repeatCell: { range: { sheetId: resumeSheetId, startRowIndex: tRowIdx, endRowIndex: tRowIdx + 1, startColumnIndex: 2, endColumnIndex: 3 }, cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: "#,##0.00 €" } } }, fields: "userEnteredFormat.numberFormat" } });
   });
 
-  // Column widths + freeze
+  // Column widths — freeze is applied separately below
   fmtReqs.push(
     { updateDimensionProperties: { range: { sheetId: resumeSheetId, dimension: "COLUMNS", startIndex: 0, endIndex: 1 }, properties: { pixelSize: 200 }, fields: "pixelSize" } },
     ...Array.from({ length: 12 }, (_, i) => ({ updateDimensionProperties: { range: { sheetId: resumeSheetId, dimension: "COLUMNS", startIndex: i + 1, endIndex: i + 2 }, properties: { pixelSize: 90 }, fields: "pixelSize" } })),
     { updateDimensionProperties: { range: { sheetId: resumeSheetId, dimension: "COLUMNS", startIndex: 13, endIndex: 14 }, properties: { pixelSize: 120 }, fields: "pixelSize" } },
-    { updateSheetProperties: { properties: { sheetId: resumeSheetId, gridProperties: { frozenRowCount: 2, frozenColumnCount: 1 } }, fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount" } },
   );
 
   await writeValues(token, spreadsheetId, "'Résumé Annuel'!A1", rows);
   await batchUpdate(token, spreadsheetId, fmtReqs);
+  // Apply freeze in a separate batch — Google Sheets rejects mergeCells that span
+  // frozen/non-frozen columns when freeze and merge are in the same batchUpdate.
+  await batchUpdate(token, spreadsheetId, [
+    { updateSheetProperties: { properties: { sheetId: resumeSheetId, gridProperties: { frozenRowCount: 2, frozenColumnCount: 1 } }, fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount" } },
+  ]);
 }
 
 const serviceEmail = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
