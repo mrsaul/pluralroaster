@@ -54,7 +54,7 @@ export function formatDeliveryDate(dateStr: string): string {
 /** Compute the HT line total for one item. */
 function itemLineHT(item: OrderReceiptData["items"][number]): number {
   if (item.unitPrice != null) return item.unitPrice * item.quantity;
-  const qty = item.sizeKg ? item.sizeKg * item.quantity : item.quantity;
+  const qty = item.sizeKg != null ? item.sizeKg * item.quantity : item.quantity;
   return qty * item.pricePerKg;
 }
 
@@ -93,15 +93,17 @@ export function buildPlainTextSummary(data: OrderReceiptData): string {
   lines.push("");
 
   for (const item of data.items) {
+    // grindType is not stored in OrderReceiptData; always infer from product name
     const grind = inferGrind(item.name, null);
-    const grindLabel = grind.key ? ` ${GRIND_LABEL[grind.key] ?? grind.key}` : "";
+    const grindLabel = grind.key ? (GRIND_LABEL[grind.key] ?? grind.key) : null;
     const sizePart = item.sizeLabel
       ? item.sizeLabel
       : item.sizeKg != null
         ? `${item.sizeKg < 1 ? item.sizeKg * 1000 + "g" : item.sizeKg + " kg"}`
         : "";
     const lineTotal = fmtEur(itemLineHT(item));
-    const sizeFull = sizePart ? `${sizePart}${grindLabel}` : grindLabel.trim();
+    const parts = [sizePart || null, grindLabel].filter(Boolean);
+    const sizeFull = parts.join(" ");
     lines.push(`- ${item.name} — ${sizeFull} × ${item.quantity} — ${lineTotal}`);
   }
 
