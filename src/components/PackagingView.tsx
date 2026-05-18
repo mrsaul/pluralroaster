@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   getOrderPriority, type OrderStatus, type PriorityLevel,
 } from "@/lib/orderStatuses";
-import { inferGrind } from "@/lib/orderUtils";
+import { inferGrind, GRIND_LABEL as GRIND_LABEL_BASE } from "@/lib/orderUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,10 +59,8 @@ interface PackagingViewProps {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const GRIND_LABEL: Record<string, string> = {
+  ...GRIND_LABEL_BASE,
   whole_bean: "Grain entier",
-  espresso: "Espresso",
-  filter: "Filtre",
-  french_press: "Piston",
   custom: "Personnalisé",
 };
 

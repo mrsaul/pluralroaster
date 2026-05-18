@@ -6,17 +6,12 @@ import {
   type OrderReceiptData,
   formatDeliveryDate,
   inferGrind,
+  GRIND_LABEL,
 } from "@/lib/orderUtils";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 
 const RECEIPT_KEY = "plural_order_receipt";
-
-const GRIND_LABEL: Record<string, string> = {
-  espresso: "Espresso",
-  filter: "Filtre",
-  french_press: "Piston",
-};
 
 function itemLineHT(item: OrderReceiptData["items"][number]): number {
   if (item.unitPrice != null) return item.unitPrice * item.quantity;

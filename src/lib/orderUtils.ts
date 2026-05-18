@@ -24,7 +24,7 @@ export type OrderReceiptData = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const GRIND_LABEL: Record<string, string> = {
+export const GRIND_LABEL: Record<string, string> = {
   espresso: "Espresso",
   filter: "Filtre",
   french_press: "Piston",
