@@ -60,7 +60,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
         }),
       );
     } catch (err) {
-      toast({ title: "Failed to load orders", description: String(err), variant: "destructive" });
+      toast({ title: "Failed to load orders", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       if (error) throw error;
       setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
     } catch (err) {
-      toast({ title: "Status update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Status update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -84,7 +84,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       if (error) throw error;
       setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, [field]: value } : o));
     } catch (err) {
-      toast({ title: "Update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 

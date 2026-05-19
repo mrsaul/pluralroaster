@@ -300,7 +300,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       }
       setSellsyVariantMap(vMap);
     } catch (err) {
-      toastRef.current({ title: "Failed to load orders", description: String(err), variant: "destructive" });
+      toastRef.current({ title: "Failed to load orders", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setLoadingOrders(false);
     }
@@ -329,7 +329,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
       toast({ title: `Status → ${ORDER_STATUS_LABEL[newStatus]}` });
     } catch (err) {
-      toast({ title: "Status update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Status update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -344,7 +344,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, [field]: value } : o));
     } catch (err) {
-      toast({ title: "Checklist update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Checklist update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -396,7 +396,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       await loadOrders();
     } catch (err) {
-      toast({ title: "Approve failed", description: String(err), variant: "destructive" });
+      toast({ title: "Approve failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setApprovingIds((prev) => {
         const next = new Set(prev);
@@ -447,7 +447,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         toast({ title: "Invoice sent to Sellsy", description: `Invoice ID: ${sellsyId ?? "—"}` });
       }
     } catch (err) {
-      toast({ title: "Invoice send failed", description: String(err), variant: "destructive" });
+      toast({ title: "Invoice send failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setInvoiceSendingIds((prev) => {
         const next = new Set(prev);
@@ -546,7 +546,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
        toast({ title: "Client deleted", description: `"${client.company_name || client.contact_name || "Client"}" has been removed.` });
        void loadClients();
      } catch (err) {
-       toast({ title: "Delete failed", description: String(err), variant: "destructive" });
+       toast({ title: "Delete failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
      } finally {
        setClientToDelete(null);
      }
@@ -561,7 +561,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
        toast({ title: "Product deleted", description: `"${product.name}" has been removed.` });
        void loadProducts();
      } catch (err) {
-       toast({ title: "Delete failed", description: String(err), variant: "destructive" });
+       toast({ title: "Delete failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
      } finally {
        setProductToDelete(null);
      }

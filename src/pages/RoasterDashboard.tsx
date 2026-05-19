@@ -44,7 +44,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
         })),
       );
     } catch (err) {
-      toast({ title: "Failed to load orders", description: String(err), variant: "destructive" });
+      toast({ title: "Failed to load orders", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
         ),
       );
     } catch (err) {
-      toast({ title: "Update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
