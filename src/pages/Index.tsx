@@ -113,6 +113,13 @@ const Index = () => {
   const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
+  const [deliveryService, setDeliveryService] = useState<{
+    id: string;
+    name: string;
+    price_per_kg: number;
+    sellsy_id: string;
+  } | null>(null);
+  const [deliveryFee, setDeliveryFee] = useState<number>(20); // default fallback
   const cart = useCart();
   const { clearCart } = cart;
   const { toast } = useToast();
@@ -191,12 +198,11 @@ const Index = () => {
     }
 
     // Regular user — check onboarding via contacts→companies
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
     const { data: contact } = await supabase
       .from("contacts")
-
       .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, company_addresses(label, address_line1, address_line2))")
-      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, company_addresses(label, address_line1, address_line2))")
-      .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
+      .eq("user_id", currentUser?.id ?? "")
       .maybeSingle();
 
     const company = (contact?.companies as any) ?? null;
@@ -234,6 +240,40 @@ const Index = () => {
     const restored = savedView && RESTORABLE_CLIENT_VIEWS.includes(savedView) ? savedView : "home";
     setView(restored);
     await loadOrders();
+
+    // Fetch LOBERZ delivery service
+    const { data: svcRow } = await supabase
+      .from('products')
+      .select('id, name, price_per_kg, sellsy_id')
+      .eq('kind', 'service')
+      .order('created_at')
+      .limit(1)
+      .maybeSingle();
+
+    if (svcRow) {
+      setDeliveryService(svcRow as { id: string; name: string; price_per_kg: number; sellsy_id: string });
+
+      // Check per-client override on the current user's profile
+      if (currentUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('delivery_fee_override_cents')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+        const override = (profile as any)?.delivery_fee_override_cents;
+        if (override != null) {
+          setDeliveryFee(override / 100);
+        } else {
+          setDeliveryFee(Number(svcRow.price_per_kg));
+        }
+      } else {
+        setDeliveryFee(Number(svcRow.price_per_kg));
+      }
+    } else {
+      // No service product found in DB — preserve the default fee of 20
+      setDeliveryFee(20);
+    }
   }, [loadOrders, setView]);
 
   // ── Auth lifecycle ──────────────────────────────────────────────────────────
@@ -342,7 +382,7 @@ const Index = () => {
       throw new Error("Not authenticated");
     }
 
-    const items = cart.items.map((item) => ({
+    const coffeeItems = cart.items.map((item) => ({
       product_id: item.product.id,
       product_name: item.product.name,
       product_sku: item.product.sku ?? null,
@@ -354,15 +394,31 @@ const Index = () => {
       size_kg: item.sizeKg ?? null,
     }));
 
+    // Auto-attach delivery service line
+    const allItems = [...coffeeItems];
+    if (deliveryService) {
+      allItems.push({
+        product_id: deliveryService.id,
+        product_name: deliveryService.name,
+        product_sku: '0001',
+        price_per_kg: deliveryFee,
+        quantity: 1,
+        size_label: null,
+        size_kg: null,
+        kind: 'service' as const,
+      });
+    }
+
+    const deliveryTotal = deliveryService ? deliveryFee : 0;
     const { data: rpcResult, error: rpcError } = await (supabase as any).rpc("create_order_with_items", {
       p_user_id:            user.id,
       p_delivery_date:      deliveryDate,
       p_total_kg:           cart.totalKg,
-      p_total_price:        cart.totalPrice,
+      p_total_price:        cart.totalPrice + deliveryTotal,
       p_status:             "received",
       p_confirmed_at:       new Date().toISOString(),
       p_notes:              notes ?? null,
-      p_items:              items,
+      p_items:              allItems,
       p_reordered_from:     reorderedFromId ?? null,
     });
 
@@ -379,7 +435,7 @@ const Index = () => {
     cart.clearCart();
 
     return { orderId: rpcResult.order_id as string };
-  }, [cart, loadOrders, reorderedFromId, toast]);
+  }, [cart, deliveryFee, deliveryService, loadOrders, reorderedFromId, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
     if (!draftDeliveryDate || cart.items.length === 0) {
@@ -487,6 +543,9 @@ const Index = () => {
             onBack={() => setView("home")}
             onConfirm={handleConfirmOrder}
             reorderedFromRef={reorderedFromId}
+            deliveryFee={deliveryFee}
+            deliveryServiceName={deliveryService?.name ?? 'Livraison à vélo par LOBERZ'}
+            clientName={String((onboardingData as any)?.company_name ?? '')}
           />
         </Suspense>
       );

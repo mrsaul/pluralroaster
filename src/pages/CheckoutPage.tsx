@@ -16,6 +16,9 @@ interface CheckoutPageProps {
   onConfirm: (deliveryDate: string, notes?: string) => Promise<{ orderId: string }>;
   /** Short ref of the original order when this is a re-order (e.g. "A1B2C3D4") */
   reorderedFromRef?: string | null;
+  deliveryFee: number;
+  deliveryServiceName: string;
+  clientName?: string;
 }
 
 type Step = "review" | "success" | "error";
@@ -48,6 +51,9 @@ export default function CheckoutPage({
   onBack,
   onConfirm,
   reorderedFromRef,
+  deliveryFee,
+  deliveryServiceName,
+  clientName = '',
 }: CheckoutPageProps) {
   const [step, setStep] = useState<Step>("review");
   const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
@@ -60,10 +66,12 @@ export default function CheckoutPage({
   const [confirmedItems, setConfirmedItems] = useState<CartItem[]>([]);
   const [confirmedTotal, setConfirmedTotal] = useState(0);
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
+  const [confirmedDeliveryFee, setConfirmedDeliveryFee] = useState<number>(0);
+  const [confirmedDeliveryServiceName, setConfirmedDeliveryServiceName] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  const vatAmount = totalPrice * VAT;
-  const totalTTC = totalPrice + vatAmount;
+  const vatAmount = (totalPrice + deliveryFee) * VAT;
+  const totalTTC = totalPrice + deliveryFee + vatAmount;
 
   const handleConfirm = useCallback(async () => {
     if (!deliveryDate || submitting) return;
@@ -79,6 +87,40 @@ export default function CheckoutPage({
       setConfirmedItems(snap);
       setConfirmedTotal(snapTotal);
       setConfirmedOrderId(orderId);
+      setConfirmedDeliveryFee(deliveryFee);
+      setConfirmedDeliveryServiceName(deliveryServiceName);
+      // Write receipt data for PDF page (sessionStorage, main branch shape)
+      const now = new Date().toISOString();
+      const receiptData: OrderReceiptData = {
+        orderId: orderId,
+        placedAt: now,
+        deliveryDate: deliveryDate,
+        notes: notes.trim() || null,
+        items: [
+          ...snap.map((item) => ({
+            name: item.product.name,
+            sizeLabel: item.sizeLabel ?? null,
+            sizeKg: item.sizeKg ?? null,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice ?? null,
+            pricePerKg: item.product.pricePerKg,
+            kind: 'coffee' as const,
+          })),
+          ...(deliveryFee > 0 ? [{
+            name: deliveryServiceName,
+            sizeLabel: null,
+            sizeKg: null,
+            quantity: 1,
+            unitPrice: deliveryFee,
+            pricePerKg: deliveryFee,
+            kind: 'service' as const,
+          }] : []),
+        ],
+        totalHT: snapTotal + deliveryFee,
+        vatRate: 0.20,
+        totalTTC: (snapTotal + deliveryFee) * 1.20,
+      };
+      sessionStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       setStep("success");
     } catch (err) {
       setOrderError(err instanceof Error ? err.message : "Something went wrong.");
@@ -86,12 +128,12 @@ export default function CheckoutPage({
     } finally {
       setSubmitting(false);
     }
-  }, [deliveryDate, items, notes, onConfirm, submitting, totalPrice]);
+  }, [deliveryDate, deliveryFee, deliveryServiceName, items, notes, onConfirm, submitting, totalPrice]);
 
   // ── Success screen ────────────────────────────────────────────────────────
 
   if (step === "success") {
-    const snapHT = confirmedTotal;
+    const snapHT  = confirmedTotal + confirmedDeliveryFee;
     const snapVAT = snapHT * VAT;
     const snapTTC = snapHT + snapVAT;
 
@@ -100,17 +142,29 @@ export default function CheckoutPage({
       placedAt:     confirmedAt ?? new Date().toISOString(),
       deliveryDate: deliveryDate ?? "",
       notes:        notes.trim() || null,
-      items: confirmedItems.map(item => ({
-        name:       item.product.name,
-        sizeLabel:  item.sizeLabel ?? null,
-        sizeKg:     item.sizeKg ?? null,
-        quantity:   item.quantity,
-        unitPrice:  item.unitPrice ?? null,
-        pricePerKg: item.product.pricePerKg,
-      })),
-      totalHT:  confirmedTotal,
+      items: [
+        ...confirmedItems.map(item => ({
+          name:       item.product.name,
+          sizeLabel:  item.sizeLabel ?? null,
+          sizeKg:     item.sizeKg ?? null,
+          quantity:   item.quantity,
+          unitPrice:  item.unitPrice ?? null,
+          pricePerKg: item.product.pricePerKg,
+          kind:       'coffee' as const,
+        })),
+        ...(confirmedDeliveryFee > 0 ? [{
+          name:       confirmedDeliveryServiceName,
+          sizeLabel:  null,
+          sizeKg:     null,
+          quantity:   1,
+          unitPrice:  confirmedDeliveryFee,
+          pricePerKg: confirmedDeliveryFee,
+          kind:       'service' as const,
+        }] : []),
+      ],
+      totalHT:  snapHT,
       vatRate:  0.20,
-      totalTTC: confirmedTotal * 1.20,
+      totalTTC: snapTTC,
     };
 
     const handleShare = async () => {
@@ -200,6 +254,17 @@ export default function CheckoutPage({
                   </p>
                 </div>
               ))}
+              {confirmedDeliveryFee > 0 && (
+                <div className="flex items-start justify-between px-4 py-2.5 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Livraison</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{confirmedDeliveryServiceName}</p>
+                  </div>
+                  <p className="text-sm tabular-nums text-foreground shrink-0">
+                    €{confirmedDeliveryFee.toFixed(2)}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="border-t border-border bg-muted/20 divide-y divide-border/50 text-sm">
               <div className="flex justify-between px-4 py-2 text-muted-foreground">
@@ -365,6 +430,14 @@ export default function CheckoutPage({
             <div className="flex justify-between px-4 py-2">
               <span className="text-muted-foreground">Subtotal HT</span>
               <span className="tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
+            </div>
+            {/* Delivery fee */}
+            <div className="flex justify-between px-4 py-2">
+              <div>
+                <span className="text-muted-foreground">Livraison</span>
+                <span className="block text-xs text-muted-foreground/70">{deliveryServiceName}</span>
+              </div>
+              <span className="tabular-nums text-foreground">€{deliveryFee.toFixed(2)}</span>
             </div>
             <div className="flex justify-between px-4 py-2">
               <span className="text-muted-foreground">VAT (20%)</span>

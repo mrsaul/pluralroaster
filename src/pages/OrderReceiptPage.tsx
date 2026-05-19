@@ -6,17 +6,12 @@ import {
   type OrderReceiptData,
   formatDeliveryDate,
   inferGrind,
+  GRIND_LABEL,
 } from "@/lib/orderUtils";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 
 const SESSION_KEY = "plural_order_receipt";
-
-const GRIND_LABEL: Record<string, string> = {
-  espresso: "Espresso",
-  filter: "Filtre",
-  french_press: "Piston",
-};
 
 function itemLineHT(item: OrderReceiptData["items"][number]): number {
   if (item.unitPrice != null) return item.unitPrice * item.quantity;
@@ -30,10 +25,7 @@ function itemUnitHT(item: OrderReceiptData["items"][number]): number {
 }
 
 function fmtEur(n: number): string {
-  return n.toLocaleString("fr-FR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }) + " €";
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n);
 }
 
 function formatPlacedAt(iso: string): string {
@@ -262,17 +254,21 @@ export default function OrderReceiptPage() {
             </thead>
             <tbody>
               {data.items.map((item, i) => {
-                // grindType is not in OrderReceiptData; infer from product name
-                const grind = inferGrind(item.name, null);
-                const grindLabel = grind.key ? (GRIND_LABEL[grind.key] ?? null) : null;
-                const sizeStr = formatSizeLabel(item);
-                const conditioning = [sizeStr || null, grindLabel].filter(Boolean).join(" · ");
+                const isService = item.kind === 'service';
+                const grind = isService ? null : inferGrind(item.name, null);
+                const grindLabel = grind?.key ? (GRIND_LABEL[grind.key] ?? null) : null;
+                const sizeStr = isService ? null : formatSizeLabel(item);
+                const conditioning = isService
+                  ? "—"
+                  : [sizeStr || null, grindLabel].filter(Boolean).join(" · ");
                 const rowBg = i % 2 === 1 ? "#F0EBE3" : undefined;
                 return (
                   <tr key={i}>
                     <td style={{ padding: "9px 10px", color: "#1A1A18", verticalAlign: "middle", borderBottom: "1px solid #e8e3db", background: rowBg }}>
                       <span style={{ display: "block", fontWeight: 600, fontSize: 11 }}>{item.name}</span>
-                      <span style={{ fontSize: 9, color: "#9E9E93", marginTop: 1 }}>Café de spécialité</span>
+                      <span style={{ fontSize: 9, color: "#9E9E93", marginTop: 1 }}>
+                        {isService ? "Livraison" : "Café de spécialité"}
+                      </span>
                     </td>
                     <td style={{ padding: "9px 10px", color: "#1A1A18", borderBottom: "1px solid #e8e3db", background: rowBg }}>
                       {conditioning}

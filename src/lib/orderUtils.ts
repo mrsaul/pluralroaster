@@ -16,6 +16,7 @@ export type OrderReceiptData = {
     quantity: number;
     unitPrice: number | null;  // per-bag price when variant pricing applies
     pricePerKg: number;
+    kind?: 'coffee' | 'service';  // optional for back-compat; service items = delivery fee
   }[];
   totalHT: number;
   vatRate: 0.20;
@@ -24,7 +25,7 @@ export type OrderReceiptData = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const GRIND_LABEL: Record<string, string> = {
+export const GRIND_LABEL: Record<string, string> = {
   espresso: "Espresso",
   filter: "Filtre",
   french_press: "Piston",
@@ -60,10 +61,7 @@ function itemLineHT(item: OrderReceiptData["items"][number]): number {
 
 /** Format a number as French locale currency: "183,60 €" */
 function fmtEur(n: number): string {
-  return n.toLocaleString("fr-FR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }) + " €";
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n);
 }
 
 /**
@@ -93,6 +91,10 @@ export function buildPlainTextSummary(data: OrderReceiptData): string {
   lines.push("");
 
   for (const item of data.items) {
+    if (item.kind === 'service') {
+      lines.push(`- ${item.name} × ${item.quantity} — ${fmtEur(item.unitPrice ?? item.pricePerKg)}`);
+      continue;
+    }
     // grindType is not stored in OrderReceiptData; always infer from product name
     const grind = inferGrind(item.name, null);
     const grindLabel = grind.key ? (GRIND_LABEL[grind.key] ?? grind.key) : null;

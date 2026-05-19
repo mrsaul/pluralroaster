@@ -42,6 +42,7 @@ type ProductRow = {
   synced_at: string;
   sellsy_tax_id: string | null;
   sellsy_tax_rate: number | null;
+  kind: 'coffee' | 'service';
 };
 
 type ProductParseError = {
@@ -855,6 +856,9 @@ function normalizeProduct(product: JsonRecord) {
     ? (Number.isFinite(Number(firstTax.rate)) ? Number(firstTax.rate) : null)
     : null;
 
+  const sellsyType = typeof product.type === 'string' ? product.type : null;
+  const kind: 'coffee' | 'service' = sellsyType === 'service' ? 'service' : 'coffee';
+
   return {
     row: {
       sellsy_id: sellsyId,
@@ -868,6 +872,7 @@ function normalizeProduct(product: JsonRecord) {
       synced_at: new Date().toISOString(),
       sellsy_tax_id: sellsyTaxId,
       sellsy_tax_rate: sellsyTaxRate,
+      kind,
     } satisfies ProductRow,
     parseError,
   };
@@ -1548,7 +1553,7 @@ async function handleCreateInvoice(
       id, user_id, company_id, created_at, total_price,
       order_items (
         id, product_name, quantity, price_per_kg, size_label,
-        products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
+        products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name, kind )
       )
     `)
     .eq("id", orderId)
@@ -1648,6 +1653,36 @@ async function handleCreateInvoice(
     const hasItem = Boolean(product.sellsy_id);
 
     if (hasItem) {
+      // ── Service item (delivery) ─────────────────────────────────────────────
+      if (product.kind === 'service') {
+        const numericSellsyId = Number(product.sellsy_id);
+        if (!Number.isFinite(numericSellsyId)) {
+          console.error(`[invoice] service item skipped: non-numeric sellsy_id="${product.sellsy_id}", falling back to free-form`);
+          return {
+            type: 'single',
+            description: String(item.product_name ?? product.name ?? ''),
+            // price_per_kg is repurposed here to hold the flat service fee (e.g. 20 €) for delivery items
+            unit_amount: String(item.price_per_kg ?? 0),
+            quantity: String(item.quantity ?? 1),
+          };
+        }
+        const row: JsonRecord = {
+          type: 'catalog',
+          // Sellsy v2: services are catalogued as "item" objects, not "product" objects — this is intentional
+          related: { type: 'item', id: numericSellsyId },
+          description: String(item.product_name ?? product.name ?? ''),
+          // price_per_kg is repurposed here to hold the flat service fee (e.g. 20 €) for delivery items
+          unit_amount: String(item.price_per_kg ?? 0),
+          quantity: String(item.quantity ?? 1),
+        };
+        if (product.sellsy_tax_id) {
+          row.tax_id = Number(product.sellsy_tax_id);
+        }
+        console.log(`[invoice] service row: sellsy_id=${numericSellsyId} unit=${row.unit_amount}`);
+        return row;
+      }
+
+      // ── Coffee / catalog item ───────────────────────────────────────────────
       // Resolve declination_id: products with Sellsy variants require it.
       // Match by size_label first, then fall back to closest price match.
       const productVariants = variantsByProductId.get(product.id) ?? [];

@@ -100,6 +100,7 @@ type AdminOrderItem = {
   size_kg: number | null;
   grind_type: string | null;
   product_variant_id: string | null;
+  kind: string | null;
 };
 
 type AdminOrder = {
@@ -225,7 +226,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .select(`
           id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
           is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes,
-          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg, size_label, size_kg, grind_type, product_variant_id ),
+          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg, size_label, size_kg, grind_type, product_variant_id, kind ),
           companies ( name, email )
         `)
         .order("created_at", { ascending: false });
@@ -274,6 +275,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             size_kg: i.size_kg != null ? Number(i.size_kg) : null,
             grind_type: i.grind_type ?? null,
             product_variant_id: i.product_variant_id ?? null,
+            kind: i.kind ?? null,
           })),
         };
       });
@@ -511,12 +513,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       product_sku: product.sku,
       price_per_kg: product.custom_price_per_kg ?? product.price_per_kg,
       quantity: 1,
-    }).select("id, product_id, product_name, product_sku, quantity, price_per_kg").single();
+    }).select("id, product_id, product_name, product_sku, quantity, price_per_kg, kind").single();
     if (error || !inserted) { toast({ title: "Add failed", description: error?.message, variant: "destructive" }); return; }
     const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
     const newItem: AdminOrderItem = {
       id: inserted.id, product_id: inserted.product_id, product_name: inserted.product_name,
       product_sku: inserted.product_sku, quantity: Number(inserted.quantity), price_per_kg: Number(inserted.price_per_kg),
+      kind: inserted.kind ?? null,
     };
     setAdminOrders((prev) => prev.map((o) => o.id !== orderId ? o : { ...o, total_kg: totalKg, total_price: totalPrice, items: [...o.items, newItem] }));
     setSelectedOrder((prev) => !prev || prev.id !== orderId ? prev : { ...prev, total_kg: totalKg, total_price: totalPrice, items: [...prev.items, newItem] });
@@ -904,7 +907,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       is_packed: o.is_packed,
       is_labeled: o.is_labeled,
       notes: o.notes,
-      items: o.items.map((i) => {
+      items: o.items.filter((i) => i.kind !== 'service').map((i) => {
         // Resolve sellsy_declination_id by matching product_id + size_kg in the variant map.
         // This is more robust than matching by size_label ("Standard" vs "1000g" are both 1 kg).
         const variantKey = i.product_id && i.size_kg != null
@@ -1227,6 +1230,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                       New
                                     </span>
                                   )}
+                                  {(() => {
+                                    const deliveryItem = order.items.find((i) => i.kind === 'service');
+                                    const hasZeroDelivery = deliveryItem != null && Number(deliveryItem.price_per_kg) === 0;
+                                    return hasZeroDelivery ? (
+                                      <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                        ⚠ Livraison 0 €
+                                      </span>
+                                    ) : null;
+                                  })()}
                                 </span>
                               </TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
