@@ -43,7 +43,7 @@ export interface OrderReceiptData {
 // ── Currency helper ───────────────────────────────────────────────────────────
 
 function fmtEur(amount: number): string {
-  return `${amount.toFixed(2)} €`;
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
 }
 
 // ── Plain-text summary ────────────────────────────────────────────────────────

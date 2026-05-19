@@ -5,6 +5,7 @@ import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CartItem } from "@/lib/store";
+import type { OrderReceiptData } from "@/lib/orderUtils";
 import { cn } from "@/lib/utils";
 
 interface CheckoutPageProps {
@@ -83,6 +84,39 @@ export default function CheckoutPage({
       setConfirmedOrderId(orderId);
       setConfirmedDeliveryFee(deliveryFee);
       setConfirmedDeliveryServiceName(deliveryServiceName);
+      // Write receipt data for PDF page
+      const receiptData: OrderReceiptData = {
+        orderId: orderId,
+        createdAt: new Date().toISOString(),
+        deliveryDate: deliveryDate,
+        clientName: '',
+        notes: notes.trim() || null,
+        items: [
+          ...snap.map((item) => ({
+            name: item.product.name,
+            sizeLabel: item.sizeLabel ?? undefined,
+            sizeKg: item.sizeKg ?? undefined,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice ?? undefined,
+            pricePerKg: item.product.pricePerKg,
+            kind: 'coffee' as const,
+          })),
+          ...(deliveryFee > 0 ? [{
+            name: deliveryServiceName,
+            sizeLabel: undefined,
+            sizeKg: undefined,
+            quantity: 1,
+            unitPrice: deliveryFee,
+            pricePerKg: deliveryFee,
+            kind: 'service' as const,
+          }] : []),
+        ],
+        subtotalHT: snapTotal + deliveryFee,
+        vatRate: 0.20,
+        vatAmount: (snapTotal + deliveryFee) * 0.20,
+        totalTTC: (snapTotal + deliveryFee) * 1.20,
+      };
+      localStorage.setItem("pr_order_receipt_v1", JSON.stringify(receiptData));
       setStep("success");
     } catch (err) {
       setOrderError(err instanceof Error ? err.message : "Something went wrong.");
