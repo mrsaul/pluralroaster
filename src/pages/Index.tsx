@@ -545,6 +545,7 @@ const Index = () => {
             reorderedFromRef={reorderedFromId}
             deliveryFee={deliveryFee}
             deliveryServiceName={deliveryService?.name ?? 'Livraison à vélo par LOBERZ'}
+            clientName={String((onboardingData as any)?.company_name ?? '')}
           />
         </Suspense>
       );

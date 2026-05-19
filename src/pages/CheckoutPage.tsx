@@ -18,6 +18,7 @@ interface CheckoutPageProps {
   reorderedFromRef?: string | null;
   deliveryFee: number;
   deliveryServiceName: string;
+  clientName?: string;
 }
 
 type Step = "review" | "success" | "error";
@@ -52,6 +53,7 @@ export default function CheckoutPage({
   reorderedFromRef,
   deliveryFee,
   deliveryServiceName,
+  clientName = '',
 }: CheckoutPageProps) {
   const [step, setStep] = useState<Step>("review");
   const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export default function CheckoutPage({
         orderId: orderId,
         createdAt: new Date().toISOString(),
         deliveryDate: deliveryDate,
-        clientName: '',
+        clientName: clientName,
         notes: notes.trim() || null,
         items: [
           ...snap.map((item) => ({

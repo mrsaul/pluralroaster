@@ -169,7 +169,7 @@ export default function OrderReceiptPage() {
           {/* ── Totals ── */}
           <div className="border-t border-border bg-muted/20 divide-y divide-border/50 text-sm">
             <div className="flex justify-between px-5 py-2 text-muted-foreground">
-              <span>Sous-total HT</span>
+              <span>Total HT</span>
               <span className="tabular-nums">{fmtEur(data.subtotalHT)}</span>
             </div>
             <div className="flex justify-between px-5 py-2 text-muted-foreground">
