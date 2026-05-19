@@ -90,7 +90,7 @@ export default function CheckoutPage({
     } finally {
       setSubmitting(false);
     }
-  }, [deliveryDate, items, notes, onConfirm, submitting, totalPrice]);
+  }, [deliveryDate, deliveryFee, deliveryServiceName, items, notes, onConfirm, submitting, totalPrice]);
 
   // ── Success screen ────────────────────────────────────────────────────────
 
