@@ -467,12 +467,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       product_sku: product.sku,
       price_per_kg: product.custom_price_per_kg ?? product.price_per_kg,
       quantity: 1,
-    }).select("id, product_id, product_name, product_sku, quantity, price_per_kg").single();
+    }).select("id, product_id, product_name, product_sku, quantity, price_per_kg, kind").single();
     if (error || !inserted) { toast({ title: "Add failed", description: error?.message, variant: "destructive" }); return; }
     const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
     const newItem: AdminOrderItem = {
       id: inserted.id, product_id: inserted.product_id, product_name: inserted.product_name,
       product_sku: inserted.product_sku, quantity: Number(inserted.quantity), price_per_kg: Number(inserted.price_per_kg),
+      kind: inserted.kind ?? null,
     };
     setAdminOrders((prev) => prev.map((o) => o.id !== orderId ? o : { ...o, total_kg: totalKg, total_price: totalPrice, items: [...o.items, newItem] }));
     setSelectedOrder((prev) => !prev || prev.id !== orderId ? prev : { ...prev, total_kg: totalKg, total_price: totalPrice, items: [...prev.items, newItem] });
