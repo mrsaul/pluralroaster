@@ -94,6 +94,7 @@ type AdminOrderItem = {
   product_sku: string | null;
   quantity: number;
   price_per_kg: number;
+  kind: string | null;
 };
 
 type AdminOrder = {
@@ -203,7 +204,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .select(`
           id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
           is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync,
-          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg ),
+          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg, kind ),
           companies ( name, email )
         `)
         .order("created_at", { ascending: false });
@@ -247,6 +248,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             product_sku: i.product_sku,
             quantity: Number(i.quantity),
             price_per_kg: Number(i.price_per_kg),
+            kind: i.kind ?? null,
           })),
         };
       });
@@ -854,7 +856,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       is_roasted: o.is_roasted,
       is_packed: o.is_packed,
       is_labeled: o.is_labeled,
-      items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
+      items: o.items.filter((i) => i.kind !== 'service').map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
     })),
     [adminOrders],
   );
@@ -1151,6 +1153,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                       New
                                     </span>
                                   )}
+                                  {(() => {
+                                    const deliveryItem = order.items.find((i) => i.kind === 'service');
+                                    const hasZeroDelivery = deliveryItem != null && Number(deliveryItem.price_per_kg) === 0;
+                                    return hasZeroDelivery ? (
+                                      <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                        ⚠ Livraison 0 €
+                                      </span>
+                                    ) : null;
+                                  })()}
                                 </span>
                               </TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
