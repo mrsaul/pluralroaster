@@ -27,18 +27,45 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
         .order("delivery_date", { ascending: true });
       if (error) throw error;
 
-      // Resolve client names for auth users via profiles
+      // Resolve client names:
+      // 1. contacts table (via user_id) → company name or contact name
+      // 2. profiles.full_name / email as fallback
       const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
-      const { data: profiles } = userIds.length > 0
-        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
-        : { data: [] };
+
+      const [{ data: contacts }, { data: profiles }] = await Promise.all([
+        userIds.length > 0
+          ? supabase
+              .from("contacts")
+              .select("user_id, first_name, last_name, companies(name)")
+              .in("user_id", userIds)
+          : Promise.resolve({ data: [] }),
+        userIds.length > 0
+          ? supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      // Pick the primary contact per user_id (first match is fine — one user = one company)
+      const contactMap = new Map<string, { companyName: string | null; contactName: string | null }>();
+      for (const c of (contacts ?? []) as any[]) {
+        if (!c.user_id || contactMap.has(c.user_id)) continue;
+        const companyName = (c.companies as any)?.name ?? null;
+        const contactName = [c.first_name, c.last_name].filter(Boolean).join(" ") || null;
+        contactMap.set(c.user_id, { companyName, contactName });
+      }
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
       setOrders(
         ((data ?? []) as any[]).map((o) => {
+          const contact = o.user_id ? contactMap.get(o.user_id) : null;
           const profile = o.user_id ? profileMap.get(o.user_id) : null;
-          const clientName = (o.companies as any)?.name
-            || profile?.full_name || profile?.email || null;
+          // Resolution chain: order.company → contact.company → contact name → profile → "Client sans nom"
+          const clientName =
+            (o.companies as any)?.name          // company_id direct join on order
+            ?? contact?.companyName             // company via contacts table (user_id path)
+            ?? contact?.contactName             // contact first+last name
+            ?? profile?.full_name              // profile fallback
+            ?? profile?.email                  // email last resort
+            ?? "Client sans nom";
           return {
             id: o.id,
             client_name: clientName,
