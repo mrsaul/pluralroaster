@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   getOrderPriority, type OrderStatus, type PriorityLevel,
 } from "@/lib/orderStatuses";
@@ -253,7 +252,6 @@ function OrderCard({
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [etapesOpen, setEtapesOpen] = useState(false);
   const state = getPackagingState(order, packedLineIds);
   const priority = getOrderPriority(order.delivery_date);
   const allLinesPacked = order.items.length > 0 && order.items.every(i => packedLineIds.has(i.id));
@@ -321,13 +319,8 @@ function OrderCard({
             </div>
           </div>
 
-          {/* Checklist dots + expand toggle */}
+          {/* Expand toggle */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="flex items-center gap-1" title="Torréfié · Conditionné · Étiqueté">
-              <div className={cn("w-2.5 h-2.5 rounded-full", order.is_roasted ? "bg-emerald-500" : "bg-border")} />
-              <div className={cn("w-2.5 h-2.5 rounded-full", order.is_packed ? "bg-emerald-500" : "bg-border")} />
-              <div className={cn("w-2.5 h-2.5 rounded-full", order.is_labeled ? "bg-emerald-500" : "bg-border")} />
-            </div>
             <button
               type="button"
               onClick={() => setExpanded(v => !v)}
@@ -370,46 +363,6 @@ function OrderCard({
             ))}
           </div>
 
-          {/* Étapes — collapsed by default, expandable for manual override */}
-          <div className="mx-4 mb-4">
-            <button
-              type="button"
-              onClick={() => setEtapesOpen(v => !v)}
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 w-full"
-            >
-              {etapesOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-              <span className="font-semibold uppercase tracking-wider">Étapes de préparation</span>
-              <div className="flex items-center gap-1 ml-1">
-                {(["is_roasted", "is_packed", "is_labeled"] as const).map(f => (
-                  <div key={f} className={cn("w-2 h-2 rounded-full", order[f] ? "bg-emerald-500" : "bg-border")} />
-                ))}
-              </div>
-            </button>
-            {etapesOpen && (
-              <div className="rounded-lg bg-muted/30 border border-border/50 p-3 mt-1">
-                <div className="space-y-2">
-                  {(["is_roasted", "is_packed", "is_labeled"] as const).map((field) => {
-                    const labels = { is_roasted: "Torréfié", is_packed: "Conditionné", is_labeled: "Étiqueté" };
-                    return (
-                      <label key={field} className="flex items-center gap-3 cursor-pointer min-h-[44px]">
-                        <Checkbox
-                          checked={order[field]}
-                          onCheckedChange={(v) => onChecklistChange(order.id, field, Boolean(v))}
-                          className="w-5 h-5"
-                        />
-                        <span className={cn(
-                          "text-sm font-medium",
-                          order[field] && "line-through text-muted-foreground",
-                        )}>
-                          {labels[field]}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Notes */}
           {order.notes && (
