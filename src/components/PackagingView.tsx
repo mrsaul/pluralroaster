@@ -253,10 +253,21 @@ function OrderCard({
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [etapesOpen, setEtapesOpen] = useState(false);
   const state = getPackagingState(order, packedLineIds);
   const priority = getOrderPriority(order.delivery_date);
-  const allLinesPacked = order.items.every(i => packedLineIds.has(i.id));
-  const canMarkReady = allLinesPacked && order.is_roasted && order.is_packed && order.is_labeled;
+  const allLinesPacked = order.items.length > 0 && order.items.every(i => packedLineIds.has(i.id));
+  const canMarkReady = allLinesPacked;
+
+  // When all lines are packed, silently write all three étapes to true
+  useEffect(() => {
+    if (allLinesPacked && (!order.is_roasted || !order.is_packed || !order.is_labeled)) {
+      if (!order.is_roasted) onChecklistChange(order.id, "is_roasted", true);
+      if (!order.is_packed) onChecklistChange(order.id, "is_packed", true);
+      if (!order.is_labeled) onChecklistChange(order.id, "is_labeled", true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allLinesPacked]);
 
   const borderClass = cn(
     "bg-card border rounded-xl overflow-hidden transition-all",
@@ -359,31 +370,45 @@ function OrderCard({
             ))}
           </div>
 
-          {/* Checklist */}
-          <div className="mx-4 mb-4 rounded-lg bg-muted/30 border border-border/50 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
-              Étapes de préparation
-            </p>
-            <div className="space-y-2">
-              {(["is_roasted", "is_packed", "is_labeled"] as const).map((field) => {
-                const labels = { is_roasted: "Torréfié", is_packed: "Conditionné", is_labeled: "Étiqueté" };
-                return (
-                  <label key={field} className="flex items-center gap-3 cursor-pointer min-h-[44px]">
-                    <Checkbox
-                      checked={order[field]}
-                      onCheckedChange={(v) => onChecklistChange(order.id, field, Boolean(v))}
-                      className="w-5 h-5"
-                    />
-                    <span className={cn(
-                      "text-sm font-medium",
-                      order[field] && "line-through text-muted-foreground",
-                    )}>
-                      {labels[field]}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
+          {/* Étapes — collapsed by default, expandable for manual override */}
+          <div className="mx-4 mb-4">
+            <button
+              type="button"
+              onClick={() => setEtapesOpen(v => !v)}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 w-full"
+            >
+              {etapesOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              <span className="font-semibold uppercase tracking-wider">Étapes de préparation</span>
+              <div className="flex items-center gap-1 ml-1">
+                {(["is_roasted", "is_packed", "is_labeled"] as const).map(f => (
+                  <div key={f} className={cn("w-2 h-2 rounded-full", order[f] ? "bg-emerald-500" : "bg-border")} />
+                ))}
+              </div>
+            </button>
+            {etapesOpen && (
+              <div className="rounded-lg bg-muted/30 border border-border/50 p-3 mt-1">
+                <div className="space-y-2">
+                  {(["is_roasted", "is_packed", "is_labeled"] as const).map((field) => {
+                    const labels = { is_roasted: "Torréfié", is_packed: "Conditionné", is_labeled: "Étiqueté" };
+                    return (
+                      <label key={field} className="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                        <Checkbox
+                          checked={order[field]}
+                          onCheckedChange={(v) => onChecklistChange(order.id, field, Boolean(v))}
+                          className="w-5 h-5"
+                        />
+                        <span className={cn(
+                          "text-sm font-medium",
+                          order[field] && "line-through text-muted-foreground",
+                        )}>
+                          {labels[field]}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Notes */}
@@ -405,7 +430,7 @@ function OrderCard({
                   "w-full gap-2 h-12 text-base font-semibold",
                   canMarkReady && "bg-emerald-600 hover:bg-emerald-700 text-white",
                 )}
-                title={!canMarkReady ? "Cochez toutes les lignes et les étapes de préparation" : undefined}
+                title={!canMarkReady ? "Cochez toutes les lignes pour marquer comme prêt" : undefined}
               >
                 <CheckSquare className="w-5 h-5" />
                 Marquer comme prêt pour livraison
