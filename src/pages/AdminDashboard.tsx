@@ -234,17 +234,40 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (error) throw error;
 
       const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
-      const { data: profiles } = userIds.length > 0
-        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
-        : { data: [] };
+
+      const [{ data: contacts }, { data: profiles }] = await Promise.all([
+        userIds.length > 0
+          ? supabase
+              .from("contacts")
+              .select("user_id, first_name, last_name, companies(name)")
+              .in("user_id", userIds)
+          : Promise.resolve({ data: [] }),
+        userIds.length > 0
+          ? supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const contactMap = new Map<string, { companyName: string | null; contactName: string | null }>();
+      for (const c of (contacts ?? []) as any[]) {
+        if (!c.user_id || contactMap.has(c.user_id)) continue;
+        const companyName = (c.companies as any)?.name ?? null;
+        const contactName = [c.first_name, c.last_name].filter(Boolean).join(" ") || null;
+        contactMap.set(c.user_id, { companyName, contactName });
+      }
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
       const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
+        const contact = o.user_id ? contactMap.get(o.user_id) : null;
         const profile = o.user_id ? profileMap.get(o.user_id) : null;
-        // Company name is always the client identity; profile is just the account holder
-        const clientName = (o.companies as any)?.name
-          || profile?.full_name || profile?.email
-          || (o.companies as any)?.email || null;
+        // Resolution chain: order.company → contact.company → contact name → profile → null
+        const clientName =
+          (o.companies as any)?.name
+          ?? contact?.companyName
+          ?? contact?.contactName
+          ?? profile?.full_name
+          ?? profile?.email
+          ?? (o.companies as any)?.email
+          ?? null;
         const userEmail = profile?.email || (o.companies as any)?.email || null;
         return {
           id: o.id,

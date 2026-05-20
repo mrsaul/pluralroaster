@@ -289,10 +289,15 @@ function OrderCard({
               </span>
             </div>
 
-            {/* Client name — large */}
+            {/* Client name — large primary label */}
             <h3 className="text-xl font-bold text-foreground leading-tight truncate">
-              {order.client_name ?? <span className="text-muted-foreground italic">{order.id.slice(0, 8)} <span className="text-xs font-normal">(client non identifié)</span></span>}
+              {order.client_name ?? <span className="italic text-muted-foreground">Client sans nom</span>}
             </h3>
+
+            {/* Order ref — small secondary */}
+            <p className="text-[11px] text-muted-foreground/70 font-mono mt-0.5">
+              #{order.id.slice(0, 8).toUpperCase()}
+            </p>
 
             {/* Date + summary */}
             <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
