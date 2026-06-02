@@ -618,17 +618,13 @@ function normalizeDeclination(
   productId: string,           // UUID from our products table
   syncedAt: string,
 ): VariantRow | null {
-  // Extract size label from attribute values, name, or reference
+  // Extract size label from attribute values, name, or reference.
+  // If nothing is parseable, fall back to reference or the declination ID so we still
+  // capture sellsy_declination_id — without it the invoice builder cannot link the row.
   const rawSizeLabel = extractSizeLabel(raw);
-  if (!rawSizeLabel) {
-    // Declination without any usable size label — skip
-    return null;
-  }
-
-  // Prefer a clean canonical weight label ("1kg", "250g") extracted from the raw label.
-  // If the raw label is already clean (e.g. "1kg"), extractWeightLabel returns it directly.
-  // If it's embedded in a longer string (e.g. "Colombie - Guadalupe 1kg"), we strip the noise.
-  const sizeLabel = extractWeightLabel(rawSizeLabel) ?? rawSizeLabel;
+  const sizeLabel = rawSizeLabel
+    ? (extractWeightLabel(rawSizeLabel) ?? rawSizeLabel)
+    : (raw.reference?.trim() || `decl-${raw.id}`);
 
   // Price from the per-declination cache populated by fetchDeclinationsForItem
   let priceHT = _declinationPriceCache.get(raw.id) ?? 0;
