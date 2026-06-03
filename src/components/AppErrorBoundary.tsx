@@ -29,6 +29,11 @@ export class AppErrorBoundary extends Component<Props, State> {
   static getDerivedStateFromError(error: unknown): State {
     const message =
       error instanceof Error ? error.message : "Une erreur inattendue s'est produite.";
+    // Stale chunk after a deploy — auto-reload once instead of showing the error screen.
+    if (typeof message === "string" && message.includes("Failed to fetch dynamically imported module")) {
+      window.location.reload();
+      return { hasError: false, message: null };
+    }
     return { hasError: true, message };
   }
 
