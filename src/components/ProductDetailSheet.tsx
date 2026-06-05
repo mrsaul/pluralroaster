@@ -3,6 +3,7 @@ import { Drawer, DrawerContent, DrawerClose } from "@/components/ui/drawer";
 import { X, Minus, Plus, Coffee, MapPin, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Product, ProductVariant } from "@/lib/store";
+import { resolveVariantLabel } from "@/lib/orderUtils";
 
 // ── Color helpers (shared with catalog) ──────────────────────────────────────
 
@@ -217,7 +218,7 @@ export function ProductDetailSheet({
                           "text-sm font-semibold",
                           isSelected ? "text-foreground" : "text-muted-foreground",
                         )}>
-                          {variant.size_label}
+                          {resolveVariantLabel(variant)}
                         </p>
                         <p className="text-xs mt-0.5 tabular-nums text-muted-foreground">
                           €{variant.price.toFixed(2)}

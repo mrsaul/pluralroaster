@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CartItem } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { type OrderReceiptData, buildPlainTextSummary } from "@/lib/orderUtils";
+import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
 
 interface CheckoutPageProps {
   items: CartItem[];
@@ -245,7 +245,7 @@ export default function CheckoutPage({
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {item.sizeLabel
-                        ? `${item.sizeLabel} × ${item.quantity}`
+                        ? `${resolveVariantLabel({ size_label: item.sizeLabel, size_kg: item.sizeKg ?? null })} × ${item.quantity}`
                         : `${lineQtyKg(item).toFixed(2)} kg`}
                     </p>
                   </div>
@@ -409,7 +409,7 @@ export default function CheckoutPage({
                       )}
                       <span className="text-xs text-muted-foreground">
                         {item.sizeLabel
-                          ? `${item.sizeLabel} × ${item.quantity}`
+                          ? `${resolveVariantLabel({ size_label: item.sizeLabel, size_kg: item.sizeKg ?? null })} × ${item.quantity}`
                           : `${qty.toFixed(2)} kg`}
                       </span>
                     </div>

@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { frenchStatus, statusColor } from "@/components/OrderHistoryTab";
 import type { Order } from "@/lib/store";
+import { resolveVariantLabel } from "@/lib/orderUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,7 +82,7 @@ export function OrderDetailView({ order, onBack, onReorder }: OrderDetailViewPro
                     </p>
                     {item.sizeLabel && (
                       <p className="text-xs text-muted-foreground">
-                        {item.sizeLabel}
+                        {resolveVariantLabel({ size_label: item.sizeLabel, size_kg: item.sizeKg ?? null })}
                       </p>
                     )}
                   </div>

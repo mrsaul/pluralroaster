@@ -23,6 +23,19 @@ export type OrderReceiptData = {
   totalTTC: number;
 };
 
+// ── Variant label resolution ──────────────────────────────────────────────────
+
+/**
+ * Resolve a human-readable variant label.
+ * "Standard" (or blank) is meaningless to clients — substitute the weight.
+ */
+export function resolveVariantLabel(variant: { size_label: string | null; size_kg: number | null }): string {
+  if (!variant.size_label || variant.size_label.toLowerCase() === "standard") {
+    return variant.size_kg != null ? `${variant.size_kg} kg` : "";
+  }
+  return variant.size_label;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export const GRIND_LABEL: Record<string, string> = {

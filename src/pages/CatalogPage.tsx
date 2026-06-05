@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { CartBar } from "@/components/CartBar";
 import { ProductDetailSheet } from "@/components/ProductDetailSheet";
+import { resolveVariantLabel } from "@/lib/orderUtils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MOCK_PRODUCTS, type Product, type ProductVariant, type Order } from "@/lib/store";
@@ -543,8 +544,9 @@ export default function CatalogPage({
                   </button>
                 </div>
                 <div className="-mx-4 px-4 flex gap-2.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                  {usualOrderItems.map(({ product, quantity, sizeLabel }) => {
+                  {usualOrderItems.map(({ product, quantity, sizeLabel, sizeKg }) => {
                     const badge = getCartBadge(product);
+                    const displayLabel = sizeLabel ? resolveVariantLabel({ size_label: sizeLabel, size_kg: sizeKg ?? null }) : null;
                     return (
                       <button
                         key={`${product.id}::${sizeLabel ?? ""}`}
@@ -561,7 +563,7 @@ export default function CatalogPage({
                           {product.name}
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-1">
-                          Last: ×{quantity}{sizeLabel ? ` ${sizeLabel}` : ""}
+                          Last: ×{quantity}{displayLabel ? ` ${displayLabel}` : ""}
                         </p>
                         <p className="mt-2 text-[11px] font-semibold text-primary">+ Add</p>
                       </button>
