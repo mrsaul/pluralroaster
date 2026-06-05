@@ -546,6 +546,16 @@ const Index = () => {
             deliveryFee={deliveryFee}
             deliveryServiceName={deliveryService?.name ?? 'Livraison à vélo par LOBERZ'}
             clientName={String((onboardingData as any)?.company_name ?? '')}
+            onRemoveItem={(product, sizeLabel) => {
+              cart.updateQuantity(product, 0, sizeLabel);
+            }}
+            onUpdateItem={(product, oldSizeLabel, qty, newSizeLabel, newSizeKg, newUnitPrice) => {
+              if (newSizeLabel !== oldSizeLabel) {
+                // Remove old variant line, then add new one
+                cart.updateQuantity(product, 0, oldSizeLabel);
+              }
+              cart.updateQuantity(product, qty, newSizeLabel, newSizeKg, newUnitPrice);
+            }}
           />
         </Suspense>
       );

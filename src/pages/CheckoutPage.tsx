@@ -4,9 +4,10 @@ import { ArrowLeft, CheckCircle2, AlertCircle, Package, RotateCcw, Share2, FileT
 import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { CartItem } from "@/lib/store";
+import type { CartItem, Product } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
+import { SwipeableCartRow } from "@/components/SwipeableCartRow";
 
 interface CheckoutPageProps {
   items: CartItem[];
@@ -19,6 +20,17 @@ interface CheckoutPageProps {
   deliveryFee: number;
   deliveryServiceName: string;
   clientName?: string;
+  /** Remove a specific line item from the draft order */
+  onRemoveItem?: (product: Product, sizeLabel?: string) => void;
+  /** Update quantity and/or variant of a specific line item */
+  onUpdateItem?: (
+    product: Product,
+    oldSizeLabel: string | undefined,
+    quantity: number,
+    newSizeLabel?: string,
+    newSizeKg?: number,
+    newUnitPrice?: number,
+  ) => void;
 }
 
 type Step = "review" | "success" | "error";
@@ -54,6 +66,8 @@ export default function CheckoutPage({
   deliveryFee,
   deliveryServiceName,
   clientName = '',
+  onRemoveItem,
+  onUpdateItem,
 }: CheckoutPageProps) {
   const [step, setStep] = useState<Step>("review");
   const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
@@ -389,38 +403,23 @@ export default function CheckoutPage({
 
           <div className="divide-y divide-border">
             {items.map((item, i) => {
-              const qty = lineQtyKg(item);
-              const ppu = linePricePerKg(item);
-              const ht = lineHT(item);
+              const subtitle = item.sizeLabel
+                ? `${resolveVariantLabel({ size_label: item.sizeLabel, size_kg: item.sizeKg ?? null })} × ${item.quantity}`
+                : `${lineQtyKg(item).toFixed(2)} kg`;
               return (
-                <div
-                  key={i}
-                  className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {item.product.name}
-                    </p>
-                    <div className="flex flex-wrap gap-x-3 mt-0.5">
-                      {item.product.sku && (
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {item.product.sku}
-                        </span>
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {item.sizeLabel
-                          ? `${resolveVariantLabel({ size_label: item.sizeLabel, size_kg: item.sizeKg ?? null })} × ${item.quantity}`
-                          : `${qty.toFixed(2)} kg`}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {qty.toFixed(2)} kg · €{ppu.toFixed(2)}/kg
-                    </p>
-                  </div>
-                  <p className="text-sm font-medium text-foreground tabular-nums self-start pt-0.5">
-                    €{ht.toFixed(2)}
-                  </p>
-                </div>
+                <SwipeableCartRow
+                  key={`${item.product.id}::${item.sizeLabel ?? ""}::${i}`}
+                  item={item}
+                  lineTotal={lineHT(item)}
+                  subtitle={subtitle}
+                  onRemove={onRemoveItem
+                    ? () => onRemoveItem(item.product, item.sizeLabel)
+                    : () => {}}
+                  onUpdate={onUpdateItem
+                    ? (qty, newSizeLabel, newSizeKg, newUnitPrice) =>
+                        onUpdateItem(item.product, item.sizeLabel, qty, newSizeLabel, newSizeKg, newUnitPrice)
+                    : () => {}}
+                />
               );
             })}
           </div>
