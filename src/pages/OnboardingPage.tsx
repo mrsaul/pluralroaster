@@ -153,8 +153,11 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
   const saveProgress = useCallback(async (nextStep: number, status = "pending") => {
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      // Use getSession() — reads from localStorage, no network round-trip, never
+      // returns null due to a token-refresh race the way getUser() can.
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) throw new Error("Votre session a expiré. Veuillez vous reconnecter.");
 
       const { error } = await (supabase as any).rpc("user_save_onboarding_progress", {
         _company_name:            data.company_name || user.email || "My Company",
@@ -221,9 +224,10 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
   }, [saveProgress, clearDraft, onComplete]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email && !data.email) {
-        setData((prev) => ({ ...prev, email: user.email ?? "" }));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const email = session?.user?.email;
+      if (email && !data.email) {
+        setData((prev) => ({ ...prev, email }));
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
