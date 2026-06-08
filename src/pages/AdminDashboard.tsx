@@ -742,11 +742,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     if (!orderToDelete) return;
     setDeletingOrder(true);
     try {
-      // Delete items first (FK constraint)
-      await supabase.from("order_items").delete().eq("order_id", orderToDelete.id);
-      const { error } = await supabase.from("orders").delete().eq("id", orderToDelete.id);
+      const id = orderToDelete.id;
+      // Clear all FK references before deleting the order row
+      await supabase.from("order_items").delete().eq("order_id", id);
+      await supabase.from("order_status_history").delete().eq("order_id", id);
+      await supabase.from("roasted_stock_history").delete().eq("order_id", id);
+      // shopify_orders references orders via synced_to_order_id — null it out (don't delete the Shopify record)
+      await supabase.from("shopify_orders").update({ synced_to_order_id: null }).eq("synced_to_order_id", id);
+      // orders that were re-ordered from this one — detach the back-reference
+      await supabase.from("orders").update({ reordered_from: null }).eq("reordered_from", id);
+      // Now safe to delete the order itself
+      const { error } = await supabase.from("orders").delete().eq("id", id);
       if (error) throw error;
-      setAdminOrders((prev) => prev.filter((o) => o.id !== orderToDelete.id));
+      setAdminOrders((prev) => prev.filter((o) => o.id !== id));
       toast({ title: "Order deleted" });
       setOrderToDelete(null);
     } catch (err) {
