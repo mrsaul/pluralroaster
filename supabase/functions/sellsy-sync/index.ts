@@ -1664,8 +1664,8 @@ async function handleCreateInvoice(
         }
         const row: JsonRecord = {
           type: 'catalog',
-          // Sellsy v2: services are catalogued as "item" objects, not "product" objects — this is intentional
-          related: { type: 'item', id: numericSellsyId },
+          // Sellsy v2: services use related.type = "service" (not "product", not "item")
+          related: { type: 'service', id: numericSellsyId },
           description: String(item.product_name ?? product.name ?? ''),
           // price_per_kg is repurposed here to hold the flat service fee (e.g. 20 €) for delivery items
           unit_amount: String(item.price_per_kg ?? 0),
