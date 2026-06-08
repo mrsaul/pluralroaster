@@ -11,6 +11,7 @@ import {
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
    Menu, User, Settings, Warehouse, ExternalLink,
+   GitMerge, AlertTriangle,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -194,6 +195,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [importSellsyId, setImportSellsyId] = useState("");
   const [importingClient, setImportingClient] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
+  const [mergingClientId, setMergingClientId] = useState<string | null>(null);
 
   // Products
   const [products, setProducts] = useState<AdminProductRow[]>([]);
@@ -647,6 +649,46 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       setClientError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingClients(false);
+    }
+  };
+
+  /* ── Merge duplicate client (non-Sellsy) into existing Sellsy company ── */
+  const mergeClient = async (keepId: string, deleteId: string) => {
+    setMergingClientId(deleteId);
+    try {
+      // 1. Move any delivery address from the duplicate → keeper
+      await supabase
+        .from("company_addresses")
+        .update({ company_id: keepId })
+        .eq("company_id", deleteId);
+
+      // 2. Link the auth user from the duplicate contact → keeper contact
+      const { data: dupContacts } = await supabase
+        .from("contacts")
+        .select("id, user_id")
+        .eq("company_id", deleteId);
+      const dupUserContact = (dupContacts ?? []).find((c: any) => c.user_id);
+      if (dupUserContact?.user_id) {
+        // Point the keeper's primary contact to this user
+        await supabase
+          .from("contacts")
+          .update({ user_id: dupUserContact.user_id })
+          .eq("company_id", keepId);
+      }
+
+      // 3. Reassign any orders from the duplicate company's user to the kept company
+      // (orders are tied to user_id not company_id so they carry over automatically)
+
+      // 4. Delete duplicate contacts then duplicate company
+      await supabase.from("contacts").delete().eq("company_id", deleteId);
+      await supabase.from("companies").delete().eq("id", deleteId);
+
+      toast({ title: "Clients merged", description: "The duplicate account has been merged into the existing client." });
+      void loadClients();
+    } catch (err) {
+      toast({ title: "Merge failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setMergingClientId(null);
     }
   };
 
@@ -1475,6 +1517,69 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </Button>
                   </div>
                 </div>
+
+                {/* ── Duplicate client detection ── */}
+                {(() => {
+                  // Group completed clients by email; flag pairs where one has sellsy_client_id and the other doesn't
+                  const byEmail = new Map<string, AppClient[]>();
+                  for (const c of clients) {
+                    if (!c.email) continue;
+                    const key = c.email.toLowerCase().trim();
+                    byEmail.set(key, [...(byEmail.get(key) ?? []), c]);
+                  }
+                  const duplicatePairs: Array<{ keep: AppClient; drop: AppClient }> = [];
+                  byEmail.forEach((group) => {
+                    if (group.length < 2) return;
+                    const withSellsy = group.filter((c) => c.sellsy_client_id);
+                    const withoutSellsy = group.filter((c) => !c.sellsy_client_id);
+                    // For each Sellsy-linked company, pair it with each non-Sellsy duplicate
+                    withSellsy.forEach((keep) => {
+                      withoutSellsy.forEach((drop) => {
+                        duplicatePairs.push({ keep, drop });
+                      });
+                    });
+                    // If all have Sellsy (or none have Sellsy), just flag pairs by creation date
+                    if (withSellsy.length === 0 && group.length >= 2) {
+                      const sorted = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                      for (let i = 1; i < sorted.length; i++) {
+                        duplicatePairs.push({ keep: sorted[0], drop: sorted[i] });
+                      }
+                    }
+                  });
+                  if (duplicatePairs.length === 0) return null;
+                  return (
+                    <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                          {duplicatePairs.length} compte{duplicatePairs.length > 1 ? "s" : ""} en double détecté{duplicatePairs.length > 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        {duplicatePairs.map(({ keep, drop }) => (
+                          <div key={`${keep.id}::${drop.id}`} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-white dark:bg-card p-3">
+                            <div className="flex-1 min-w-0 text-sm">
+                              <span className="font-semibold text-foreground">{drop.company_name}</span>
+                              <span className="text-muted-foreground"> ({drop.email}) → </span>
+                              <span className="font-semibold text-foreground">{keep.company_name}</span>
+                              {keep.sellsy_client_id && <span className="ml-1 text-xs text-green-600 font-mono">Sellsy #{keep.sellsy_client_id}</span>}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 shrink-0 border-amber-400 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                              disabled={mergingClientId === drop.id}
+                              onClick={() => void mergeClient(keep.id, drop.id)}
+                            >
+                              <GitMerge className={cn("h-3.5 w-3.5", mergingClientId === drop.id && "animate-spin")} />
+                              {mergingClientId === drop.id ? "Fusion…" : "Fusionner"}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <AdminClientsSection
                   clients={clients}
