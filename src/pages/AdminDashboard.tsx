@@ -11,7 +11,7 @@ import {
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
    Menu, User, Settings, Warehouse, ExternalLink,
-   GitMerge, AlertTriangle,
+   GitMerge, AlertTriangle, Pencil,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -197,6 +197,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [showAddClient, setShowAddClient] = useState(false);
   const [mergingClientId, setMergingClientId] = useState<string | null>(null);
 
+  // Order edit / delete
+  const [editingOrder, setEditingOrder] = useState<AdminOrder | null>(null);
+  const [editClientName, setEditClientName] = useState("");
+  const [editDeliveryDate, setEditDeliveryDate] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [savingOrderEdit, setSavingOrderEdit] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<AdminOrder | null>(null);
+  const [deletingOrder, setDeletingOrder] = useState(false);
+
   // Products
   const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -227,7 +236,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .from("orders")
         .select(`
           id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes,
+          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes, client_name,
           order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg, size_label, size_kg, grind_type, product_variant_id, kind ),
           companies ( name, email )
         `)
@@ -261,9 +270,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
         const contact = o.user_id ? contactMap.get(o.user_id) : null;
         const profile = o.user_id ? profileMap.get(o.user_id) : null;
-        // Resolution chain: order.company → contact.company → contact name → profile → null
+        // Resolution chain: manual override → order.company → contact.company → contact name → profile → null
         const clientName =
-          (o.companies as any)?.name
+          o.client_name
+          ?? (o.companies as any)?.name
           ?? contact?.companyName
           ?? contact?.contactName
           ?? profile?.full_name
@@ -689,6 +699,60 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       toast({ title: "Merge failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setMergingClientId(null);
+    }
+  };
+
+  /* ── Save order edits ── */
+  const saveOrderEdit = async () => {
+    if (!editingOrder) return;
+    setSavingOrderEdit(true);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          client_name: editClientName.trim() || null,
+          delivery_date: editDeliveryDate,
+          notes: editNotes.trim() || null,
+        })
+        .eq("id", editingOrder.id);
+      if (error) throw error;
+      setAdminOrders((prev) =>
+        prev.map((o) =>
+          o.id === editingOrder.id
+            ? {
+                ...o,
+                client_name: editClientName.trim() || null,
+                delivery_date: editDeliveryDate,
+                notes: editNotes.trim() || null,
+              }
+            : o
+        )
+      );
+      toast({ title: "Order updated" });
+      setEditingOrder(null);
+    } catch (err) {
+      toast({ title: "Save failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setSavingOrderEdit(false);
+    }
+  };
+
+  /* ── Delete order ── */
+  const deleteOrder = async () => {
+    if (!orderToDelete) return;
+    setDeletingOrder(true);
+    try {
+      // Delete items first (FK constraint)
+      await supabase.from("order_items").delete().eq("order_id", orderToDelete.id);
+      const { error } = await supabase.from("orders").delete().eq("id", orderToDelete.id);
+      if (error) throw error;
+      setAdminOrders((prev) => prev.filter((o) => o.id !== orderToDelete.id));
+      toast({ title: "Order deleted" });
+      setOrderToDelete(null);
+    } catch (err) {
+      toast({ title: "Delete failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setDeletingOrder(false);
     }
   };
 
@@ -1337,24 +1401,47 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 </Select>
                               </TableCell>
                               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                {order.status === "received" && (
-                                  <Button
-                                    size="sm"
-                                    className="gap-1.5"
-                                    disabled={approvingIds.has(order.id)}
-                                    onClick={() => void approveOrder(order)}
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {order.status === "received" && (
+                                    <Button
+                                      size="sm"
+                                      className="gap-1.5"
+                                      disabled={approvingIds.has(order.id)}
+                                      onClick={() => void approveOrder(order)}
+                                    >
+                                      {approvingIds.has(order.id) ? (
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Check className="w-3.5 h-3.5" />
+                                      )}
+                                      Approve
+                                    </Button>
+                                  )}
+                                  {order.sellsy_id && (
+                                    <span className="text-xs font-mono text-muted-foreground mr-1">{order.sellsy_id}</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    title="Edit order"
+                                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                    onClick={() => {
+                                      setEditingOrder(order);
+                                      setEditClientName(order.client_name ?? "");
+                                      setEditDeliveryDate(order.delivery_date);
+                                      setEditNotes(order.notes ?? "");
+                                    }}
                                   >
-                                    {approvingIds.has(order.id) ? (
-                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                      <Check className="w-3.5 h-3.5" />
-                                    )}
-                                    Approve
-                                  </Button>
-                                )}
-                                {order.sellsy_id && (
-                                  <span className="text-xs font-mono text-muted-foreground">{order.sellsy_id}</span>
-                                )}
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Delete order"
+                                    className="p-1.5 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                    onClick={() => setOrderToDelete(order)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))
@@ -2126,6 +2213,74 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               onClick={() => clientToDelete && deleteClient(clientToDelete)}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Edit order dialog ── */}
+      <Dialog open={!!editingOrder} onOpenChange={(open) => { if (!open) setEditingOrder(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit order</DialogTitle>
+            <DialogDescription>
+              {editingOrder && `#${editingOrder.id.slice(0, 8).toUpperCase()}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">Client name</label>
+              <Input
+                value={editClientName}
+                onChange={(e) => setEditClientName(e.target.value)}
+                placeholder={editingOrder?.client_name ?? "Client name"}
+              />
+              <p className="text-xs text-muted-foreground">Overrides the name shown on this order.</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">Delivery date</label>
+              <Input
+                type="date"
+                value={editDeliveryDate}
+                onChange={(e) => setEditDeliveryDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">Notes</label>
+              <textarea
+                className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder="Internal notes…"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setEditingOrder(null)}>Cancel</Button>
+            <Button disabled={savingOrderEdit} onClick={() => void saveOrderEdit()}>
+              {savingOrderEdit ? <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</> : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete order confirmation ── */}
+      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => { if (!open) setOrderToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Order #{orderToDelete?.id.slice(0, 8).toUpperCase()} from {orderToDelete?.client_name ?? "this client"} will be permanently deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingOrder}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingOrder}
+              onClick={() => void deleteOrder()}
+            >
+              {deletingOrder ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
