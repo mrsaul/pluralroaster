@@ -20,7 +20,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, user_id, company_id, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
+          id, user_id, company_id, client_name, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
           order_items ( product_name, product_sku, quantity, price_per_kg, size_label, size_kg ),
           companies ( name )
         `)
@@ -60,7 +60,8 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
           const profile = o.user_id ? profileMap.get(o.user_id) : null;
           // Resolution chain: order.company → contact.company → contact name → profile → "Client sans nom"
           const clientName =
-            (o.companies as any)?.name          // company_id direct join on order
+            o.client_name                      // manual admin override
+            ?? (o.companies as any)?.name       // company_id direct join on order
             ?? contact?.companyName             // company via contacts table (user_id path)
             ?? contact?.contactName             // contact first+last name
             ?? profile?.full_name              // profile fallback
