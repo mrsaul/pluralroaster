@@ -651,7 +651,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
   const readyCount = packagingOrders.filter(o => getPackagingState(o, packedLineIds) === "ready").length;
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-5 animate-in fade-in-0 duration-200">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-card border border-border rounded-lg p-4">
@@ -683,7 +683,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
         {/* Date filter */}
         <div className="flex rounded-lg border border-border overflow-hidden text-sm">
           {(["today2", "week", "all"] as DateFilter[]).map(v => {
-            const labels = { today2: "Auj. + 2 j.", week: "Cette semaine", all: "Tout" };
+            const labels = { today2: "Auj. + 2j", week: "Semaine", all: "Tout" };
             return (
               <button
                 key={v}
