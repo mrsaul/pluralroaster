@@ -2147,8 +2147,65 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </label>
               </div>
 
-              {/* Items table */}
-              <div className="rounded-lg border border-border overflow-hidden">
+              {/* Items — mobile cards */}
+              <div className="lg:hidden space-y-2">
+                {selectedOrder.items.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4 text-sm">No items</p>
+                ) : selectedOrder.items.map((item) => {
+                  const size = normalizeSize(item.size_label, item.size_kg);
+                  const bags = size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
+                  return (
+                    <div key={item.id} className="rounded-xl border border-border bg-muted/20 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground leading-snug flex-1 min-w-0">{item.product_name}</p>
+                        {canEdit && (
+                          <button
+                            className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors active:scale-95"
+                            onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-2.5 gap-3">
+                        {canEdit ? (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors active:scale-95"
+                                onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - (item.size_kg ?? 1))}
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-10 text-center tabular-nums text-foreground font-semibold text-sm">
+                                {bags ?? item.quantity}
+                              </span>
+                              <button
+                                className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors active:scale-95"
+                                onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + (item.size_kg ?? 1))}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            {size && <span className="text-xs text-muted-foreground pl-0.5">{size} / unité</span>}
+                          </div>
+                        ) : (
+                          <span className="text-sm font-semibold text-foreground tabular-nums">
+                            {bags != null ? `${bags} × ${size}` : `${item.quantity} kg`}
+                          </span>
+                        )}
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">€{item.price_per_kg.toFixed(2)}/kg</p>
+                          <p className="text-sm font-bold tabular-nums text-foreground">€{(item.quantity * item.price_per_kg).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Items — desktop table */}
+              <div className="hidden lg:block rounded-lg border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -2163,57 +2220,58 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     {selectedOrder.items.length === 0 ? (
                       <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
                     ) : (
-                      selectedOrder.items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
-                          <TableCell className="text-right">
-                            {canEdit ? (
-                              <div className="inline-flex flex-col items-end gap-0.5">
-                                <div className="inline-flex items-center gap-1">
-                                  <button
-                                    className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                                    onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - 1)}
-                                  >
-                                    <Minus className="w-3 h-3" />
-                                  </button>
-                                  <span className="w-8 text-center tabular-nums text-foreground font-medium">{item.quantity}</span>
-                                  <button
-                                    className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                                    onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + 1)}
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                  </button>
-                                </div>
-                                {normalizeSize(item.size_label, item.size_kg) && (
-                                  <span className="text-xs text-muted-foreground">{normalizeSize(item.size_label, item.size_kg)}</span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="tabular-nums text-foreground">
-                                {(() => {
-                                  const size = normalizeSize(item.size_label, item.size_kg);
-                                  if (size && item.size_kg != null) {
-                                    return `${Math.round(item.quantity / item.size_kg)} × ${size}`;
-                                  }
-                                  return `${item.quantity}`;
-                                })()}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
-                          <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
-                          {canEdit && (
+                      selectedOrder.items.map((item) => {
+                        const size = normalizeSize(item.size_label, item.size_kg);
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
                             <TableCell className="text-right">
-                              <button
-                                className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
-                                onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canEdit ? (
+                                <div className="inline-flex flex-col items-end gap-0.5">
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                      onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - (item.size_kg ?? 1))}
+                                    >
+                                      <Minus className="w-3 h-3" />
+                                    </button>
+                                    <span className="w-8 text-center tabular-nums text-foreground font-medium">
+                                      {size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : item.quantity}
+                                    </span>
+                                    <button
+                                      className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                      onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + (item.size_kg ?? 1))}
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  {size && (
+                                    <span className="text-xs text-muted-foreground">{size}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="tabular-nums text-foreground">
+                                  {size && item.size_kg != null
+                                    ? `${Math.round(item.quantity / item.size_kg)} × ${size}`
+                                    : `${item.quantity}`}
+                                </span>
+                              )}
                             </TableCell>
-                          )}
-                        </TableRow>
-                      ))
+                            <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
+                            <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
+                            {canEdit && (
+                              <TableCell className="text-right">
+                                <button
+                                  className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                                  onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
