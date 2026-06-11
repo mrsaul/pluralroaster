@@ -31,6 +31,7 @@ import {
   ORDER_STATUSES, ORDER_STATUS_LABEL, ORDER_STATUS_CLASS,
   normalizeOrderStatus, type OrderStatus,
 } from "@/lib/orderStatuses";
+import { normalizeSize } from "@/lib/orderUtils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2033,7 +2034,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty (kg)</TableHead>
+                      <TableHead className="text-right">Qté</TableHead>
                       <TableHead className="text-right">€/kg</TableHead>
                       <TableHead className="text-right">Subtotal</TableHead>
                       {canEdit && <TableHead className="w-[80px]" />}
@@ -2048,23 +2049,33 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
                           <TableCell className="text-right">
                             {canEdit ? (
-                              <div className="inline-flex items-center gap-1">
-                                <button
-                                  className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - 1)}
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </button>
-                                <span className="w-8 text-center tabular-nums text-foreground font-medium">{item.quantity}</span>
-                                <button
-                                  className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + 1)}
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </button>
+                              <div className="inline-flex flex-col items-end gap-0.5">
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                    onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - 1)}
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </button>
+                                  <span className="w-8 text-center tabular-nums text-foreground font-medium">{item.quantity}</span>
+                                  <button
+                                    className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                    onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + 1)}
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                {normalizeSize(item.size_label, item.size_kg) && (
+                                  <span className="text-xs text-muted-foreground">{normalizeSize(item.size_label, item.size_kg)}</span>
+                                )}
                               </div>
                             ) : (
-                              <span className="tabular-nums text-foreground">{item.quantity}</span>
+                              <span className="tabular-nums text-foreground">
+                                {(() => {
+                                  const size = normalizeSize(item.size_label, item.size_kg);
+                                  return size ? `${item.quantity} × ${size}` : `${item.quantity}`;
+                                })()}
+                              </span>
                             )}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>

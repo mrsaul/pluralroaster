@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import {
   getOrderPriority, type OrderStatus, type PriorityLevel,
 } from "@/lib/orderStatuses";
-import { inferGrind } from "@/lib/orderUtils";
+import { inferGrind, normalizeSize } from "@/lib/orderUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,20 +73,6 @@ const GRIND_ICON: Record<string, React.ReactNode> = {
   custom: <Coffee className="w-3 h-3" />,
 };
 
-/** Normalize size_label for display — "Standard" → "1 kg", "1000g" → "1 kg", etc. */
-function normalizeSize(label: string | null, sizeKg: number | null): string | null {
-  if (!label && !sizeKg) return null;
-  if (!label || label === "Standard") {
-    if (sizeKg === 1) return "1 kg";
-    if (sizeKg === 0.25) return "250 g";
-    if (sizeKg) return `${sizeKg < 1 ? sizeKg * 1000 + " g" : sizeKg + " kg"}`;
-    return "1 kg";
-  }
-  if (label === "1000g") return "1 kg";
-  if (label === "250g") return "250 g";
-  if (label === "500g") return "500 g";
-  return label;
-}
 
 function getSizeChipClass(label: string | null, sizeKg: number | null): string {
   const kg = sizeKg ?? (label === "1000g" || label === "Standard" ? 1 : label === "250g" ? 0.25 : null);
@@ -224,7 +210,7 @@ function LineRow({
       {/* Quantity + weight */}
       <div className="text-right flex-shrink-0">
         <p className="text-base font-semibold tabular-nums text-foreground">
-          × {item.quantity}
+          {hasSize ? `${item.quantity} × ${sizeDisplay}` : `× ${item.quantity}`}
         </p>
         <p className="text-xs tabular-nums text-muted-foreground mt-0.5">
           {totalKg % 1 === 0 ? totalKg : totalKg.toFixed(2)} kg
@@ -552,7 +538,9 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold tabular-nums text-foreground">{group.total_bags} sacs</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">
+                    {sizeDisplay ? `${group.total_bags} × ${sizeDisplay}` : `${group.total_bags} sacs`}
+                  </p>
                   <p className="text-xs tabular-nums text-muted-foreground">{group.total_kg.toFixed(group.total_kg % 1 === 0 ? 0 : 2)} kg</p>
                 </div>
               </div>

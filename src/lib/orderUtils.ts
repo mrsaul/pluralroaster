@@ -23,6 +23,24 @@ export type OrderReceiptData = {
   totalTTC: number;
 };
 
+// ── Size display helpers ──────────────────────────────────────────────────────
+
+/** Normalize size_label for display — "Standard" → "1 kg", "1000g" → "1 kg", "250g" → "250 g", etc. */
+export function normalizeSize(label: string | null, sizeKg: number | null): string | null {
+  if (!label && !sizeKg) return null;
+  if (!label || label === "Standard") {
+    if (sizeKg === 1) return "1 kg";
+    if (sizeKg === 0.25) return "250 g";
+    if (sizeKg) return `${sizeKg < 1 ? sizeKg * 1000 + " g" : sizeKg + " kg"}`;
+    return "1 kg";
+  }
+  if (label === "1000g") return "1 kg";
+  if (label === "250g") return "250 g";
+  if (label === "150g") return "150 g";
+  if (label === "500g") return "500 g";
+  return label;
+}
+
 // ── Variant label resolution ──────────────────────────────────────────────────
 
 /**
