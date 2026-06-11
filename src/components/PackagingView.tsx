@@ -145,7 +145,8 @@ function LineRow({
   // this product+size. Resolved via product_variants (source=sellsy) in AdminDashboard —
   // never from order_items.product_variant_id which is structurally never populated.
   const missingVariant = hasSize && item.sellsy_declination_id == null;
-  const totalKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
+  const totalKg = item.quantity; // quantity is always stored in kg
+  const bags = item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
 
   return (
     <div className={cn(
@@ -210,7 +211,7 @@ function LineRow({
       {/* Quantity + weight */}
       <div className="text-right flex-shrink-0">
         <p className="text-base font-semibold tabular-nums text-foreground">
-          {hasSize ? `${item.quantity} × ${sizeDisplay}` : `× ${item.quantity}`}
+          {bags != null ? `${bags} × ${sizeDisplay}` : `× ${item.quantity}`}
         </p>
         <p className="text-xs tabular-nums text-muted-foreground mt-0.5">
           {totalKg % 1 === 0 ? totalKg : totalKg.toFixed(2)} kg
@@ -493,9 +494,9 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
           total_kg: 0,
           lines: [],
         };
-        const itemKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
-        existing.total_bags += item.quantity;
-        existing.total_kg += itemKg;
+        const itemBags = item.size_kg != null ? Math.round(item.quantity / item.size_kg) : item.quantity;
+        existing.total_bags += itemBags;
+        existing.total_kg += item.quantity; // quantity is always in kg
         existing.lines.push({ orderId: order.id, client_name: order.client_name, item });
         map.set(key, existing);
       }

@@ -2073,7 +2073,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               <span className="tabular-nums text-foreground">
                                 {(() => {
                                   const size = normalizeSize(item.size_label, item.size_kg);
-                                  return size ? `${item.quantity} × ${size}` : `${item.quantity}`;
+                                  if (size && item.size_kg != null) {
+                                    return `${Math.round(item.quantity / item.size_kg)} × ${size}`;
+                                  }
+                                  return `${item.quantity}`;
                                 })()}
                               </span>
                             )}
