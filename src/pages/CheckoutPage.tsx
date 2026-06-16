@@ -84,6 +84,7 @@ export default function CheckoutPage({
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
   const [confirmedDeliveryFee, setConfirmedDeliveryFee] = useState<number>(0);
   const [confirmedDeliveryServiceName, setConfirmedDeliveryServiceName] = useState<string>('');
+  const [confirmedDiscountAmt, setConfirmedDiscountAmt] = useState(0);
   const [copied, setCopied] = useState(false);
 
   const discountAmount = Math.round(totalPrice * discountPercent / 100 * 100) / 100;
@@ -106,8 +107,9 @@ export default function CheckoutPage({
       setConfirmedAt(new Date().toISOString());
       setConfirmedItems(snap);
       setConfirmedTotal(snapTotal);
-      setConfirmedOrderId(orderId);
       setConfirmedDeliveryFee(deliveryFee);
+      setConfirmedDiscountAmt(snapDiscountAmount);
+      setConfirmedOrderId(orderId);
       setConfirmedDeliveryServiceName(deliveryServiceName);
       // Write receipt data for PDF page (localStorage — shared across tabs, unlike sessionStorage)
       const now = new Date().toISOString();
@@ -138,7 +140,7 @@ export default function CheckoutPage({
         ],
         totalHT: snapDiscountedProductTotal + deliveryFee,
         vatRate: 0.20,
-        totalTTC: (snapDiscountedProductTotal + deliveryFee) * 1.20,
+        totalTTC: (snapDiscountedProductTotal + deliveryFee) * (1 + VAT),
         ...(discountPercent > 0 ? {
           discountPercent,
           discountAmount: snapDiscountAmount,
@@ -157,8 +159,7 @@ export default function CheckoutPage({
   // ── Success screen ────────────────────────────────────────────────────────
 
   if (step === "success") {
-    const confirmedDiscountAmount = Math.round(confirmedTotal * discountPercent / 100 * 100) / 100;
-    const confirmedDiscountedTotal = confirmedTotal - confirmedDiscountAmount;
+    const confirmedDiscountedTotal = confirmedTotal - confirmedDiscountAmt;
     const snapHT  = confirmedDiscountedTotal + confirmedDeliveryFee;
     const snapVAT = snapHT * VAT;
     const snapTTC = snapHT + snapVAT;
@@ -193,7 +194,7 @@ export default function CheckoutPage({
       totalTTC: snapTTC,
       ...(discountPercent > 0 ? {
         discountPercent,
-        discountAmount: confirmedDiscountAmount,
+        discountAmount: confirmedDiscountAmt,
       } : {}),
     };
 
