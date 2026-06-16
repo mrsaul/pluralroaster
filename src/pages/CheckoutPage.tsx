@@ -103,7 +103,7 @@ export default function CheckoutPage({
       setConfirmedOrderId(orderId);
       setConfirmedDeliveryFee(deliveryFee);
       setConfirmedDeliveryServiceName(deliveryServiceName);
-      // Write receipt data for PDF page (sessionStorage, main branch shape)
+      // Write receipt data for PDF page (localStorage — shared across tabs, unlike sessionStorage)
       const now = new Date().toISOString();
       const receiptData: OrderReceiptData = {
         orderId: orderId,
@@ -134,7 +134,7 @@ export default function CheckoutPage({
         vatRate: 0.20,
         totalTTC: (snapTotal + deliveryFee) * 1.20,
       };
-      sessionStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
+      localStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       setStep("success");
     } catch (err) {
       setOrderError(err instanceof Error ? err.message : "Something went wrong.");
@@ -199,7 +199,7 @@ export default function CheckoutPage({
     };
 
     const handlePdf = () => {
-      sessionStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
+      localStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       window.open("/order-receipt", "_blank", "noopener");
     };
 

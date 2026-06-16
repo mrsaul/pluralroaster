@@ -52,7 +52,7 @@ export default function OrderReceiptPage() {
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) {
       setMissing(true);
       return;

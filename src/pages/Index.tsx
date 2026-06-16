@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useCallback } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -123,6 +123,11 @@ const Index = () => {
   const cart = useCart();
   const { clearCart } = cart;
   const { toast } = useToast();
+
+  // Tracks whether we've already completed the first auth cycle. Once true,
+  // SIGNED_IN events from Supabase (which fire on tab-resume / session restore)
+  // are ignored — only SIGNED_OUT resets this so a real re-login still works.
+  const sessionInitialized = useRef(false);
 
   // Wraps setView so every navigation is saved to sessionStorage automatically.
   const setView = useCallback((v: View) => {
@@ -283,6 +288,7 @@ const Index = () => {
       setAuthError(null);
       try {
         await syncUserRole();
+        sessionInitialized.current = true;
       } catch (err) {
         setAuthError(err instanceof Error ? err.message : "Authentication error. Please refresh and try again.");
       } finally {
@@ -292,6 +298,7 @@ const Index = () => {
 
     const handleSignedOut = () => {
       clearSavedView();
+      sessionInitialized.current = false;
       setRole(null);
       setOrders([]);
       setAuthLoading(false);
@@ -314,7 +321,10 @@ const Index = () => {
         return;
       }
 
-      // SIGNED_IN — covers first login AND re-login after logout.
+      // SIGNED_IN fires on actual login AND on tab-resume / session restore.
+      // If we're already initialized, ignore it — the user didn't sign out.
+      if (sessionInitialized.current) return;
+
       void handleAuthenticatedSession();
     });
 
