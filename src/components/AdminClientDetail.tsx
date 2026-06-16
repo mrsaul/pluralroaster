@@ -358,11 +358,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Pricing Tier</p>
-                {isSellsyMode ? (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-sm text-foreground capitalize">{client.pricing_tier ?? "standard"}</p>
-                  </div>
-                ) : tierOptions.length > 0 ? (
+                {tierOptions.length > 0 ? (
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-1.5">
                       <button
