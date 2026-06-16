@@ -142,6 +142,7 @@ const Index = () => {
     sellsy_id: string;
   } | null>(null);
   const [deliveryFee, setDeliveryFee] = useState<number>(20); // default fallback
+  const [clientTier, setClientTier] = useState<{ discountPercent: number; name: string } | null>(null);
   const cart = useCart();
   const { clearCart } = cart;
   const { toast } = useToast();
@@ -228,7 +229,7 @@ const Index = () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     const { data: contact } = await supabase
       .from("contacts")
-      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, company_addresses(label, address_line1, address_line2))")
+      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, pricing_tier_id, pricing_tiers(product_discount_percent, name), company_addresses(label, address_line1, address_line2))")
       .eq("user_id", currentUser?.id ?? "")
       .maybeSingle();
 
@@ -267,6 +268,14 @@ const Index = () => {
     const restored = savedView && RESTORABLE_CLIENT_VIEWS.includes(savedView) ? savedView : "home";
     setView(restored);
     await loadOrders();
+
+    // Load discount tier for this client's company
+    const tier = (company?.pricing_tiers as any) ?? null;
+    setClientTier(
+      tier && Number(tier.product_discount_percent) > 0
+        ? { discountPercent: Number(tier.product_discount_percent), name: String(tier.name) }
+        : null
+    );
 
     // Fetch LOBERZ delivery service
     const { data: svcRow } = await supabase
@@ -413,6 +422,14 @@ const Index = () => {
       throw new Error("Votre session a expiré. Veuillez vous reconnecter.");
     }
 
+    // Apply product discount for this client's tier (services excluded)
+    const discountPct = clientTier?.discountPercent ?? 0;
+    const coffeeSubtotal = cart.totalPrice;
+    const discountedCoffeeTotal =
+      discountPct > 0
+        ? Math.round(coffeeSubtotal * (1 - discountPct / 100) * 100) / 100
+        : coffeeSubtotal;
+
     const coffeeItems = cart.items.map((item) => ({
       product_id: item.product.id,
       product_name: item.product.name,
@@ -445,12 +462,16 @@ const Index = () => {
       p_user_id:            user.id,
       p_delivery_date:      deliveryDate,
       p_total_kg:           cart.totalKg,
-      p_total_price:        cart.totalPrice + deliveryTotal,
+      p_total_price:        discountedCoffeeTotal + deliveryTotal,
       p_status:             "received",
       p_confirmed_at:       new Date().toISOString(),
       p_notes:              notes ?? null,
       p_items:              allItems,
       p_reordered_from:     reorderedFromId ?? null,
+      ...(discountPct > 0 ? {
+        p_discount_percent:  discountPct,
+        p_pricing_tier_name: clientTier!.name,
+      } : {}),
     });
 
     if (rpcError || !rpcResult?.order_id) {
@@ -466,7 +487,7 @@ const Index = () => {
     cart.clearCart();
 
     return { orderId: rpcResult.order_id as string };
-  }, [cart, deliveryFee, deliveryService, loadOrders, reorderedFromId, toast]);
+  }, [cart, clientTier, deliveryFee, deliveryService, loadOrders, reorderedFromId, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
     if (!draftDeliveryDate || cart.items.length === 0) {
@@ -577,6 +598,7 @@ const Index = () => {
             deliveryFee={deliveryFee}
             deliveryServiceName={deliveryService?.name ?? 'Livraison à vélo par LOBERZ'}
             clientName={String((onboardingData as any)?.company_name ?? '')}
+            discountPercent={clientTier?.discountPercent ?? 0}
             onRemoveItem={(product, sizeLabel) => {
               cart.updateQuantity(product, 0, sizeLabel);
             }}
