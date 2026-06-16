@@ -291,20 +291,32 @@ export default function OrderReceiptPage() {
           {/* ── Totals ────────────────────────────────────────────────────── */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 32 }}>
             <div style={{ width: 220, fontSize: 11 }}>
-              {(
-                [
-                  { label: "Sous-total HT", val: fmtEur(data.totalHT) },
-                  { label: "TVA 20 %", val: fmtEur(snapVAT) },
-                ] as const
-              ).map((row) => (
-                <div
-                  key={row.label}
-                  style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" }}
-                >
-                  <span>{row.label}</span>
-                  <span>{row.val}</span>
+              {/* Sous-total HT (full catalog price before discount) */}
+              {data.discountPercent != null && data.discountPercent > 0 ? (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" }}>
+                    <span>Sous-total HT</span>
+                    <span>{fmtEur(data.totalHT + (data.discountAmount ?? 0))}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#3a8a5a", borderBottom: "1px solid #e8e3db" }}>
+                    <span>Remise {data.discountPercent} %</span>
+                    <span>−{fmtEur(data.discountAmount ?? 0)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" }}>
+                    <span>Base HT remisée</span>
+                    <span>{fmtEur(data.totalHT)}</span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" }}>
+                  <span>Sous-total HT</span>
+                  <span>{fmtEur(data.totalHT)}</span>
                 </div>
-              ))}
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" }}>
+                <span>TVA 20 %</span>
+                <span>{fmtEur(snapVAT)}</span>
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 5px", fontSize: 14, fontWeight: 700, color: "#1A1A18", borderTop: "2px solid #1A1A18", marginTop: 3 }}>
                 <span>Total TTC</span>
                 <span>{fmtEur(data.totalTTC)}</span>
