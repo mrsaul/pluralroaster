@@ -16,24 +16,41 @@ import { supabase } from "@/integrations/supabase/client";
 type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding";
 type AppRole = "admin" | "user" | "roaster" | "packaging";
 
-// ── View persistence (sessionStorage) ────────────────────────────────────────
-// sessionStorage survives tab switches and is cleared when the browser session ends.
+// ── View + draft persistence (localStorage) ───────────────────────────────────
+// localStorage survives Android tab discards; sessionStorage does not.
+// On low-RAM Android devices, Chrome discards background tabs and fully
+// reloads them on return — sessionStorage is cleared in that process.
 
-const VIEW_KEY = "pr_view";
+const VIEW_KEY         = "pr_view";
+const DRAFT_DATE_KEY   = "pr_draft_delivery_date";
 
-// Views that are safe to restore per role on initial load
-const RESTORABLE_CLIENT_VIEWS: View[] = ["home", "shop", "orders", "account"];
+// checkout included so users resuming after a tab discard land back in their flow
+const RESTORABLE_CLIENT_VIEWS: View[] = ["home", "shop", "orders", "account", "checkout"];
 
 function saveView(v: View): void {
-  try { sessionStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
+  try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
 }
 
 function loadSavedView(): View | null {
-  try { return sessionStorage.getItem(VIEW_KEY) as View | null; } catch { return null; }
+  try { return localStorage.getItem(VIEW_KEY) as View | null; } catch { return null; }
 }
 
 function clearSavedView(): void {
-  try { sessionStorage.removeItem(VIEW_KEY); } catch { /* ignore */ }
+  try {
+    localStorage.removeItem(VIEW_KEY);
+    localStorage.removeItem(DRAFT_DATE_KEY);
+  } catch { /* ignore */ }
+}
+
+function saveDraftDate(d: string | null): void {
+  try {
+    if (d) localStorage.setItem(DRAFT_DATE_KEY, d);
+    else localStorage.removeItem(DRAFT_DATE_KEY);
+  } catch { /* ignore */ }
+}
+
+function loadDraftDate(): string | null {
+  try { return localStorage.getItem(DRAFT_DATE_KEY); } catch { return null; }
 }
 
 // ── Data types ────────────────────────────────────────────────────────────────
@@ -110,7 +127,12 @@ const Index = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
+  const [draftDeliveryDate, setDraftDeliveryDateRaw] = useState<string | null>(() => loadDraftDate());
+
+  const setDraftDeliveryDate = useCallback((d: string | null) => {
+    saveDraftDate(d);
+    setDraftDeliveryDateRaw(d);
+  }, []);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
   const [deliveryService, setDeliveryService] = useState<{
