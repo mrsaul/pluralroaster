@@ -27,6 +27,11 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+// 'field' = pass discount + discount_type on each product row (preferred: shows "−10%" on the invoice)
+// 'price' = bake discount into unit_amount (fallback if Sellsy rejects the discount field)
+// Switch to 'price' if Sellsy returns a 422 mentioning additionalProperties.
+const SELLSY_DISCOUNT_MODE: 'field' | 'price' = 'field';
+
 const SELLSY_DEFAULT_API_BASE_URL = "https://api.sellsy.com";
 const SELLSY_TOKEN_URL = "https://login.sellsy.com/oauth2/access-tokens";
 
@@ -1546,7 +1551,7 @@ async function handleCreateInvoice(
   const { data: order, error: orderErr } = await (supabaseClient as any)
     .from("orders")
     .select(`
-      id, user_id, company_id, created_at, total_price,
+      id, user_id, company_id, created_at, total_price, discount_percent,
       order_items (
         id, product_name, quantity, price_per_kg, size_label,
         products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name, kind )
@@ -1643,6 +1648,8 @@ async function handleCreateInvoice(
   //   `quantity` and `unit_amount` must be STRINGS, not numbers
   //   `additionalProperties: false` — no extra fields (no discount, discount_type, etc.)
   //   `tax_id` must be a NUMBER when present
+  const orderDiscountPct = Number((order as any).discount_percent ?? 0);
+  console.log(`[invoice] order discount: ${orderDiscountPct}%`);
   console.log(`[invoice] building rows for ${orderItems.length} order items`);
   const items: JsonRecord[] = orderItems.map((item: any) => {
     const product = item.products ?? {};
@@ -1703,18 +1710,29 @@ async function handleCreateInvoice(
         related.declination_id = declinationId;
       }
 
+      const baseUnitAmount = Number(item.price_per_kg ?? 0);
+      const discountedUnitAmount =
+        orderDiscountPct > 0
+          ? Math.round(baseUnitAmount * (1 - orderDiscountPct / 100) * 100) / 100
+          : baseUnitAmount;
+
       const row: JsonRecord = {
         type: "catalog",
         related,
         description: String(item.product_name ?? product.name ?? ""),
-        unit_amount: String(item.price_per_kg ?? 0),
+        unit_amount: SELLSY_DISCOUNT_MODE === 'field'
+          ? String(baseUnitAmount)
+          : String(discountedUnitAmount),
         quantity: String(item.quantity ?? 1),
+        ...(SELLSY_DISCOUNT_MODE === 'field' && orderDiscountPct > 0
+          ? { discount: orderDiscountPct, discount_type: 'percent' }
+          : {}),
       };
       // tax_id must be a number (integer) when present, not a string
       if (product.sellsy_tax_id) {
         row.tax_id = Number(product.sellsy_tax_id);
       }
-      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} declination_id=${declinationId} qty=${row.quantity} unit=${row.unit_amount}`);
+      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} declination_id=${declinationId} qty=${row.quantity} unit=${row.unit_amount} discount=${orderDiscountPct > 0 ? `${orderDiscountPct}% (${SELLSY_DISCOUNT_MODE})` : 'none'}`);
       return row;
     }
 
