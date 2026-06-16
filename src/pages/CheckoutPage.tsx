@@ -20,6 +20,7 @@ interface CheckoutPageProps {
   deliveryFee: number;
   deliveryServiceName: string;
   clientName?: string;
+  discountPercent?: number;
   /** Remove a specific line item from the draft order */
   onRemoveItem?: (product: Product, sizeLabel?: string) => void;
   /** Update quantity and/or variant of a specific line item */
@@ -66,6 +67,7 @@ export default function CheckoutPage({
   deliveryFee,
   deliveryServiceName,
   clientName = '',
+  discountPercent = 0,
   onRemoveItem,
   onUpdateItem,
 }: CheckoutPageProps) {
@@ -84,14 +86,18 @@ export default function CheckoutPage({
   const [confirmedDeliveryServiceName, setConfirmedDeliveryServiceName] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  const vatAmount = (totalPrice + deliveryFee) * VAT;
-  const totalTTC = totalPrice + deliveryFee + vatAmount;
+  const discountAmount = Math.round(totalPrice * discountPercent / 100 * 100) / 100;
+  const discountedProductTotal = totalPrice - discountAmount;
+  const vatAmount = (discountedProductTotal + deliveryFee) * VAT;
+  const totalTTC = discountedProductTotal + deliveryFee + vatAmount;
 
   const handleConfirm = useCallback(async () => {
     if (!deliveryDate || submitting) return;
     // Snapshot now — parent will clear cart after onConfirm resolves
     const snap = [...items];
     const snapTotal = totalPrice;
+    const snapDiscountAmount = Math.round(snapTotal * discountPercent / 100 * 100) / 100;
+    const snapDiscountedProductTotal = snapTotal - snapDiscountAmount;
 
     setSubmitting(true);
     setOrderError(null);
@@ -130,9 +136,13 @@ export default function CheckoutPage({
             kind: 'service' as const,
           }] : []),
         ],
-        totalHT: snapTotal + deliveryFee,
+        totalHT: snapDiscountedProductTotal + deliveryFee,
         vatRate: 0.20,
-        totalTTC: (snapTotal + deliveryFee) * 1.20,
+        totalTTC: (snapDiscountedProductTotal + deliveryFee) * 1.20,
+        ...(discountPercent > 0 ? {
+          discountPercent,
+          discountAmount: snapDiscountAmount,
+        } : {}),
       };
       localStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       setStep("success");
@@ -147,7 +157,9 @@ export default function CheckoutPage({
   // ── Success screen ────────────────────────────────────────────────────────
 
   if (step === "success") {
-    const snapHT  = confirmedTotal + confirmedDeliveryFee;
+    const confirmedDiscountAmount = Math.round(confirmedTotal * discountPercent / 100 * 100) / 100;
+    const confirmedDiscountedTotal = confirmedTotal - confirmedDiscountAmount;
+    const snapHT  = confirmedDiscountedTotal + confirmedDeliveryFee;
     const snapVAT = snapHT * VAT;
     const snapTTC = snapHT + snapVAT;
 
@@ -179,6 +191,10 @@ export default function CheckoutPage({
       totalHT:  snapHT,
       vatRate:  0.20,
       totalTTC: snapTTC,
+      ...(discountPercent > 0 ? {
+        discountPercent,
+        discountAmount: confirmedDiscountAmount,
+      } : {}),
     };
 
     const handleShare = async () => {
@@ -430,6 +446,12 @@ export default function CheckoutPage({
               <span className="text-muted-foreground">Subtotal HT</span>
               <span className="tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
             </div>
+            {discountPercent > 0 && (
+              <div className="flex justify-between px-4 py-2">
+                <span className="text-emerald-600 dark:text-emerald-400">Remise {discountPercent} %</span>
+                <span className="tabular-nums text-emerald-600 dark:text-emerald-400">−€{discountAmount.toFixed(2)}</span>
+              </div>
+            )}
             {/* Delivery fee */}
             <div className="flex justify-between px-4 py-2">
               <div>
