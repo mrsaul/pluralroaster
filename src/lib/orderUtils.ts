@@ -21,6 +21,8 @@ export type OrderReceiptData = {
   totalHT: number;
   vatRate: 0.20;
   totalTTC: number;
+  discountPercent?: number;
+  discountAmount?: number;
 };
 
 // ── Variant label resolution ──────────────────────────────────────────────────
