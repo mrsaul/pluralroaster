@@ -1,0 +1,2 @@
+-- Placeholder migration to sync local migration history with remote
+-- This migration was applied to the remote database but the local file was not tracked in git
