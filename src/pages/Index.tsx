@@ -334,6 +334,7 @@ const Index = () => {
       setOrders([]);
       setAuthLoading(false);
       clearCart();
+      setClientTier(null);
     };
 
     // onAuthStateChange fires for every auth event — including background
