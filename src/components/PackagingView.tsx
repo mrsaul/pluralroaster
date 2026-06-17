@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import {
   getOrderPriority, type OrderStatus, type PriorityLevel,
 } from "@/lib/orderStatuses";
-import { inferGrind } from "@/lib/orderUtils";
+import { inferGrind, normalizeSize } from "@/lib/orderUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,20 +73,6 @@ const GRIND_ICON: Record<string, React.ReactNode> = {
   custom: <Coffee className="w-3 h-3" />,
 };
 
-/** Normalize size_label for display — "Standard" → "1 kg", "1000g" → "1 kg", etc. */
-function normalizeSize(label: string | null, sizeKg: number | null): string | null {
-  if (!label && !sizeKg) return null;
-  if (!label || label === "Standard") {
-    if (sizeKg === 1) return "1 kg";
-    if (sizeKg === 0.25) return "250 g";
-    if (sizeKg) return `${sizeKg < 1 ? sizeKg * 1000 + " g" : sizeKg + " kg"}`;
-    return "1 kg";
-  }
-  if (label === "1000g") return "1 kg";
-  if (label === "250g") return "250 g";
-  if (label === "500g") return "500 g";
-  return label;
-}
 
 function getSizeChipClass(label: string | null, sizeKg: number | null): string {
   const kg = sizeKg ?? (label === "1000g" || label === "Standard" ? 1 : label === "250g" ? 0.25 : null);
@@ -159,7 +145,8 @@ function LineRow({
   // this product+size. Resolved via product_variants (source=sellsy) in AdminDashboard —
   // never from order_items.product_variant_id which is structurally never populated.
   const missingVariant = hasSize && item.sellsy_declination_id == null;
-  const totalKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
+  const totalKg = item.quantity; // quantity is always stored in kg
+  const bags = item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
 
   return (
     <div className={cn(
@@ -224,10 +211,10 @@ function LineRow({
       {/* Quantity + weight */}
       <div className="text-right flex-shrink-0">
         <p className="text-base font-semibold tabular-nums text-foreground">
-          × {item.quantity}
+          {bags != null ? `${bags} × ${sizeDisplay}` : `× ${item.quantity}`}
         </p>
         <p className="text-xs tabular-nums text-muted-foreground mt-0.5">
-          {totalKg % 1 === 0 ? totalKg : totalKg.toFixed(2)} kg
+          {Number.isInteger(totalKg) ? totalKg : totalKg.toFixed(2)} kg
         </p>
       </div>
     </div>
@@ -507,9 +494,9 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
           total_kg: 0,
           lines: [],
         };
-        const itemKg = item.size_kg != null ? item.quantity * item.size_kg : item.quantity;
-        existing.total_bags += item.quantity;
-        existing.total_kg += itemKg;
+        const itemBags = item.size_kg != null ? Math.round(item.quantity / item.size_kg) : item.quantity;
+        existing.total_bags += itemBags;
+        existing.total_kg = Math.round((existing.total_kg + item.quantity) * 10000) / 10000;
         existing.lines.push({ orderId: order.id, client_name: order.client_name, item });
         map.set(key, existing);
       }
@@ -552,7 +539,9 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold tabular-nums text-foreground">{group.total_bags} sacs</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">
+                    {sizeDisplay ? `${Math.round(group.total_bags)} × ${sizeDisplay}` : `${Math.round(group.total_bags)} sacs`}
+                  </p>
                   <p className="text-xs tabular-nums text-muted-foreground">{group.total_kg.toFixed(group.total_kg % 1 === 0 ? 0 : 2)} kg</p>
                 </div>
               </div>
@@ -575,7 +564,11 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
                   )}>
                     {client_name ?? orderId.slice(0, 8)}
                   </span>
-                  <span className="text-sm tabular-nums text-muted-foreground">× {item.quantity}</span>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    {item.size_kg != null
+                      ? `${Math.round(item.quantity / item.size_kg)} × ${normalizeSize(item.size_label, item.size_kg)}`
+                      : `${item.quantity} kg`}
+                  </span>
                 </div>
               ))}
             </div>
@@ -662,7 +655,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
   const readyCount = packagingOrders.filter(o => getPackagingState(o, packedLineIds) === "ready").length;
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-5 animate-in fade-in-0 duration-200">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-card border border-border rounded-lg p-4">
@@ -694,7 +687,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
         {/* Date filter */}
         <div className="flex rounded-lg border border-border overflow-hidden text-sm">
           {(["today2", "week", "all"] as DateFilter[]).map(v => {
-            const labels = { today2: "Auj. + 2 j.", week: "Cette semaine", all: "Tout" };
+            const labels = { today2: "Auj. + 2j", week: "Semaine", all: "Tout" };
             return (
               <button
                 key={v}

@@ -31,6 +31,7 @@ import {
   ORDER_STATUSES, ORDER_STATUS_LABEL, ORDER_STATUS_CLASS,
   normalizeOrderStatus, type OrderStatus,
 } from "@/lib/orderStatuses";
+import { normalizeSize } from "@/lib/orderUtils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1211,19 +1212,55 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8 overflow-auto">
-          <div className="max-w-6xl mx-auto">
-            {/* Mobile header */}
-            <div className="flex lg:hidden items-center justify-between mb-6">
-              <div>
-                <h1 className="text-base font-medium text-foreground">Plural Roaster</h1>
-                <p className="text-xs text-muted-foreground">{sectionLabels[activeSection]}</p>
+        <main className="flex-1 pb-28 lg:pb-8 overflow-y-auto overflow-x-hidden min-w-0">
+
+          {/* ── Sticky mobile header ── */}
+          <div className="lg:hidden sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest leading-none">Plural Roaster</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <h1 className="text-[17px] font-bold text-foreground leading-tight">{sectionLabels[activeSection]}</h1>
+                  {activeSection === "orders" && receivedCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">{receivedCount}</span>
+                  )}
+                  {activeSection === "roaster" && roasterBadge > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-orange-500 text-white text-[10px] font-bold px-1">{roasterBadge}</span>
+                  )}
+                  {activeSection === "packaging" && packagingBadge > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-white text-[10px] font-bold px-1">{packagingBadge}</span>
+                  )}
+                </div>
               </div>
+              {activeSection === "orders" && (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => void loadOrders()}
+                    className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    aria-label="Refresh"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateOrder(true)}
+                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-fuchsia-800 text-white hover:bg-fuchsia-700 transition-colors"
+                    aria-label="New order"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
+          </div>
+
+          <div className="p-4 lg:p-8">
+          <div className="max-w-6xl mx-auto">
 
             {/* ═══════════ ORDERS ═══════════ */}
             {activeSection === "orders" && (
-              <section className="space-y-6">
+              <section className="space-y-4 lg:space-y-6 animate-in fade-in-0 duration-200">
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   <div className="bg-card border border-border rounded-lg p-4">
@@ -1255,15 +1292,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
 
                 {/* Toolbar */}
-                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                  <div className="flex gap-2 items-center flex-wrap">
-                    <div className="relative">
+                <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center lg:justify-between">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                    <div className="relative flex-1 sm:flex-none">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         placeholder="Search orders…"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9 w-56"
+                        className="pl-9 w-full lg:w-56"
                       />
                       {searchQuery && (
                         <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -1272,7 +1309,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       )}
                     </div>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-52">
+                      <SelectTrigger className="w-full sm:w-52">
                         <SelectValue placeholder="Filter by status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1284,7 +1321,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </Select>
                   </div>
 
-                  <div className="flex gap-2">
+                  {/* Desktop action buttons — on mobile these live in the sticky header */}
+                  <div className="hidden lg:flex gap-2">
                     <Button size="sm" className="gap-2 bg-fuchsia-800 opacity-65" onClick={() => setShowCreateOrder(true)}>
                       <Plus className="w-4 h-4" /> New Order
                     </Button>
@@ -1310,8 +1348,87 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 </div>
 
-                {/* Orders table */}
-                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                {/* Mobile: approve-all banner */}
+                {receivedCount > 0 && (
+                  <div className="lg:hidden flex items-center gap-3 bg-primary/8 border border-primary/20 rounded-xl px-4 py-3">
+                    <p className="flex-1 text-sm font-semibold text-foreground">
+                      {receivedCount} commande{receivedCount > 1 ? "s" : ""} à valider
+                    </p>
+                    <Button
+                      size="sm"
+                      className="flex-shrink-0 gap-1.5"
+                      onClick={() => void approveAllReceived()}
+                      disabled={approvingIds.size > 0}
+                    >
+                      {approvingIds.size > 0
+                        ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        : <Send className="w-3.5 h-3.5" />}
+                      Tout valider
+                    </Button>
+                  </div>
+                )}
+
+                {/* ── Mobile order cards (< lg) ── */}
+                <div className="lg:hidden">
+                  {loadingOrders ? (
+                    <div className="text-center text-muted-foreground py-16">Loading orders…</div>
+                  ) : filteredOrders.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-16">No orders found.</div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {filteredOrders.map((order) => (
+                        <div
+                          key={order.id}
+                          onClick={() => setSelectedOrder(order)}
+                          className="bg-card border border-border rounded-xl p-4 cursor-pointer transition-all active:scale-[0.98] active:bg-muted/20"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-foreground truncate leading-tight">
+                                {order.client_name || order.user_email || "—"}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                                #{order.id.slice(0, 8).toUpperCase()} · {format(parseISO(order.created_at), "d MMM, HH:mm")}
+                              </p>
+                            </div>
+                            <span className={cn(
+                              "inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold flex-shrink-0",
+                              ORDER_STATUS_CLASS[order.status],
+                            )}>
+                              {ORDER_STATUS_LABEL[order.status]}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-3 text-sm">
+                            <span className="tabular-nums text-muted-foreground">{order.total_kg.toFixed(0)} kg</span>
+                            <span className="w-px h-3 bg-border" />
+                            <span className="tabular-nums font-semibold text-foreground">€{order.total_price.toFixed(2)}</span>
+                            <span className="ml-auto tabular-nums text-muted-foreground">
+                              {format(parseISO(order.delivery_date), "d MMM")}
+                            </span>
+                          </div>
+                          {order.status === "received" && (
+                            <div className="mt-3 pt-3 border-t border-border">
+                              <Button
+                                size="sm"
+                                className="w-full gap-2 h-9"
+                                disabled={approvingIds.has(order.id)}
+                                onClick={(e) => { e.stopPropagation(); void approveOrder(order); }}
+                              >
+                                {approvingIds.has(order.id)
+                                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  : <Check className="w-3.5 h-3.5" />}
+                                Approve
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Desktop orders table (≥ lg) ── */}
+                <div className="hidden lg:block bg-card border border-border rounded-lg overflow-hidden">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -1457,12 +1574,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </TableBody>
                     </Table>
                   </div>
-                </div>
+                </div>{/* /hidden lg:block table wrapper */}
               </section>
             )}
 
             {/* ═══════════ ROASTER ═══════════ */}
             {activeSection === "roaster" && (
+              <div className="animate-in fade-in-0 duration-200">
               <RoasterView
                 orders={roasterOrders}
                 onMarkRoasted={async (orderId, value) => {
@@ -1472,11 +1590,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   }
                 }}
               />
+              </div>
             )}
 
             {/* ═══════════ PACKAGING ═══════════ */}
             {activeSection === "packaging" && (
-              <div className="space-y-4">
+              <div className="space-y-4 animate-in fade-in-0 duration-200">
                 {/* Export toolbar */}
                 <div className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1930,6 +2049,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             {/* ═══════════ PROFILE ═══════════ */}
             {activeSection === "profile" && <ProfileSettingsView />}
           </div>
+          </div>{/* /p-4 wrapper */}
         </main>
       </div>
 
@@ -2027,13 +2147,70 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </label>
               </div>
 
-              {/* Items table */}
-              <div className="rounded-lg border border-border overflow-hidden">
+              {/* Items — mobile cards */}
+              <div className="lg:hidden space-y-2">
+                {selectedOrder.items.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4 text-sm">No items</p>
+                ) : selectedOrder.items.map((item) => {
+                  const size = normalizeSize(item.size_label, item.size_kg);
+                  const bags = size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
+                  return (
+                    <div key={item.id} className="rounded-xl border border-border bg-muted/20 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground leading-snug flex-1 min-w-0">{item.product_name}</p>
+                        {canEdit && (
+                          <button
+                            className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors active:scale-95"
+                            onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-2.5 gap-3">
+                        {canEdit ? (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors active:scale-95"
+                                onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - (item.size_kg ?? 1))}
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-10 text-center tabular-nums text-foreground font-semibold text-sm">
+                                {bags ?? item.quantity}
+                              </span>
+                              <button
+                                className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors active:scale-95"
+                                onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + (item.size_kg ?? 1))}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            {size && <span className="text-xs text-muted-foreground pl-0.5">{size} / unité</span>}
+                          </div>
+                        ) : (
+                          <span className="text-sm font-semibold text-foreground tabular-nums">
+                            {bags != null ? `${bags} × ${size}` : `${item.quantity} kg`}
+                          </span>
+                        )}
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">€{item.price_per_kg.toFixed(2)}/kg</p>
+                          <p className="text-sm font-bold tabular-nums text-foreground">€{(item.quantity * item.price_per_kg).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Items — desktop table */}
+              <div className="hidden lg:block rounded-lg border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty (kg)</TableHead>
+                      <TableHead className="text-right">Qté</TableHead>
                       <TableHead className="text-right">€/kg</TableHead>
                       <TableHead className="text-right">Subtotal</TableHead>
                       {canEdit && <TableHead className="w-[80px]" />}
@@ -2043,44 +2220,58 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     {selectedOrder.items.length === 0 ? (
                       <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
                     ) : (
-                      selectedOrder.items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
-                          <TableCell className="text-right">
-                            {canEdit ? (
-                              <div className="inline-flex items-center gap-1">
-                                <button
-                                  className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - 1)}
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </button>
-                                <span className="w-8 text-center tabular-nums text-foreground font-medium">{item.quantity}</span>
-                                <button
-                                  className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + 1)}
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="tabular-nums text-foreground">{item.quantity}</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
-                          <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
-                          {canEdit && (
+                      selectedOrder.items.map((item) => {
+                        const size = normalizeSize(item.size_label, item.size_kg);
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
                             <TableCell className="text-right">
-                              <button
-                                className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
-                                onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canEdit ? (
+                                <div className="inline-flex flex-col items-end gap-0.5">
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                      onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - (item.size_kg ?? 1))}
+                                    >
+                                      <Minus className="w-3 h-3" />
+                                    </button>
+                                    <span className="w-8 text-center tabular-nums text-foreground font-medium">
+                                      {size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : item.quantity}
+                                    </span>
+                                    <button
+                                      className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                      onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + (item.size_kg ?? 1))}
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  {size && (
+                                    <span className="text-xs text-muted-foreground">{size}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="tabular-nums text-foreground">
+                                  {size && item.size_kg != null
+                                    ? `${Math.round(item.quantity / item.size_kg)} × ${size}`
+                                    : `${item.quantity}`}
+                                </span>
+                              )}
                             </TableCell>
-                          )}
-                        </TableRow>
-                      ))
+                            <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
+                            <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
+                            {canEdit && (
+                              <TableCell className="text-right">
+                                <button
+                                  className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                                  onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
@@ -2336,7 +2527,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               key={item.key}
               onClick={() => { setActiveSection(item.key); setMenuOpen(false); }}
               className={cn(
-                "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
+                "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2.5 text-sm font-medium transition-all active:scale-95",
                 activeSection === item.key && !menuOpen
                   ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -2357,7 +2548,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <PopoverTrigger asChild>
               <button
                 className={cn(
-                  "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
+                  "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2.5 text-sm font-medium transition-all active:scale-95",
                   menuSectionActive || menuOpen
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground",
