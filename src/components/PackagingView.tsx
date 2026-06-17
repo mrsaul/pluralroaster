@@ -214,7 +214,7 @@ function LineRow({
           {bags != null ? `${bags} × ${sizeDisplay}` : `× ${item.quantity}`}
         </p>
         <p className="text-xs tabular-nums text-muted-foreground mt-0.5">
-          {totalKg % 1 === 0 ? totalKg : totalKg.toFixed(2)} kg
+          {Number.isInteger(totalKg) ? totalKg : totalKg.toFixed(2)} kg
         </p>
       </div>
     </div>
@@ -496,7 +496,7 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
         };
         const itemBags = item.size_kg != null ? Math.round(item.quantity / item.size_kg) : item.quantity;
         existing.total_bags += itemBags;
-        existing.total_kg += item.quantity; // quantity is always in kg
+        existing.total_kg = Math.round((existing.total_kg + item.quantity) * 10000) / 10000;
         existing.lines.push({ orderId: order.id, client_name: order.client_name, item });
         map.set(key, existing);
       }
@@ -540,7 +540,7 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold tabular-nums text-foreground">
-                    {sizeDisplay ? `${group.total_bags} × ${sizeDisplay}` : `${group.total_bags} sacs`}
+                    {sizeDisplay ? `${Math.round(group.total_bags)} × ${sizeDisplay}` : `${Math.round(group.total_bags)} sacs`}
                   </p>
                   <p className="text-xs tabular-nums text-muted-foreground">{group.total_kg.toFixed(group.total_kg % 1 === 0 ? 0 : 2)} kg</p>
                 </div>
@@ -564,7 +564,11 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
                   )}>
                     {client_name ?? orderId.slice(0, 8)}
                   </span>
-                  <span className="text-sm tabular-nums text-muted-foreground">× {item.quantity}</span>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    {item.size_kg != null
+                      ? `${Math.round(item.quantity / item.size_kg)} × ${normalizeSize(item.size_label, item.size_kg)}`
+                      : `${item.quantity} kg`}
+                  </span>
                 </div>
               ))}
             </div>
