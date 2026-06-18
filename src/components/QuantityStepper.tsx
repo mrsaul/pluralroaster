@@ -9,11 +9,18 @@ interface QuantityStepperProps {
   min?: number;
   max?: number;
   className?: string;
+  renderValue?: (value: number) => string;
 }
 
-export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999, className }: QuantityStepperProps) {
+export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999, className, renderValue }: QuantityStepperProps) {
   const decrement = () => onChange(Math.max(min, value - step));
   const increment = () => onChange(Math.min(max, value + step));
+
+  const label = renderValue
+    ? renderValue(value)
+    : value > 0
+      ? `${Number.isInteger(value) ? value : value.toFixed(1)} kg`
+      : "—";
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
@@ -26,7 +33,7 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
         <Minus className="w-4 h-4" />
       </motion.button>
       <span className="w-16 text-center font-mono text-sm tabular-nums font-medium text-foreground">
-        {value > 0 ? `${Number.isInteger(value) ? value : value.toFixed(1)} kg` : "—"}
+        {label}
       </span>
       <motion.button
         whileTap={{ scale: 0.92 }}
