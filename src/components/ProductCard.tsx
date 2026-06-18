@@ -3,6 +3,15 @@ import { RoastIcon } from "./RoastIcon";
 import { QuantityStepper } from "./QuantityStepper";
 import type { Product } from "@/lib/store";
 
+const BAG_TAG = "sachet-3kg";
+const BAG_KG = 3;
+
+function bagLabel(totalKg: number): string {
+  if (totalKg === 0) return "—";
+  const bags = totalKg / BAG_KG;
+  return `${bags} sac${bags > 1 ? "s" : ""}`;
+}
+
 interface ProductCardProps {
   product: Product;
   quantity: number;
@@ -10,6 +19,8 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, quantity, onQuantityChange }: ProductCardProps) {
+  const isBag = product.tags?.includes(BAG_TAG) ?? false;
+
   return (
     <motion.div
       layout
@@ -24,6 +35,7 @@ export function ProductCard({ product, quantity, onQuantityChange }: ProductCard
         </p>
         <p className="text-xs text-muted-foreground">
           {product.origin} · <span className="font-mono tabular-nums">{product.sku}</span>
+          {isBag && <span className="ml-1">· 3kg/sac</span>}
         </p>
       </div>
       <div className="flex flex-col items-end gap-1">
@@ -33,6 +45,7 @@ export function ProductCard({ product, quantity, onQuantityChange }: ProductCard
         <QuantityStepper
           value={quantity}
           onChange={(qty) => onQuantityChange(product, qty)}
+          renderValue={isBag ? bagLabel : undefined}
         />
       </div>
     </motion.div>
