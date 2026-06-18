@@ -20,6 +20,9 @@ const ROAST_TEXT: Record<string, string> = {
   espresso: "text-stone-100",
 };
 
+const BAG_TAG = "sachet-3kg";
+const BAG_KG = 3;
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface ProductDetailSheetProps {
@@ -36,9 +39,6 @@ interface ProductDetailSheetProps {
   ) => void;
 }
 
-const BAG_TAG = "sachet-3kg";
-const BAG_KG = 3;
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ProductDetailSheet({
@@ -49,10 +49,12 @@ export function ProductDetailSheet({
   updateQuantity,
 }: ProductDetailSheetProps) {
   const isBag = product?.tags?.includes(BAG_TAG) ?? false;
-  // Bag products bypass the variant selector — always treat as no-variant
-  const hasVariants = !isBag && !!(product?.variants && product.variants.length > 0);
+  const hasVariants = !!(product?.variants && product.variants.length > 0);
 
+  // selectedVariant = null when bag chip is selected (or no variants)
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  // isBagSelected = true when the "Sac 3kg" chip is active
+  const [isBagSelected, setIsBagSelected] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
 
@@ -61,21 +63,30 @@ export function ProductDetailSheet({
     if (!product || !open) return;
     setAdded(false);
     if (hasVariants) {
-      const first = product.variants![0];
-      setSelectedVariant(first);
-      const existing = getQuantity(product.id, first.size_label);
-      setQuantity(existing > 0 ? existing : 1);
+      if (isBag) {
+        // Default to bag chip; client can switch to 250g
+        setIsBagSelected(true);
+        setSelectedVariant(null);
+        const existingKg = getQuantity(product.id);
+        setQuantity(existingKg > 0 ? existingKg / BAG_KG : 1);
+      } else {
+        const first = product.variants![0];
+        setSelectedVariant(first);
+        setIsBagSelected(false);
+        const existing = getQuantity(product.id, first.size_label);
+        setQuantity(existing > 0 ? existing : 1);
+      }
     } else {
       setSelectedVariant(null);
+      setIsBagSelected(isBag);
       const existing = getQuantity(product.id);
-      // For bag products, existing is stored as totalKg — convert back to bags
-      const existingBags = isBag && existing > 0 ? existing / BAG_KG : existing;
-      setQuantity(existingBags > 0 ? existingBags : 1);
+      const units = isBag && existing > 0 ? existing / BAG_KG : existing;
+      setQuantity(units > 0 ? units : 1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id, open]);
 
-  // When variant changes, load its current cart qty
+  // When a real variant chip is selected, load its current cart qty
   useEffect(() => {
     if (!product || !selectedVariant || !open) return;
     const existing = getQuantity(product.id, selectedVariant.size_label);
@@ -84,42 +95,35 @@ export function ProductDetailSheet({
   }, [selectedVariant?.size_label]);
 
   const currentCartQty = product
-    ? hasVariants && selectedVariant
-      ? getQuantity(product.id, selectedVariant.size_label)
-      : getQuantity(product.id)
+    ? isBagSelected
+      ? getQuantity(product.id)
+      : selectedVariant
+        ? getQuantity(product.id, selectedVariant.size_label)
+        : getQuantity(product.id)
     : 0;
 
   const isUpdate = currentCartQty > 0;
 
-  const unitPrice = hasVariants && selectedVariant ? selectedVariant.price : null;
-  const lineTotal =
-    unitPrice != null
-      ? unitPrice * quantity
-      : isBag
-        ? (product?.pricePerKg ?? 0) * BAG_KG * quantity
-        : (product?.pricePerKg ?? 0) * quantity;
+  const lineTotal = (() => {
+    if (isBag && isBagSelected) return (product?.pricePerKg ?? 0) * BAG_KG * quantity;
+    if (selectedVariant) return selectedVariant.price * quantity;
+    return (product?.pricePerKg ?? 0) * quantity;
+  })();
 
   const handleAdd = useCallback(() => {
     if (!product || added) return;
-    if (hasVariants && selectedVariant) {
-      updateQuantity(
-        product,
-        quantity,
-        selectedVariant.size_label,
-        selectedVariant.size_kg,
-        selectedVariant.price,
-      );
-    } else if (isBag) {
-      // Store total kg in cart so Sellsy / checkout math stays unchanged
+    if (isBag && isBagSelected) {
+      // Store total kg so cart/checkout/Sellsy math stays unchanged
       updateQuantity(product, quantity * BAG_KG);
+    } else if (selectedVariant) {
+      updateQuantity(product, quantity, selectedVariant.size_label, selectedVariant.size_kg, selectedVariant.price);
     } else {
       updateQuantity(product, quantity);
     }
-    // Haptic feedback on mobile
     if ("vibrate" in navigator) navigator.vibrate(50);
     setAdded(true);
     setTimeout(onClose, 800);
-  }, [product, quantity, selectedVariant, hasVariants, updateQuantity, onClose, added]);
+  }, [product, quantity, selectedVariant, isBagSelected, isBag, updateQuantity, onClose, added]);
 
   if (!product) return null;
 
@@ -205,20 +209,21 @@ export function ProductDetailSheet({
               </div>
             )}
 
-            {/* Size selector */}
-            {hasVariants && (
+            {/* Size selector — real variants + optional "Sac 3kg" chip */}
+            {(hasVariants || isBag) && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
                   Choose your size
                 </p>
-                <div className="flex gap-2">
-                  {product.variants!.map((variant) => {
-                    const isSelected = selectedVariant?.size_label === variant.size_label;
+                <div className="flex gap-2 flex-wrap">
+                  {hasVariants && product.variants!.map((variant) => {
+                    const isSelected = !isBagSelected && selectedVariant?.size_label === variant.size_label;
+                    const pricePerKg = variant.size_kg > 0 ? variant.price / variant.size_kg : null;
                     return (
                       <button
                         key={variant.size_label}
                         type="button"
-                        onClick={() => setSelectedVariant(variant)}
+                        onClick={() => { setSelectedVariant(variant); setIsBagSelected(false); setQuantity(1); }}
                         className={cn(
                           "flex-1 rounded-xl border-2 py-3 px-2 text-center transition-all duration-150",
                           isSelected
@@ -226,29 +231,64 @@ export function ProductDetailSheet({
                             : "border-border bg-background hover:border-primary/40",
                         )}
                       >
-                        <p className={cn(
-                          "text-sm font-semibold",
-                          isSelected ? "text-foreground" : "text-muted-foreground",
-                        )}>
+                        <p className={cn("text-sm font-semibold", isSelected ? "text-foreground" : "text-muted-foreground")}>
                           {resolveVariantLabel(variant)}
                         </p>
                         <p className="text-xs mt-0.5 tabular-nums text-muted-foreground">
                           €{variant.price.toFixed(2)}
                         </p>
+                        {pricePerKg != null && (
+                          <p className="text-[10px] mt-0.5 tabular-nums text-muted-foreground/60">
+                            €{pricePerKg.toFixed(2)}/kg
+                          </p>
+                        )}
                       </button>
                     );
                   })}
+                  {isBag && (
+                    <button
+                      type="button"
+                      onClick={() => { setIsBagSelected(true); setSelectedVariant(null); setQuantity(1); }}
+                      className={cn(
+                        "flex-1 rounded-xl border-2 py-3 px-2 text-center transition-all duration-150",
+                        isBagSelected
+                          ? "border-primary bg-primary/5"
+                          : "border-border bg-background hover:border-primary/40",
+                      )}
+                    >
+                      <p className={cn("text-sm font-semibold", isBagSelected ? "text-foreground" : "text-muted-foreground")}>
+                        Sac 3kg
+                      </p>
+                      <p className="text-xs mt-0.5 tabular-nums text-muted-foreground">
+                        €{(product.pricePerKg * BAG_KG).toFixed(2)}/sac
+                      </p>
+                      <p className="text-[10px] mt-0.5 tabular-nums text-muted-foreground/60">
+                        €{product.pricePerKg.toFixed(2)}/kg
+                      </p>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* No variants — show price/kg or bag price */}
-            {!hasVariants && (
+            {/* No variants and not a bag product — show price/kg */}
+            {!hasVariants && !isBag && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span className="text-lg font-bold text-foreground tabular-nums">
-                  €{isBag ? (product.pricePerKg * BAG_KG).toFixed(2) : product.pricePerKg.toFixed(2)}
+                  €{product.pricePerKg.toFixed(2)}
                 </span>
-                <span>{isBag ? `/sac · ${BAG_KG}kg/sac` : "/kg · bulk bags"}</span>
+                <span>/kg · bulk bags</span>
+              </div>
+            )}
+
+            {/* No variants, bag product only — show bag price + per-kg reference */}
+            {!hasVariants && isBag && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="text-lg font-bold text-foreground tabular-nums">
+                  €{(product.pricePerKg * BAG_KG).toFixed(2)}
+                </span>
+                <span>/sac · {BAG_KG}kg/sac</span>
+                <span className="text-muted-foreground/60">· €{product.pricePerKg.toFixed(2)}/kg</span>
               </div>
             )}
 
@@ -259,7 +299,7 @@ export function ProductDetailSheet({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  {isBag ? "Nombre de sacs" : "Quantity"}
+                  {isBag && isBagSelected ? "Nombre de sacs" : "Quantity"}
                 </p>
                 <div className="flex items-center gap-3">
                   {/* Minus — 44×44px touch target */}
