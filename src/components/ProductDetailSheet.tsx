@@ -36,6 +36,9 @@ interface ProductDetailSheetProps {
   ) => void;
 }
 
+const BAG_TAG = "sachet-3kg";
+const BAG_KG = 3;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ProductDetailSheet({
@@ -45,7 +48,9 @@ export function ProductDetailSheet({
   getQuantity,
   updateQuantity,
 }: ProductDetailSheetProps) {
-  const hasVariants = !!(product?.variants && product.variants.length > 0);
+  const isBag = product?.tags?.includes(BAG_TAG) ?? false;
+  // Bag products bypass the variant selector — always treat as no-variant
+  const hasVariants = !isBag && !!(product?.variants && product.variants.length > 0);
 
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -63,7 +68,9 @@ export function ProductDetailSheet({
     } else {
       setSelectedVariant(null);
       const existing = getQuantity(product.id);
-      setQuantity(existing > 0 ? existing : 1);
+      // For bag products, existing is stored as totalKg — convert back to bags
+      const existingBags = isBag && existing > 0 ? existing / BAG_KG : existing;
+      setQuantity(existingBags > 0 ? existingBags : 1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id, open]);
@@ -88,7 +95,9 @@ export function ProductDetailSheet({
   const lineTotal =
     unitPrice != null
       ? unitPrice * quantity
-      : (product?.pricePerKg ?? 0) * quantity;
+      : isBag
+        ? (product?.pricePerKg ?? 0) * BAG_KG * quantity
+        : (product?.pricePerKg ?? 0) * quantity;
 
   const handleAdd = useCallback(() => {
     if (!product || added) return;
@@ -100,6 +109,9 @@ export function ProductDetailSheet({
         selectedVariant.size_kg,
         selectedVariant.price,
       );
+    } else if (isBag) {
+      // Store total kg in cart so Sellsy / checkout math stays unchanged
+      updateQuantity(product, quantity * BAG_KG);
     } else {
       updateQuantity(product, quantity);
     }
@@ -230,13 +242,13 @@ export function ProductDetailSheet({
               </div>
             )}
 
-            {/* No variants — show price/kg */}
+            {/* No variants — show price/kg or bag price */}
             {!hasVariants && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span className="text-lg font-bold text-foreground tabular-nums">
-                  €{product.pricePerKg.toFixed(2)}
+                  €{isBag ? (product.pricePerKg * BAG_KG).toFixed(2) : product.pricePerKg.toFixed(2)}
                 </span>
-                <span>/kg · bulk bags</span>
+                <span>{isBag ? `/sac · ${BAG_KG}kg/sac` : "/kg · bulk bags"}</span>
               </div>
             )}
 
@@ -247,7 +259,7 @@ export function ProductDetailSheet({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  Quantity
+                  {isBag ? "Nombre de sacs" : "Quantity"}
                 </p>
                 <div className="flex items-center gap-3">
                   {/* Minus — 44×44px touch target */}
