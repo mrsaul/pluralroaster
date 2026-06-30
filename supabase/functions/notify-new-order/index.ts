@@ -24,6 +24,7 @@ type OrderItem = {
 };
 
 type Profile = { id: string; full_name: string | null; email: string | null };
+type Company = { id: string; name: string | null; email: string | null };
 
 async function sendEmail(
   apiKey: string,
@@ -108,26 +109,35 @@ Deno.serve(async (req: Request) => {
 
     const order = payload.record;
     const orderId = order.id as string;
-    const userId = order.user_id as string;
+    const userId = (order.user_id as string | null) ?? null;
+    const companyId = (order.company_id as string | null) ?? null;
     const deliveryDate = order.delivery_date as string;
     const totalPrice = Number(order.total_price);
     const totalKg = Number(order.total_kg);
     const notes = (order.notes as string | null) ?? null;
 
-    // Fetch order items + client profile using service role
+    // Fetch order items + client profile + company using service role
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const db = createClient(supabaseUrl, serviceKey);
 
-    const [{ data: itemsRaw }, { data: profileRaw }] = await Promise.all([
+    const [{ data: itemsRaw }, { data: profileRaw }, { data: companyRaw }] = await Promise.all([
       db.from("order_items").select("product_name,product_sku,quantity,price_per_kg").eq("order_id", orderId),
-      db.from("profiles").select("id,full_name,email").eq("id", userId).single(),
+      userId
+        ? db.from("profiles").select("id,full_name,email").eq("id", userId).single()
+        : Promise.resolve({ data: null }),
+      companyId
+        ? db.from("companies").select("id,name,email").eq("id", companyId).single()
+        : Promise.resolve({ data: null }),
     ]);
 
     const items = (itemsRaw ?? []) as OrderItem[];
     const profile = profileRaw as Profile | null;
-    const clientName = profile?.full_name ?? profile?.email ?? "Client";
-    const clientEmail = profile?.email;
+    const company = companyRaw as Company | null;
+
+    // Prefer profile full_name, then company name, then email fallbacks
+    const clientName = profile?.full_name ?? company?.name ?? profile?.email ?? company?.email ?? "Client";
+    const clientEmail = profile?.email ?? company?.email ?? null;
 
     const vatAmount = totalPrice * 0.20;
     const totalTTC = totalPrice + vatAmount;
