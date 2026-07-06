@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link2, Unlink2, AlertTriangle, Loader2, Clock, RefreshCw } from "lucide-react";
+import { Link2, Unlink2, AlertTriangle, Loader2, Clock, RefreshCw, ChevronDown, ChevronRight, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,26 @@ type PricingTierOption = {
   delivery_discount_percent: number;
 };
 
+type ClientOrderItem = {
+  id: string;
+  product_name: string;
+  product_sku: string | null;
+  quantity: number;
+  price_per_kg: number;
+  size_label: string | null;
+};
+
+type ClientOrder = {
+  id: string;
+  created_at: string;
+  delivery_date: string | null;
+  status: string;
+  total_kg: number;
+  total_price: number;
+  sellsy_id: string | null;
+  items: ClientOrderItem[];
+};
+
 interface Props {
   client: AppClient | null;
   open: boolean;
@@ -89,6 +109,9 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
   const [tierOptions, setTierOptions] = useState<PricingTierOption[]>([]);
   const [pendingTierChange, setPendingTierChange] = useState<string | null>(null);
+  const [orders, setOrders] = useState<ClientOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   // ── Draft-persisted form state (key includes client id for per-client drafts) ──
   const defaultFormData = client ? clientToFormData(client) : {
@@ -125,6 +148,39 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     supabase.from("pricing_tiers").select("id, name, product_discount_percent, delivery_discount_percent").eq("is_active", true).order("name")
       .then(({ data }) => setTierOptions((data ?? []) as PricingTierOption[]));
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !client) return;
+    setLoadingOrders(true);
+    setExpandedOrderId(null);
+    supabase
+      .from("orders")
+      .select("id, created_at, delivery_date, status, total_kg, total_price, sellsy_id, order_items(id, product_name, product_sku, quantity, price_per_kg, size_label)")
+      .eq("company_id", client.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setOrders(
+          (data ?? []).map((o: any) => ({
+            id: o.id,
+            created_at: o.created_at,
+            delivery_date: o.delivery_date ?? null,
+            status: o.status ?? "pending",
+            total_kg: Number(o.total_kg),
+            total_price: Number(o.total_price),
+            sellsy_id: o.sellsy_id ?? null,
+            items: (o.order_items ?? []).map((i: any) => ({
+              id: i.id,
+              product_name: i.product_name,
+              product_sku: i.product_sku ?? null,
+              quantity: Number(i.quantity),
+              price_per_kg: Number(i.price_per_kg),
+              size_label: i.size_label ?? null,
+            })),
+          }))
+        );
+        setLoadingOrders(false);
+      });
+  }, [open, client?.id]);
 
   const isSellsyMode = dataMode === "sellsy";
 
@@ -459,6 +515,76 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               <p className="text-[11px] text-muted-foreground">
                 Registered: {format(parseISO(client.created_at), "MMM d, yyyy")} · Status: <span className="capitalize font-medium">{client.onboarding_status ?? "pending"}</span>
               </p>
+            </div>
+
+            {/* Order History */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Order History</p>
+                {loadingOrders && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              </div>
+              {!loadingOrders && orders.length === 0 && (
+                <div className="flex items-center gap-2 rounded-lg bg-muted/30 border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+                  <Package className="h-4 w-4 shrink-0" />
+                  No orders yet for this client.
+                </div>
+              )}
+              {orders.length > 0 && (
+                <div className="space-y-1.5">
+                  {orders.map((order) => {
+                    const isExpanded = expandedOrderId === order.id;
+                    const statusColor =
+                      order.status === "confirmed" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                      order.status === "received" ? "bg-green-100 text-green-700 border-green-200" :
+                      order.status === "cancelled" ? "bg-red-100 text-red-700 border-red-200" :
+                      "bg-muted text-muted-foreground border-border";
+                    return (
+                      <div key={order.id} className="rounded-lg border border-border overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                          <span className="flex-1 text-xs text-muted-foreground tabular-nums">
+                            {format(parseISO(order.created_at), "d MMM yyyy")}
+                            {order.delivery_date && (
+                              <span className="ml-1.5">→ {format(parseISO(order.delivery_date), "d MMM")}</span>
+                            )}
+                          </span>
+                          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", statusColor)}>
+                            {order.status}
+                          </span>
+                          <span className="text-xs font-medium tabular-nums text-muted-foreground ml-2">
+                            {order.total_kg} kg
+                          </span>
+                          <span className="text-xs font-semibold tabular-nums text-foreground ml-2">
+                            €{order.total_price.toFixed(2)}
+                          </span>
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-border bg-muted/20 px-3 py-2 space-y-1">
+                            {order.items.map((item) => (
+                              <div key={item.id} className="flex items-baseline justify-between gap-2 text-xs">
+                                <span className="text-foreground font-medium truncate">{item.product_name}</span>
+                                <span className="shrink-0 text-muted-foreground tabular-nums">
+                                  {item.quantity} kg{item.size_label ? ` · ${item.size_label}` : ""}
+                                  {" · "}€{item.price_per_kg.toFixed(2)}/kg
+                                </span>
+                              </div>
+                            ))}
+                            {order.sellsy_id && (
+                              <p className="text-[10px] text-muted-foreground/60 pt-1">Sellsy #{order.sellsy_id}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Save */}
