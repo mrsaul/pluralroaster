@@ -68,7 +68,11 @@ export default function LoginPage() {
       // onAuthStateChange in Index.tsx fires SIGNED_IN and calls syncUserRole,
       // which already invokes ensure_current_user_role. No need to call it here.
     } catch (authError) {
-      setError(authError instanceof Error ? authError.message : "Authentication failed.");
+      const raw = authError instanceof Error ? authError.message : "Authentication failed.";
+      const friendly = raw.toLowerCase().includes("rate limit")
+        ? "Too many attempts. Please wait a few minutes before trying again."
+        : raw;
+      setError(friendly);
     } finally {
       setLoading(false);
     }
