@@ -1,6 +1,4 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { useUrlState } from "@/hooks/useUrlState";
-import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { format, parseISO, isToday, isTomorrow, startOfDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -46,7 +44,7 @@ export type PackagingOrder = {
 
 type ViewMode = "orders" | "reference";
 type StatusFilter = "todo" | "all";
-type DateFilter = "today2" | "week" | "all";
+type DateFilter = "today" | "week" | "all";
 type PackagingState = "todo" | "in_progress" | "ready";
 
 interface PackagingViewProps {
@@ -572,14 +570,9 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
 // ── Main PackagingView ────────────────────────────────────────────────────────
 
 export function PackagingView({ orders, onStatusChange, onChecklistChange }: PackagingViewProps) {
-  const [viewModeRaw, setViewMode] = useUrlState("pv", "orders");
-  const viewMode = (viewModeRaw === "reference" ? "reference" : "orders") as ViewMode;
-
-  const [statusFilterRaw, setStatusFilter] = useUrlState("ps", "todo");
-  const statusFilter = (statusFilterRaw === "all" ? "all" : "todo") as StatusFilter;
-
-  const [dateFilterRaw, setDateFilter] = useUrlState("pd", "week");
-  const dateFilter = (["today2", "week", "all"].includes(dateFilterRaw) ? dateFilterRaw : "today2") as DateFilter;
+  const [viewMode, setViewMode] = useState<ViewMode>("orders");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("todo");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
 
   // Per-line local packed state — sessionStorage, survives tab switches
   const [packedLineIds, setPackedLineIds] = useState<Set<string>>(loadPackedIds);
@@ -594,21 +587,21 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
     });
   }, []);
 
-  useScrollRestoration("admin-packaging", orders.length > 0);
-
-  // Filter orders to packaging status
+  // Filter orders: confirmed + packaging + ready_for_delivery all visible
   const packagingOrders = useMemo(() => {
     const now = new Date();
     const todayStart = startOfDay(now);
 
     return orders
       .filter(o => {
-        if (o.status !== "packaging" && o.status !== "ready_for_delivery") return false;
+        // Include confirmed, packaging, and ready_for_delivery
+        if (o.status !== "confirmed" && o.status !== "packaging" && o.status !== "ready_for_delivery") return false;
 
         // Date filter
         const delivery = startOfDay(parseISO(o.delivery_date));
         const diffDays = Math.round((delivery.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
-        if (dateFilter === "today2" && diffDays > 2) return false;
+        // "today" = today and any overdue orders (diffDays <= 0)
+        if (dateFilter === "today" && diffDays > 0) return false;
         if (dateFilter === "week" && diffDays > 7) return false;
 
         // Status filter — only hide when explicitly marked ready_for_delivery
@@ -675,8 +668,8 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
       <div className="flex flex-wrap gap-2 items-center">
         {/* Date filter */}
         <div className="flex rounded-lg border border-border overflow-hidden text-sm">
-          {(["today2", "week", "all"] as DateFilter[]).map(v => {
-            const labels = { today2: "Auj. + 2j", week: "Semaine", all: "Tout" };
+          {(["today", "week", "all"] as DateFilter[]).map(v => {
+            const labels = { today: "Aujourd'hui", week: "Semaine", all: "Tout" };
             return (
               <button
                 key={v}
@@ -759,19 +752,22 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
           <Package className="w-10 h-10 mx-auto mb-4 opacity-30" />
           <p className="text-base font-medium text-foreground mb-1">Aucune commande à préparer</p>
           <p className="text-sm text-muted-foreground">
-            {statusFilter === "todo" && dateFilter === "today2"
-              ? "Toutes les commandes des prochains jours sont prêtes ou aucune n'est en attente."
+            {statusFilter === "todo" && dateFilter === "today"
+              ? "Aucune commande à préparer aujourd'hui."
               : "Modifiez les filtres pour voir d'autres commandes."}
           </p>
-          {statusFilter === "todo" && (
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
-              className="mt-3 text-sm text-primary hover:underline"
-            >
-              Voir toutes les commandes →
-            </button>
-          )}
+          <div className="flex flex-wrap justify-center gap-3 mt-3">
+            {dateFilter === "today" && (
+              <button type="button" onClick={() => setDateFilter("week")} className="text-sm text-primary hover:underline">
+                Voir la semaine →
+              </button>
+            )}
+            {statusFilter === "todo" && (
+              <button type="button" onClick={() => setStatusFilter("all")} className="text-sm text-primary hover:underline">
+                Voir toutes les commandes →
+              </button>
+            )}
+          </div>
         </div>
       ) : viewMode === "orders" ? (
         <div className="space-y-6">
