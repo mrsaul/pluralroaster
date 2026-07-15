@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { format, parseISO, isToday, isTomorrow, startOfDay } from "date-fns";
+import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   Package, CheckSquare, ChevronDown, ChevronRight, Layers,
@@ -44,7 +44,6 @@ export type PackagingOrder = {
 
 type ViewMode = "orders" | "reference";
 type StatusFilter = "todo" | "all";
-type DateFilter = "today" | "week" | "all";
 type PackagingState = "todo" | "in_progress" | "ready";
 
 interface PackagingViewProps {
@@ -572,7 +571,6 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
 export function PackagingView({ orders, onStatusChange, onChecklistChange }: PackagingViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("orders");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todo");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
 
   // Per-line local packed state — sessionStorage, survives tab switches
   const [packedLineIds, setPackedLineIds] = useState<Set<string>>(loadPackedIds);
@@ -587,27 +585,13 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
     });
   }, []);
 
-  // Filter orders: confirmed + packaging + ready_for_delivery all visible
+  // All confirmed + packaging + ready orders, no date restriction
   const packagingOrders = useMemo(() => {
-    const now = new Date();
-    const todayStart = startOfDay(now);
-
     return orders
       .filter(o => {
-        // Include confirmed, packaging, and ready_for_delivery
         if (o.status !== "confirmed" && o.status !== "packaging" && o.status !== "ready_for_delivery") return false;
-
-        // Date filter
-        const delivery = startOfDay(parseISO(o.delivery_date));
-        const diffDays = Math.round((delivery.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
-        // "today" = today and any overdue orders (diffDays <= 0)
-        if (dateFilter === "today" && diffDays > 0) return false;
-        if (dateFilter === "week" && diffDays > 7) return false;
-
-        // Status filter — only hide when explicitly marked ready_for_delivery
-        if (statusFilter === "todo") {
-          return o.status !== "ready_for_delivery";
-        }
+        // "À préparer" hides only explicitly completed orders
+        if (statusFilter === "todo") return o.status !== "ready_for_delivery";
         return true;
       })
       .sort((a, b) => {
@@ -616,7 +600,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
         if (da !== db) return da - db;
         return (a.client_name ?? "").localeCompare(b.client_name ?? "", "fr");
       });
-  }, [orders, dateFilter, statusFilter, packedLineIds]);
+  }, [orders, statusFilter]);
 
   // Group by date
   const dayGroups = useMemo(() => {
@@ -666,29 +650,6 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
 
       {/* Filter bar */}
       <div className="flex flex-wrap gap-2 items-center">
-        {/* Date filter */}
-        <div className="flex rounded-lg border border-border overflow-hidden text-sm">
-          {(["today", "week", "all"] as DateFilter[]).map(v => {
-            const labels = { today: "Aujourd'hui", week: "Semaine", all: "Tout" };
-            return (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setDateFilter(v)}
-                className={cn(
-                  "px-3 py-1.5 font-medium transition-colors",
-                  dateFilter === v
-                    ? "bg-foreground text-background"
-                    : "bg-card text-muted-foreground hover:bg-muted/50",
-                  v !== "today2" && "border-l border-border",
-                )}
-              >
-                {labels[v]}
-              </button>
-            );
-          })}
-        </div>
-
         {/* Status filter */}
         <div className="flex rounded-lg border border-border overflow-hidden text-sm">
           {(["todo", "all"] as StatusFilter[]).map(v => {
@@ -752,22 +713,17 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
           <Package className="w-10 h-10 mx-auto mb-4 opacity-30" />
           <p className="text-base font-medium text-foreground mb-1">Aucune commande à préparer</p>
           <p className="text-sm text-muted-foreground">
-            {statusFilter === "todo" && dateFilter === "today"
-              ? "Aucune commande à préparer aujourd'hui."
-              : "Modifiez les filtres pour voir d'autres commandes."}
+            {statusFilter === "todo"
+              ? "Toutes les commandes de la semaine sont prêtes."
+              : "Aucune commande confirmée cette semaine."}
           </p>
-          <div className="flex flex-wrap justify-center gap-3 mt-3">
-            {dateFilter === "today" && (
-              <button type="button" onClick={() => setDateFilter("week")} className="text-sm text-primary hover:underline">
-                Voir la semaine →
-              </button>
-            )}
-            {statusFilter === "todo" && (
+          {statusFilter === "todo" && (
+            <div className="flex justify-center mt-3">
               <button type="button" onClick={() => setStatusFilter("all")} className="text-sm text-primary hover:underline">
                 Voir toutes les commandes →
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       ) : viewMode === "orders" ? (
         <div className="space-y-6">
