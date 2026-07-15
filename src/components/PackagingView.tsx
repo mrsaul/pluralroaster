@@ -244,16 +244,6 @@ function OrderCard({
   const allLinesPacked = order.items.length > 0 && order.items.every(i => packedLineIds.has(i.id));
   const canMarkReady = allLinesPacked;
 
-  // When all lines are packed, silently write all three étapes to true
-  useEffect(() => {
-    if (allLinesPacked && (!order.is_roasted || !order.is_packed || !order.is_labeled)) {
-      if (!order.is_roasted) onChecklistChange(order.id, "is_roasted", true);
-      if (!order.is_packed) onChecklistChange(order.id, "is_packed", true);
-      if (!order.is_labeled) onChecklistChange(order.id, "is_labeled", true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allLinesPacked]);
-
   const borderClass = cn(
     "bg-card border rounded-xl overflow-hidden transition-all",
     state === "ready" && "border-emerald-200 dark:border-emerald-800 opacity-75",
@@ -588,7 +578,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
   const [statusFilterRaw, setStatusFilter] = useUrlState("ps", "todo");
   const statusFilter = (statusFilterRaw === "all" ? "all" : "todo") as StatusFilter;
 
-  const [dateFilterRaw, setDateFilter] = useUrlState("pd", "today2");
+  const [dateFilterRaw, setDateFilter] = useUrlState("pd", "week");
   const dateFilter = (["today2", "week", "all"].includes(dateFilterRaw) ? dateFilterRaw : "today2") as DateFilter;
 
   // Per-line local packed state — sessionStorage, survives tab switches
@@ -621,10 +611,9 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
         if (dateFilter === "today2" && diffDays > 2) return false;
         if (dateFilter === "week" && diffDays > 7) return false;
 
-        // Status filter
+        // Status filter — only hide when explicitly marked ready_for_delivery
         if (statusFilter === "todo") {
-          const state = getPackagingState(o, packedLineIds);
-          return state !== "ready";
+          return o.status !== "ready_for_delivery";
         }
         return true;
       })
