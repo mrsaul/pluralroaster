@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Lock, Save, Loader2 } from "lucide-react";
+import { User, Lock, Save, Loader2, Bell, BellOff } from "lucide-react";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type ProfileFormData = { fullName: string; email: string };
 const PROFILE_FORM_DEFAULT: ProfileFormData = { fullName: "", email: "" };
@@ -75,6 +76,8 @@ export function ProfileSettingsView() {
       clearDraft();
     }
   }, [form, originalName, originalEmail, loading, clearDraft]);
+
+  const { permission, subscribed, loading: pushLoading, supported, supportStatus, subscribe, unsubscribe } = usePushNotifications();
 
   const profileDirty = fullName !== originalName || email !== originalEmail;
 
@@ -241,6 +244,50 @@ export function ProfileSettingsView() {
             {savingPassword ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
             Update Password
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Push Notifications */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bell className="h-4 w-4" />
+            Push Notifications
+          </CardTitle>
+          <CardDescription>
+            Receive a notification on this device when a new order is placed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!supported ? (
+            <p className="text-sm text-muted-foreground">
+              {supportStatus === "no-sw" && "Push notifications require a browser that supports service workers."}
+              {supportStatus === "no-push" && "Push notifications are not supported in this browser. On iOS, add the app to your home screen first."}
+              {supportStatus === "no-vapid-key" && "Push notifications are not configured (missing VITE_VAPID_PUBLIC_KEY)."}
+            </p>
+          ) : permission === "denied" ? (
+            <p className="text-sm text-destructive">
+              Notifications are blocked by your browser. Open browser settings → Site settings → Notifications and allow this site.
+            </p>
+          ) : (
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm">
+                {subscribed
+                  ? <><BellOff className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">Notifications active on this device</span></>
+                  : <><Bell className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">Not enabled on this device</span></>}
+              </div>
+              <Button
+                variant={subscribed ? "outline" : "default"}
+                size="sm"
+                disabled={pushLoading}
+                onClick={subscribed ? unsubscribe : subscribe}
+                className="gap-2 shrink-0"
+              >
+                {pushLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {subscribed ? "Disable" : "Enable notifications"}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
