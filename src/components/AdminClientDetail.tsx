@@ -112,6 +112,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [sellsyClientId, setSellsyClientId] = useState<string>(client?.sellsy_client_id ?? "");
 
   // ── Draft-persisted form state (key includes client id for per-client drafts) ──
   const defaultFormData = client ? clientToFormData(client) : {
@@ -145,9 +146,10 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
 
   useEffect(() => {
     if (!open) return;
+    setSellsyClientId(client?.sellsy_client_id ?? "");
     supabase.from("pricing_tiers").select("id, name, product_discount_percent, delivery_discount_percent").eq("is_active", true).order("name")
       .then(({ data }) => setTierOptions((data ?? []) as PricingTierOption[]));
-  }, [open]);
+  }, [open, client?.id]);
 
   useEffect(() => {
     if (!open || !client) return;
@@ -227,6 +229,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           email: email || null,
           phone: phone || null,
           pricing_tier_id: pricingTierId,
+          sellsy_client_id: sellsyClientId.trim() || null,
         })
         .eq("id", client.id);
       if (companyErr) throw companyErr;
@@ -354,10 +357,21 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               )}
             </div>
 
-            {/* Sellsy ID (always read-only) */}
-            <div className="rounded-lg bg-muted/40 p-3">
+            {/* Sellsy Client ID — editable */}
+            <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Sellsy Client ID (for invoicing)</p>
-              <p className="mt-1 text-sm font-mono text-foreground">{client.sellsy_client_id ?? "Not linked"}</p>
+              <Input
+                value={sellsyClientId}
+                onChange={(e) => setSellsyClientId(e.target.value)}
+                placeholder="e.g. 123456"
+                className="font-mono text-sm"
+              />
+              {!sellsyClientId.trim() && (
+                <p className="text-[11px] text-warning flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Without a Sellsy ID, invoices can't be sent for this client.
+                </p>
+              )}
             </div>
 
             {/* Editable / Read-only fields */}
