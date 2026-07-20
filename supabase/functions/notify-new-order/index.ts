@@ -209,7 +209,7 @@ Deno.serve(async (req: Request) => {
         .from("push_subscriptions")
         .select("endpoint, p256dh, auth");
 
-      const payload = JSON.stringify({
+      const pushPayload = JSON.stringify({
         title: `New order — ${clientName}`,
         body: `${totalKg.toFixed(1)} kg · €${totalPrice.toFixed(0)} · Livraison ${deliveryDate}`,
         icon: "/favicon.png",
@@ -223,7 +223,7 @@ Deno.serve(async (req: Request) => {
           try {
             await webpush.sendNotification(
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-              payload,
+              pushPayload,
             );
             pushSent++;
           } catch (pushErr: any) {
