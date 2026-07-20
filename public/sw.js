@@ -48,3 +48,33 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// ── Push notifications ────────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() ?? {};
+  const title = data.title ?? 'PluralRoaster';
+  const options = {
+    body: data.body ?? '',
+    icon: '/favicon.png',
+    badge: '/favicon.png',
+    tag: data.tag ?? 'push',
+    data: { url: data.url ?? '/' },
+    requireInteraction: false,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url ?? '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
