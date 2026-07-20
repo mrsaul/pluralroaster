@@ -942,7 +942,25 @@ function normalizeClient(client: JsonRecord): AdminClientRow {
 
 async function syncProductsToDatabase(rows: ProductRow[]) {
   const supabase = createServiceSupabaseClient();
-  const { error } = await supabase.from("products").upsert(rows, {
+
+  // Preserve manually set is_active for products that already exist in the DB.
+  // Only new products get Sellsy's is_active value.
+  const { data: existing } = await supabase
+    .from("products")
+    .select("sellsy_id, is_active")
+    .in("sellsy_id", rows.map((r) => r.sellsy_id));
+
+  const existingActiveMap = new Map(
+    (existing ?? []).map((p) => [p.sellsy_id, p.is_active as boolean]),
+  );
+
+  const rowsToUpsert = rows.map((row) =>
+    existingActiveMap.has(row.sellsy_id)
+      ? { ...row, is_active: existingActiveMap.get(row.sellsy_id)! }
+      : row
+  );
+
+  const { error } = await supabase.from("products").upsert(rowsToUpsert, {
     onConflict: "sellsy_id",
   });
 

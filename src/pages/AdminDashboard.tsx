@@ -72,6 +72,7 @@ type AdminProductRow = {
   data_source_mode: string;
   custom_name: string | null;
   custom_price_per_kg: number | null;
+  kind: string | null;
 };
 
 type ProductParseError = {
@@ -772,7 +773,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg")
+        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg, kind")
         .order("name", { ascending: true });
       if (error) throw new Error(error.message);
       setProducts((data as AdminProductRow[]) ?? []);
@@ -1978,7 +1979,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         ) : products.length === 0 ? (
                           <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No products found.</TableCell></TableRow>
                         ) : (
-                          products.map((product) => {
+                          products.filter((p) => p.kind !== "service").map((product) => {
                             const isCustom = product.data_source_mode === "custom";
                             const displayName = isCustom && product.custom_name ? product.custom_name : product.name;
                             const displayPrice = isCustom && product.custom_price_per_kg != null ? product.custom_price_per_kg : product.price_per_kg;
