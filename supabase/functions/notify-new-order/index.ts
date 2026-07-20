@@ -10,6 +10,7 @@
 //   FROM_EMAIL       — e.g. noreply@pluralroaster.com (verified in Resend)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import webpush from "npm:web-push@3.6.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -195,8 +196,52 @@ Deno.serve(async (req: Request) => {
       await sendEmail(resendKey, clientEmail, fromEmail, `Order confirmed — #${ref}`, clientHtml);
     }
 
+    // ── Web Push fan-out ───────────────────────────────────────────────────
+    const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    const vapidSubject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@pluralroaster.com";
+
+    let pushSent = 0;
+    if (vapidPublicKey && vapidPrivateKey) {
+      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+
+      const { data: subscriptions } = await db
+        .from("push_subscriptions")
+        .select("endpoint, p256dh, auth");
+
+      const payload = JSON.stringify({
+        title: `New order — ${clientName}`,
+        body: `${totalKg.toFixed(1)} kg · €${totalPrice.toFixed(0)} · Livraison ${deliveryDate}`,
+        icon: "/favicon.png",
+        badge: "/favicon.png",
+        tag: `order-${orderId.slice(0, 8)}`,
+        url: "/",
+      });
+
+      await Promise.allSettled(
+        (subscriptions ?? []).map(async (sub) => {
+          try {
+            await webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              payload,
+            );
+            pushSent++;
+          } catch (pushErr: any) {
+            console.warn("[notify-new-order] push failed:", sub.endpoint.slice(0, 40), pushErr?.statusCode);
+            // 410 = subscription expired — clean it up
+            if (pushErr?.statusCode === 410) {
+              await db.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+            }
+          }
+        }),
+      );
+      console.log(`[notify-new-order] push sent to ${pushSent} subscription(s)`);
+    } else {
+      console.warn("[notify-new-order] Missing VAPID keys — skipping push");
+    }
+
     return new Response(
-      JSON.stringify({ success: true, orderId, notifiedAdmin: true, notifiedClient: !!clientEmail }),
+      JSON.stringify({ success: true, orderId, notifiedAdmin: true, notifiedClient: !!clientEmail, pushSent }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
