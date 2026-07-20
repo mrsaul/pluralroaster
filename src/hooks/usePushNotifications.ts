@@ -96,7 +96,8 @@ export function usePushNotifications() {
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
         await sub.unsubscribe();
-        await supabase.from("push_subscriptions" as any).delete().eq("endpoint", sub.endpoint);
+        const { error: deleteError } = await supabase.from("push_subscriptions" as any).delete().eq("endpoint", sub.endpoint);
+        if (deleteError) throw deleteError;
       }
       setSubscribed(false);
       toast({ title: "Notifications disabled" });
