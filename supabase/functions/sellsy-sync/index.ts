@@ -30,7 +30,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 // 'field' = pass discount + discount_type on each product row (preferred: shows "−10%" on the invoice)
 // 'price' = bake discount into unit_amount (fallback if Sellsy rejects the discount field)
 // Switch to 'price' if Sellsy returns a 422 mentioning additionalProperties.
-const SELLSY_DISCOUNT_MODE: 'field' | 'price' = 'field';
+const SELLSY_DISCOUNT_MODE: 'field' | 'price' = 'price';
 
 const SELLSY_DEFAULT_API_BASE_URL = "https://api.sellsy.com";
 const SELLSY_TOKEN_URL = "https://login.sellsy.com/oauth2/access-tokens";
