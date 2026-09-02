@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, ChevronRight } from "lucide-react";
+import { useT } from "@/i18n";
 
 interface CartBarProps {
   itemCount: number;
@@ -8,6 +9,8 @@ interface CartBarProps {
 }
 
 export function CartBar({ itemCount, totalPrice, onCheckout }: CartBarProps) {
+  const t = useT();
+
   return (
     <AnimatePresence>
       {itemCount > 0 && (
@@ -33,7 +36,7 @@ export function CartBar({ itemCount, totalPrice, onCheckout }: CartBarProps) {
                   </span>
                 </div>
                 <span className="text-sm font-semibold">
-                  {itemCount === 1 ? "1 item" : `${itemCount} items`}
+                  {t.cart.itemCount(itemCount)}
                 </span>
                 <span className="text-primary-foreground/50">·</span>
                 <span className="text-sm font-semibold tabular-nums">
@@ -41,7 +44,7 @@ export function CartBar({ itemCount, totalPrice, onCheckout }: CartBarProps) {
                 </span>
               </div>
               <div className="flex items-center gap-0.5 text-sm font-semibold">
-                View Order
+                {t.cart.viewOrder}
                 <ChevronRight className="w-4 h-4" />
               </div>
             </motion.button>

@@ -8,6 +8,7 @@ import type { CartItem, Product } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
 import { SwipeableCartRow } from "@/components/SwipeableCartRow";
+import { useT } from "@/i18n";
 
 interface CheckoutPageProps {
   items: CartItem[];
@@ -17,8 +18,6 @@ interface CheckoutPageProps {
   onConfirm: (deliveryDate: string, notes?: string) => Promise<{ orderId: string }>;
   /** Short ref of the original order when this is a re-order (e.g. "A1B2C3D4") */
   reorderedFromRef?: string | null;
-  deliveryFee: number;
-  deliveryServiceName: string;
   clientName?: string;
   discountPercent?: number;
   /** Remove a specific line item from the draft order */
@@ -64,13 +63,12 @@ export default function CheckoutPage({
   onBack,
   onConfirm,
   reorderedFromRef,
-  deliveryFee,
-  deliveryServiceName,
   clientName = '',
   discountPercent = 0,
   onRemoveItem,
   onUpdateItem,
 }: CheckoutPageProps) {
+  const t = useT();
   const [step, setStep] = useState<Step>("review");
   const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -82,15 +80,13 @@ export default function CheckoutPage({
   const [confirmedItems, setConfirmedItems] = useState<CartItem[]>([]);
   const [confirmedTotal, setConfirmedTotal] = useState(0);
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
-  const [confirmedDeliveryFee, setConfirmedDeliveryFee] = useState<number>(0);
-  const [confirmedDeliveryServiceName, setConfirmedDeliveryServiceName] = useState<string>('');
   const [confirmedDiscountAmt, setConfirmedDiscountAmt] = useState(0);
   const [copied, setCopied] = useState(false);
 
   const discountAmount = Math.round(totalPrice * discountPercent / 100 * 100) / 100;
   const discountedProductTotal = totalPrice - discountAmount;
-  const vatAmount = (discountedProductTotal + deliveryFee) * VAT;
-  const totalTTC = discountedProductTotal + deliveryFee + vatAmount;
+  const vatAmount = discountedProductTotal * VAT;
+  const totalTTC = discountedProductTotal + vatAmount;
 
   const handleConfirm = useCallback(async () => {
     if (!deliveryDate || submitting) return;
@@ -107,40 +103,27 @@ export default function CheckoutPage({
       setConfirmedAt(new Date().toISOString());
       setConfirmedItems(snap);
       setConfirmedTotal(snapTotal);
-      setConfirmedDeliveryFee(deliveryFee);
       setConfirmedDiscountAmt(snapDiscountAmount);
       setConfirmedOrderId(orderId);
-      setConfirmedDeliveryServiceName(deliveryServiceName);
-      // Write receipt data for PDF page (localStorage — shared across tabs, unlike sessionStorage)
+      // Write receipt data for PDF page (localStorage — shared across tabs)
       const now = new Date().toISOString();
       const receiptData: OrderReceiptData = {
         orderId: orderId,
         placedAt: now,
         deliveryDate: deliveryDate,
         notes: notes.trim() || null,
-        items: [
-          ...snap.map((item) => ({
-            name: item.product.name,
-            sizeLabel: item.sizeLabel ?? null,
-            sizeKg: item.sizeKg ?? null,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice ?? null,
-            pricePerKg: item.product.pricePerKg,
-            kind: 'coffee' as const,
-          })),
-          ...(deliveryFee > 0 ? [{
-            name: deliveryServiceName,
-            sizeLabel: null,
-            sizeKg: null,
-            quantity: 1,
-            unitPrice: deliveryFee,
-            pricePerKg: deliveryFee,
-            kind: 'service' as const,
-          }] : []),
-        ],
-        totalHT: snapDiscountedProductTotal + deliveryFee,
+        items: snap.map((item) => ({
+          name: item.product.name,
+          sizeLabel: item.sizeLabel ?? null,
+          sizeKg: item.sizeKg ?? null,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice ?? null,
+          pricePerKg: item.product.pricePerKg,
+          kind: 'coffee' as const,
+        })),
+        totalHT: snapDiscountedProductTotal,
         vatRate: 0.20,
-        totalTTC: (snapDiscountedProductTotal + deliveryFee) * (1 + VAT),
+        totalTTC: snapDiscountedProductTotal * (1 + VAT),
         ...(discountPercent > 0 ? {
           discountPercent,
           discountAmount: snapDiscountAmount,
@@ -154,13 +137,13 @@ export default function CheckoutPage({
     } finally {
       setSubmitting(false);
     }
-  }, [deliveryDate, deliveryFee, deliveryServiceName, items, notes, onConfirm, submitting, totalPrice]);
+  }, [deliveryDate, items, notes, onConfirm, submitting, totalPrice, discountPercent]);
 
   // ── Success screen ────────────────────────────────────────────────────────
 
   if (step === "success") {
     const confirmedDiscountedTotal = confirmedTotal - confirmedDiscountAmt;
-    const snapHT  = confirmedDiscountedTotal + confirmedDeliveryFee;
+    const snapHT  = confirmedDiscountedTotal;
     const snapVAT = snapHT * VAT;
     const snapTTC = snapHT + snapVAT;
 
@@ -169,26 +152,15 @@ export default function CheckoutPage({
       placedAt:     confirmedAt ?? new Date().toISOString(),
       deliveryDate: deliveryDate ?? "",
       notes:        notes.trim() || null,
-      items: [
-        ...confirmedItems.map(item => ({
-          name:       item.product.name,
-          sizeLabel:  item.sizeLabel ?? null,
-          sizeKg:     item.sizeKg ?? null,
-          quantity:   item.quantity,
-          unitPrice:  item.unitPrice ?? null,
-          pricePerKg: item.product.pricePerKg,
-          kind:       'coffee' as const,
-        })),
-        ...(confirmedDeliveryFee > 0 ? [{
-          name:       confirmedDeliveryServiceName,
-          sizeLabel:  null,
-          sizeKg:     null,
-          quantity:   1,
-          unitPrice:  confirmedDeliveryFee,
-          pricePerKg: confirmedDeliveryFee,
-          kind:       'service' as const,
-        }] : []),
-      ],
+      items: confirmedItems.map(item => ({
+        name:       item.product.name,
+        sizeLabel:  item.sizeLabel ?? null,
+        sizeKg:     item.sizeKg ?? null,
+        quantity:   item.quantity,
+        unitPrice:  item.unitPrice ?? null,
+        pricePerKg: item.product.pricePerKg,
+        kind:       'coffee' as const,
+      })),
       totalHT:  snapHT,
       vatRate:  0.20,
       totalTTC: snapTTC,
@@ -244,10 +216,10 @@ export default function CheckoutPage({
             </div>
             <div>
               <h1 className="text-xl font-semibold text-foreground">
-                Your order has been confirmed!
+                {t.checkout.successTitle}
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Our team has received your order and will process it shortly.
+                {t.checkout.successSubtitle}
               </p>
             </div>
           </div>
@@ -255,7 +227,7 @@ export default function CheckoutPage({
           {/* Order reference */}
           {confirmedOrderId && (
             <div className="bg-muted/50 border border-border rounded-lg px-4 py-3 text-center">
-              <p className="text-xs text-muted-foreground">Order reference</p>
+              <p className="text-xs text-muted-foreground">{t.checkout.orderRef}</p>
               <p className="font-mono text-sm font-medium text-foreground mt-0.5">
                 #{confirmedOrderId.slice(0, 8).toUpperCase()}
               </p>
@@ -285,29 +257,18 @@ export default function CheckoutPage({
                   </p>
                 </div>
               ))}
-              {confirmedDeliveryFee > 0 && (
-                <div className="flex items-start justify-between px-4 py-2.5 gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">Livraison</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{confirmedDeliveryServiceName}</p>
-                  </div>
-                  <p className="text-sm tabular-nums text-foreground shrink-0">
-                    €{confirmedDeliveryFee.toFixed(2)}
-                  </p>
-                </div>
-              )}
             </div>
             <div className="border-t border-border bg-muted/20 divide-y divide-border/50 text-sm">
               <div className="flex justify-between px-4 py-2 text-muted-foreground">
-                <span>Subtotal HT</span>
+                <span>{t.checkout.subtotalHT}</span>
                 <span className="tabular-nums">€{snapHT.toFixed(2)}</span>
               </div>
               <div className="flex justify-between px-4 py-2 text-muted-foreground">
-                <span>VAT (20%)</span>
+                <span>{t.checkout.vat}</span>
                 <span className="tabular-nums">€{snapVAT.toFixed(2)}</span>
               </div>
               <div className="flex justify-between px-4 py-2 font-semibold text-foreground">
-                <span>Total TTC</span>
+                <span>{t.checkout.totalTTC}</span>
                 <span className="tabular-nums">€{snapTTC.toFixed(2)}</span>
               </div>
             </div>
@@ -317,21 +278,21 @@ export default function CheckoutPage({
           <div className="grid grid-cols-3 gap-2">
             <Button variant="outline" size="sm" onClick={() => void handleShare()}>
               <Share2 className="w-4 h-4 mr-1.5" />
-              Partager
+              {t.checkout.share}
             </Button>
             <Button variant="outline" size="sm" onClick={handlePdf}>
               <FileText className="w-4 h-4 mr-1.5" />
-              PDF
+              {t.checkout.pdf}
             </Button>
             <Button variant="outline" size="sm" onClick={() => void handleCopy()} disabled={copied}>
               {copied
-                ? <><Check className="w-4 h-4 mr-1.5" />Copié !</>
-                : <><Copy className="w-4 h-4 mr-1.5" />Copier</>}
+                ? <><Check className="w-4 h-4 mr-1.5" />{t.checkout.copied}</>
+                : <><Copy className="w-4 h-4 mr-1.5" />{t.checkout.copy}</>}
             </Button>
           </div>
 
           <Button className="w-full" size="lg" onClick={onBack}>
-            Place a new order
+            {t.checkout.placeNewOrder}
           </Button>
         </motion.div>
       </div>
@@ -355,9 +316,9 @@ export default function CheckoutPage({
             </div>
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-foreground">Order failed</h1>
+            <h1 className="text-xl font-semibold text-foreground">{t.checkout.errorTitle}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {orderError ?? "Something went wrong. Your cart has been preserved."}
+              {orderError ?? t.checkout.errorGeneric}
             </p>
           </div>
           <div className="flex flex-col gap-3">
@@ -365,10 +326,10 @@ export default function CheckoutPage({
               size="lg"
               onClick={() => { setStep("review"); setOrderError(null); }}
             >
-              Try again
+              {t.checkout.tryAgain}
             </Button>
             <Button variant="outline" size="lg" onClick={onBack}>
-              Back to cart
+              {t.checkout.backToCart}
             </Button>
           </div>
         </motion.div>
@@ -390,7 +351,7 @@ export default function CheckoutPage({
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <div>
-            <h1 className="text-base font-medium text-foreground">Review Order</h1>
+            <h1 className="text-base font-medium text-foreground">{t.checkout.reviewOrder}</h1>
             <p className="text-xs text-muted-foreground tabular-nums">
               {totalKg.toFixed(2)} kg · €{totalTTC.toFixed(2)} TTC
             </p>
@@ -405,7 +366,7 @@ export default function CheckoutPage({
           <div className="flex items-center gap-2.5 rounded-xl bg-primary/8 border border-primary/20 px-4 py-3 text-sm text-primary">
             <RotateCcw className="w-4 h-4 shrink-0" />
             <span>
-              Basé sur votre commande{" "}
+              {t.checkout.basedOn}{" "}
               <span className="font-mono font-semibold">#{reorderedFromRef.slice(0, 8).toUpperCase()}</span>
             </span>
           </div>
@@ -415,7 +376,7 @@ export default function CheckoutPage({
         <section className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/40">
             <Package className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-sm font-medium text-foreground">Order items</h2>
+            <h2 className="text-sm font-medium text-foreground">{t.checkout.orderItems}</h2>
           </div>
 
           <div className="divide-y divide-border">
@@ -444,7 +405,7 @@ export default function CheckoutPage({
           {/* Totals */}
           <div className="border-t border-border bg-muted/20 divide-y divide-border/50 text-sm">
             <div className="flex justify-between px-4 py-2">
-              <span className="text-muted-foreground">Subtotal HT</span>
+              <span className="text-muted-foreground">{t.checkout.subtotalHT}</span>
               <span className="tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
             </div>
             {discountPercent > 0 && (
@@ -453,20 +414,12 @@ export default function CheckoutPage({
                 <span className="tabular-nums text-emerald-600 dark:text-emerald-400">−€{discountAmount.toFixed(2)}</span>
               </div>
             )}
-            {/* Delivery fee */}
             <div className="flex justify-between px-4 py-2">
-              <div>
-                <span className="text-muted-foreground">Livraison</span>
-                <span className="block text-xs text-muted-foreground/70">{deliveryServiceName}</span>
-              </div>
-              <span className="tabular-nums text-foreground">€{deliveryFee.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between px-4 py-2">
-              <span className="text-muted-foreground">VAT (20%)</span>
+              <span className="text-muted-foreground">{t.checkout.vat}</span>
               <span className="tabular-nums text-foreground">€{vatAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between px-4 py-2 font-semibold">
-              <span className="text-foreground">Total TTC</span>
+              <span className="text-foreground">{t.checkout.totalTTC}</span>
               <span className="tabular-nums text-foreground">€{totalTTC.toFixed(2)}</span>
             </div>
           </div>
@@ -474,20 +427,20 @@ export default function CheckoutPage({
 
         {/* ── Delivery date ── */}
         <section className="bg-card border border-border rounded-lg p-4 space-y-3">
-          <h2 className="text-sm font-medium text-foreground">Delivery date</h2>
+          <h2 className="text-sm font-medium text-foreground">{t.checkout.deliveryDate}</h2>
           <DeliveryDatePicker selected={deliveryDate} onSelect={setDeliveryDate} />
         </section>
 
         {/* ── Notes ── */}
         <section className="bg-card border border-border rounded-lg p-4 space-y-3">
           <h2 className="text-sm font-medium text-foreground">
-            Notes{" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
+            {t.checkout.notes}{" "}
+            <span className="text-muted-foreground font-normal">{t.checkout.notesOptional}</span>
           </h2>
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Special instructions, delivery notes, or comments…"
+            placeholder={t.checkout.notesPlaceholder}
             className="resize-none text-sm"
             rows={3}
           />
@@ -501,7 +454,7 @@ export default function CheckoutPage({
             disabled={!deliveryDate || submitting}
             onClick={() => void handleConfirm()}
           >
-            {submitting ? "Sending your order…" : "Confirm Order"}
+            {submitting ? t.checkout.sendingOrder : t.checkout.confirmOrder}
           </Button>
           <Button
             variant="outline"
@@ -510,7 +463,7 @@ export default function CheckoutPage({
             disabled={submitting}
             onClick={onBack}
           >
-            Edit Order
+            {t.checkout.editOrder}
           </Button>
         </div>
       </main>

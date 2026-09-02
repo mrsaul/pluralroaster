@@ -4,8 +4,10 @@ import { Loader2, KeyRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { useT } from "@/i18n";
 
 export default function ResetPasswordPage() {
+  const t = useT();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,17 +54,17 @@ export default function ResetPasswordPage() {
     setError(null);
 
     if (!ready) {
-      setError("This password reset link is invalid or has expired. Please request a new one.");
+      setError(t.reset.errInvalidLink);
       return;
     }
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError(t.reset.errTooShort);
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError(t.reset.errMismatch);
       return;
     }
 
@@ -72,7 +74,7 @@ export default function ResetPasswordPage() {
       if (updateError) throw updateError;
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to update password.");
+      setError(err instanceof Error ? err.message : t.reset.errUnableToUpdate);
     } finally {
       setLoading(false);
     }
@@ -93,10 +95,10 @@ export default function ResetPasswordPage() {
 
         <div className="mb-8">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Create new password
+            {t.reset.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose a new password for your account.
+            {t.reset.subtitle}
           </p>
         </div>
 
@@ -104,32 +106,32 @@ export default function ResetPasswordPage() {
         {waiting ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Verifying your reset link…
+            {t.reset.verifying}
           </div>
         ) : !ready ? (
           /* Token not found / expired */
           <div className="space-y-4">
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              This password reset link is invalid or has expired. Links are valid for 1 hour.
+              {t.reset.errInvalidLink}
             </div>
             <a
               href="/"
               className="block w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              ← Back to sign in
+              {t.reset.linkBack}
             </a>
           </div>
         ) : done ? (
           /* Success */
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground">
-              Password updated successfully.
+              {t.reset.msgUpdated}
             </div>
             <a
               href="/"
               className="block w-full h-11 flex items-center justify-center bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
             >
-              Sign in
+              {t.reset.btnSignIn}
             </a>
           </div>
         ) : (
@@ -137,7 +139,7 @@ export default function ResetPasswordPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm text-foreground">
-                New password
+                {t.reset.newPassword}
               </Label>
               <Input
                 id="password"
@@ -154,7 +156,7 @@ export default function ResetPasswordPage() {
 
             <div className="space-y-2">
               <Label htmlFor="confirm-password" className="text-sm text-foreground">
-                Confirm password
+                {t.reset.confirmPassword}
               </Label>
               <Input
                 id="confirm-password"
@@ -169,7 +171,7 @@ export default function ResetPasswordPage() {
             </div>
 
             {passwordMismatch && (
-              <p className="text-xs text-destructive">Passwords do not match.</p>
+              <p className="text-xs text-destructive">{t.reset.errMismatch}</p>
             )}
 
             {error && (
@@ -185,14 +187,14 @@ export default function ResetPasswordPage() {
               className="w-full h-11 flex items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg transition-opacity disabled:opacity-50"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Updating…" : "Update password"}
+              {loading ? t.reset.btnUpdating : t.reset.btnUpdate}
             </motion.button>
 
             <a
               href="/"
               className="block w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              ← Back to sign in
+              {t.reset.linkBack}
             </a>
           </form>
         )}

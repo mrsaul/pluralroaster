@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
+import { useT } from "@/i18n";
 
 const LoginPage = lazy(() => import("./LoginPage"));
 const CatalogPage = lazy(() => import("./CatalogPage"));
@@ -135,14 +136,8 @@ const Index = () => {
   }, []);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
-  const [deliveryService, setDeliveryService] = useState<{
-    id: string;
-    name: string;
-    price_per_kg: number;
-    sellsy_id: string;
-  } | null>(null);
-  const [deliveryFee, setDeliveryFee] = useState<number>(20); // default fallback
   const [clientTier, setClientTier] = useState<{ discountPercent: number; name: string } | null>(null);
+  const t = useT();
   const cart = useCart();
   const { clearCart } = cart;
   const { toast } = useToast();
@@ -276,40 +271,6 @@ const Index = () => {
         ? { discountPercent: Number(tier.product_discount_percent), name: String(tier.name) }
         : null
     );
-
-    // Fetch LOBERZ delivery service
-    const { data: svcRow } = await supabase
-      .from('products')
-      .select('id, name, price_per_kg, sellsy_id')
-      .eq('kind', 'service')
-      .order('created_at')
-      .limit(1)
-      .maybeSingle();
-
-    if (svcRow) {
-      setDeliveryService(svcRow as { id: string; name: string; price_per_kg: number; sellsy_id: string });
-
-      // Check per-client override on the current user's profile
-      if (currentUser) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('delivery_fee_override_cents')
-          .eq('id', currentUser.id)
-          .maybeSingle();
-
-        const override = (profile as any)?.delivery_fee_override_cents;
-        if (override != null) {
-          setDeliveryFee(override / 100);
-        } else {
-          setDeliveryFee(Number(svcRow.price_per_kg));
-        }
-      } else {
-        setDeliveryFee(Number(svcRow.price_per_kg));
-      }
-    } else {
-      // No service product found in DB — preserve the default fee of 20
-      setDeliveryFee(20);
-    }
   }, [loadOrders, setView]);
 
   // ── Auth lifecycle ──────────────────────────────────────────────────────────
@@ -321,7 +282,7 @@ const Index = () => {
         await syncUserRole();
         sessionInitialized.current = true;
       } catch (err) {
-        setAuthError(err instanceof Error ? err.message : "Authentication error. Please refresh and try again.");
+        setAuthError(err instanceof Error ? err.message : t.app.authError);
       } finally {
         setAuthLoading(false);
       }
@@ -443,31 +404,15 @@ const Index = () => {
       size_kg: item.sizeKg ?? null,
     }));
 
-    // Auto-attach delivery service line
-    const allItems = [...coffeeItems];
-    if (deliveryService) {
-      allItems.push({
-        product_id: deliveryService.id,
-        product_name: deliveryService.name,
-        product_sku: '0001',
-        price_per_kg: deliveryFee,
-        quantity: 1,
-        size_label: null,
-        size_kg: null,
-        kind: 'service' as const,
-      });
-    }
-
-    const deliveryTotal = deliveryService ? deliveryFee : 0;
     const { data: rpcResult, error: rpcError } = await (supabase as any).rpc("create_order_with_items", {
       p_user_id:            user.id,
       p_delivery_date:      deliveryDate,
       p_total_kg:           cart.totalKg,
-      p_total_price:        discountedCoffeeTotal + deliveryTotal,
+      p_total_price:        discountedCoffeeTotal,
       p_status:             "received",
       p_confirmed_at:       new Date().toISOString(),
       p_notes:              notes ?? null,
-      p_items:              allItems,
+      p_items:              coffeeItems,
       p_reordered_from:     reorderedFromId ?? null,
       ...(discountPct > 0 ? {
         p_discount_percent:  discountPct,
@@ -476,8 +421,8 @@ const Index = () => {
     });
 
     if (rpcError || !rpcResult?.order_id) {
-      const msg = rpcError?.message ?? "Failed to create order";
-      toast({ title: "Order failed", description: msg, variant: "destructive" });
+      const msg = rpcError?.message ?? t.app.failedToCreate;
+      toast({ title: t.app.orderFailed, description: msg, variant: "destructive" });
       throw rpcError ?? new Error(msg);
     }
 
@@ -488,7 +433,7 @@ const Index = () => {
     cart.clearCart();
 
     return { orderId: rpcResult.order_id as string };
-  }, [cart, clientTier, deliveryFee, deliveryService, loadOrders, reorderedFromId, toast]);
+  }, [cart, clientTier, loadOrders, reorderedFromId, setDraftDeliveryDate, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
     if (!draftDeliveryDate || cart.items.length === 0) {
@@ -525,7 +470,7 @@ const Index = () => {
           onClick={() => window.location.reload()}
           className="text-sm underline text-muted-foreground hover:text-foreground"
         >
-          Reload page
+          {t.app.reloadPage}
         </button>
       </div>
     );
@@ -533,7 +478,7 @@ const Index = () => {
 
   const fallback = (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 text-sm text-muted-foreground">
-      Loading…
+      {t.app.loading}
     </div>
   );
 
@@ -596,8 +541,6 @@ const Index = () => {
             onBack={() => setView("home")}
             onConfirm={handleConfirmOrder}
             reorderedFromRef={reorderedFromId}
-            deliveryFee={deliveryFee}
-            deliveryServiceName={deliveryService?.name ?? 'Livraison à vélo par LOBERZ'}
             clientName={String((onboardingData as any)?.company_name ?? '')}
             discountPercent={clientTier?.discountPercent ?? 0}
             onRemoveItem={(product, sizeLabel) => {

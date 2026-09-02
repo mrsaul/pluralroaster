@@ -3,10 +3,12 @@ import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { useT } from "@/i18n";
 
 type AuthMode = "sign-in" | "sign-up" | "forgot-password";
 
 export default function LoginPage() {
+  const t = useT();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -33,7 +35,7 @@ export default function LoginPage() {
           throw resetError;
         }
 
-        setMessage("Password reset email sent. Check your inbox.");
+        setMessage(t.login.msgResetSent);
         return;
       }
 
@@ -51,7 +53,7 @@ export default function LoginPage() {
           throw signUpError;
         }
 
-        setMessage("Account created. Check your email to confirm your address, then sign in.");
+        setMessage(t.login.msgAccountCreated);
         setMode("sign-in");
         return;
       }
@@ -68,10 +70,8 @@ export default function LoginPage() {
       // onAuthStateChange in Index.tsx fires SIGNED_IN and calls syncUserRole,
       // which already invokes ensure_current_user_role. No need to call it here.
     } catch (authError) {
-      const raw = authError instanceof Error ? authError.message : "Authentication failed.";
-      const friendly = raw.toLowerCase().includes("rate limit")
-        ? "Too many attempts. Please wait a few minutes before trying again."
-        : raw;
+      const raw = authError instanceof Error ? authError.message : t.login.errAuthFailed;
+      const friendly = raw.toLowerCase().includes("rate limit") ? t.login.errRateLimit : raw;
       setError(friendly);
     } finally {
       setLoading(false);
@@ -90,17 +90,17 @@ export default function LoginPage() {
           <h1 className="text-xl font-medium tracking-tight text-foreground">PluralRoaster</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "sign-in"
-              ? "Sign in to manage orders."
+              ? t.login.subtitleSignIn
               : mode === "sign-up"
-                ? "Create your account to access the catalog."
-                : "Enter your email to receive a reset link."}
+                ? t.login.subtitleSignUp
+                : t.login.subtitleForgot}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "sign-up" && (
             <div className="space-y-2">
-              <Label htmlFor="fullName" className="text-sm text-foreground">Full Name</Label>
+              <Label htmlFor="fullName" className="text-sm text-foreground">{t.login.fullName}</Label>
               <Input
                 id="fullName"
                 type="text"
@@ -115,7 +115,7 @@ export default function LoginPage() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm text-foreground">Email</Label>
+            <Label htmlFor="email" className="text-sm text-foreground">{t.login.email}</Label>
             <Input
               id="email"
               type="email"
@@ -129,7 +129,7 @@ export default function LoginPage() {
 
           {isPasswordRequired ? (
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm text-foreground">Password</Label>
+              <Label htmlFor="password" className="text-sm text-foreground">{t.login.password}</Label>
               <Input
                 id="password"
                 type="password"
@@ -163,15 +163,15 @@ export default function LoginPage() {
           >
             {loading
               ? mode === "sign-in"
-                ? "Signing in…"
+                ? t.login.btnSigningIn
                 : mode === "sign-up"
-                  ? "Creating account…"
-                  : "Sending reset link…"
+                  ? t.login.btnCreating
+                  : t.login.btnSending
               : mode === "sign-in"
-                ? "Sign In"
+                ? t.login.btnSignIn
                 : mode === "sign-up"
-                  ? "Create Account"
-                  : "Send Reset Link"}
+                  ? t.login.btnSignUp
+                  : t.login.btnForgot}
           </motion.button>
 
           {mode === "sign-in" ? (
@@ -185,7 +185,7 @@ export default function LoginPage() {
                 }}
                 className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                Forgot password?
+                {t.login.linkForgot}
               </button>
               <button
                 type="button"
@@ -196,7 +196,7 @@ export default function LoginPage() {
                 }}
                 className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                Need an account? Create one
+                {t.login.linkCreate}
               </button>
             </>
           ) : (
@@ -209,7 +209,7 @@ export default function LoginPage() {
               }}
               className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Back to sign in
+              {t.login.linkBack}
             </button>
           )}
 
