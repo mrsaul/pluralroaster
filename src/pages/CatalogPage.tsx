@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useT } from "@/i18n";
 import { CartBar } from "@/components/CartBar";
 import { ProductDetailSheet } from "@/components/ProductDetailSheet";
 import { resolveVariantLabel } from "@/lib/orderUtils";
@@ -128,6 +129,7 @@ function ProductCard({
   const hasImage = !!product.imageUrl;
   const roastGrad = ROAST_GRADIENT[product.roastLevel] ?? ROAST_GRADIENT.medium;
   const roastText = ROAST_TEXT[product.roastLevel] ?? ROAST_TEXT.medium;
+  const t = useT();
   const minPrice =
     product.variants && product.variants.length > 0
       ? Math.min(...product.variants.map((v) => v.price))
@@ -186,7 +188,7 @@ function ProductCard({
         )}
         <p className="text-[12px] font-semibold text-foreground pt-0.5 tabular-nums">
           {minPrice != null
-            ? `From €${minPrice.toFixed(2)}`
+            ? t.catalog.fromPrice(`€${minPrice.toFixed(2)}`)
             : `€${product.pricePerKg.toFixed(2)}/kg`}
         </p>
       </div>
@@ -222,6 +224,8 @@ export default function CatalogPage({
   onGoShop,
   onGoAccount,
 }: CatalogPageProps) {
+  const t = useT();
+
   // Products
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -367,12 +371,11 @@ export default function CatalogPage({
           <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
             <div>
               <h1 className="text-base font-semibold tracking-tight text-foreground">
-                {mode === "home" ? "Home" : "Shop"}
+                {mode === "home" ? t.catalog.home : t.catalog.shop}
               </h1>
               {mode === "shop" && !loadingProducts && (
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {filteredProducts.length}{" "}
-                  {filteredProducts.length === 1 ? "coffee" : "coffees"} available
+                  {t.catalog.coffeeCount(filteredProducts.length)}
                 </p>
               )}
             </div>
@@ -383,7 +386,7 @@ export default function CatalogPage({
                   onClick={() => void loadProducts()}
                   disabled={loadingProducts}
                   className="p-2 rounded-full transition-colors hover:bg-muted disabled:opacity-40"
-                  aria-label="Refresh catalog"
+                  aria-label={t.catalog.refreshCatalog}
                 >
                   <RefreshCw
                     className={cn("w-4 h-4 text-muted-foreground", loadingProducts && "animate-spin")}
@@ -410,7 +413,7 @@ export default function CatalogPage({
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <input
                   type="search"
-                  placeholder="Search by name, origin or tasting notes…"
+                  placeholder={t.catalog.searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-xl border border-border bg-muted/50 pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
@@ -420,7 +423,7 @@ export default function CatalogPage({
                     type="button"
                     onClick={() => setSearchQuery("")}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear search"
+                    aria-label={t.catalog.clearSearch}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -440,7 +443,7 @@ export default function CatalogPage({
                       : "bg-muted text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  All
+                  {t.catalog.filterAll}
                 </button>
                 {ROAST_OPTIONS.map((roast) => (
                   <button
@@ -474,17 +477,17 @@ export default function CatalogPage({
             {lastOrder ? (
               <section>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  Last order
+                  {t.catalog.lastOrder}
                 </p>
                 <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">
-                        {lastOrder.items.length} {lastOrder.items.length === 1 ? "product" : "products"} · €{lastOrder.totalPrice.toFixed(2)}
+                        {t.catalog.productCount(lastOrder.items.length)} · €{lastOrder.totalPrice.toFixed(2)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {format(new Date(lastOrder.createdAt), "d MMM yyyy")}
-                        {" · "}Delivery {format(new Date(lastOrder.deliveryDate), "d MMM")}
+                        {" · "}{t.catalog.deliveryLabel(format(new Date(lastOrder.deliveryDate), "d MMM"))}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
                         {lastOrder.items.map((i) => i.product.name).join(", ")}
@@ -498,14 +501,14 @@ export default function CatalogPage({
                       onClick={onReorderLastOrder}
                       className="flex-1 rounded-xl bg-primary text-primary-foreground text-xs font-semibold py-2.5 hover:bg-primary/90 transition-colors"
                     >
-                      Repeat order
+                      {t.catalog.repeatOrder}
                     </button>
                     <button
                       type="button"
                       onClick={onGoAccount}
                       className="flex items-center gap-1 rounded-xl border border-border bg-muted/40 text-xs font-medium text-foreground px-3 py-2.5 hover:bg-muted transition-colors"
                     >
-                      History
+                      {t.catalog.history}
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -515,13 +518,13 @@ export default function CatalogPage({
               <section>
                 <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
                   <Package className="w-7 h-7 mx-auto text-muted-foreground/40 mb-2" />
-                  <p className="text-sm text-muted-foreground">No orders yet.</p>
+                  <p className="text-sm text-muted-foreground">{t.catalog.noOrdersYet}</p>
                   <button
                     type="button"
                     onClick={onGoShop}
                     className="mt-3 rounded-full bg-primary text-primary-foreground text-xs font-semibold px-4 py-2 hover:bg-primary/90 transition-colors"
                   >
-                    Browse catalog
+                    {t.catalog.browseCatalog}
                   </button>
                 </div>
               </section>
@@ -532,14 +535,14 @@ export default function CatalogPage({
               <section>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Quick reorder
+                    {t.catalog.quickReorder}
                   </p>
                   <button
                     type="button"
                     onClick={onReorderLastOrder}
                     className="flex items-center gap-0.5 text-xs font-semibold text-primary"
                   >
-                    Reorder all
+                    {t.catalog.reorderAll}
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -563,9 +566,9 @@ export default function CatalogPage({
                           {product.name}
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-1">
-                          Last: ×{quantity}{displayLabel ? ` ${displayLabel}` : ""}
+                          {t.catalog.lastQty(quantity)}{displayLabel ? ` ${displayLabel}` : ""}
                         </p>
-                        <p className="mt-2 text-[11px] font-semibold text-primary">+ Add</p>
+                        <p className="mt-2 text-[11px] font-semibold text-primary">{t.catalog.add}</p>
                       </button>
                     );
                   })}
@@ -576,14 +579,14 @@ export default function CatalogPage({
             {/* Featured coffees heading */}
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Our coffees
+                {t.catalog.ourCoffees}
               </p>
               <button
                 type="button"
                 onClick={onGoShop}
                 className="flex items-center gap-0.5 text-xs font-semibold text-primary"
               >
-                Browse all
+                {t.catalog.browseAll}
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -599,14 +602,14 @@ export default function CatalogPage({
           </div>
         ) : productsError ? (
           <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-6 text-center">
-            <p className="text-sm font-medium text-foreground">Couldn't load the catalog.</p>
-            <p className="mt-1 text-xs text-muted-foreground">Showing default products.</p>
+            <p className="text-sm font-medium text-foreground">{t.catalog.couldntLoad}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t.catalog.showingDefault}</p>
             <button
               type="button"
               onClick={() => void loadProducts()}
               className="mt-3 rounded-full border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
             >
-              Retry
+              {t.catalog.retry}
             </button>
           </div>
         ) : filteredProducts.length === 0 ? (
@@ -615,10 +618,10 @@ export default function CatalogPage({
             {hasActiveFilters ? (
               <>
                 <p className="text-sm font-medium text-foreground">
-                  No coffees match your search
+                  {t.catalog.noMatch}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Try a different name or filter
+                  {t.catalog.tryDifferent}
                 </p>
                 <button
                   type="button"
@@ -628,21 +631,21 @@ export default function CatalogPage({
                   }}
                   className="mt-4 rounded-full border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
                 >
-                  Clear filters
+                  {t.catalog.clearFilters}
                 </button>
               </>
             ) : (
               <>
-                <p className="text-sm font-medium text-foreground">No products available</p>
+                <p className="text-sm font-medium text-foreground">{t.catalog.noProducts}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Ask an admin to sync the catalog.
+                  {t.catalog.askAdmin}
                 </p>
                 <button
                   type="button"
                   onClick={() => void loadProducts()}
                   className="mt-4 rounded-full border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
                 >
-                  Refresh
+                  {t.catalog.refresh}
                 </button>
               </>
             )}
@@ -666,13 +669,13 @@ export default function CatalogPage({
         <div className="max-w-lg mx-auto flex items-center justify-between rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-lg supports-[backdrop-filter]:bg-card/85 pointer-events-auto">
           {(
             [
-              { label: "Home",    icon: House,        onClick: onGoHome,    active: mode === "home" },
-              { label: "Shop",    icon: ShoppingBag,  onClick: onGoShop,    active: mode === "shop" },
-              { label: "Account", icon: UserCircle2,  onClick: onGoAccount, active: false },
-            ] as const
-          ).map(({ label, icon: Icon, onClick, active }) => (
+              { labelKey: "home" as const,    icon: House,        onClick: onGoHome,    active: mode === "home" },
+              { labelKey: "shop" as const,    icon: ShoppingBag,  onClick: onGoShop,    active: mode === "shop" },
+              { labelKey: "account" as const, icon: UserCircle2,  onClick: onGoAccount, active: false },
+            ]
+          ).map(({ labelKey, icon: Icon, onClick, active }) => (
             <button
-              key={label}
+              key={labelKey}
               onClick={onClick}
               className={cn(
                 "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-medium transition-all duration-200",
@@ -682,7 +685,7 @@ export default function CatalogPage({
               )}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {t.catalog[labelKey]}
             </button>
           ))}
         </div>

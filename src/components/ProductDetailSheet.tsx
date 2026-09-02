@@ -4,6 +4,7 @@ import { X, Minus, Plus, Coffee, MapPin, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Product, ProductVariant } from "@/lib/store";
 import { resolveVariantLabel } from "@/lib/orderUtils";
+import { useT } from "@/i18n";
 
 // ── Color helpers (shared with catalog) ──────────────────────────────────────
 
@@ -45,6 +46,7 @@ export function ProductDetailSheet({
   getQuantity,
   updateQuantity,
 }: ProductDetailSheetProps) {
+  const t = useT();
   const hasVariants = !!(product?.variants && product.variants.length > 0);
 
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
@@ -126,7 +128,7 @@ export function ProductDetailSheet({
               <DrawerClose asChild>
                 <button
                   className="w-8 h-8 rounded-full bg-background/85 backdrop-blur-md flex items-center justify-center shadow-md"
-                  aria-label="Close"
+                  aria-label={t.product.close}
                 >
                   <X className="w-4 h-4 text-foreground" />
                 </button>
@@ -176,7 +178,7 @@ export function ProductDetailSheet({
                 )}
                 <>
                   <span aria-hidden>·</span>
-                  <span className="capitalize">{product.roastLevel} roast</span>
+                  <span className="capitalize">{product.roastLevel} {t.product.roast}</span>
                 </>
               </div>
             </div>
@@ -185,7 +187,7 @@ export function ProductDetailSheet({
             {product.tastingNotes && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                  Tasting notes
+                  {t.product.tastingNotes}
                 </p>
                 <p className="text-sm text-foreground italic leading-relaxed">
                   "{product.tastingNotes}"
@@ -197,7 +199,7 @@ export function ProductDetailSheet({
             {hasVariants && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
-                  Choose your size
+                  {t.product.chooseSize}
                 </p>
                 <div className="flex gap-2">
                   {product.variants!.map((variant) => {
@@ -236,7 +238,7 @@ export function ProductDetailSheet({
                 <span className="text-lg font-bold text-foreground tabular-nums">
                   €{product.pricePerKg.toFixed(2)}
                 </span>
-                <span>/kg · bulk bags</span>
+                <span>{t.product.perKgBulk}</span>
               </div>
             )}
 
@@ -247,7 +249,7 @@ export function ProductDetailSheet({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  Quantity
+                  {t.product.quantity}
                 </p>
                 <div className="flex items-center gap-3">
                   {/* Minus — 44×44px touch target */}
@@ -261,7 +263,7 @@ export function ProductDetailSheet({
                         ? "border-border text-muted-foreground/30 cursor-not-allowed"
                         : "border-border text-foreground hover:border-primary/50 active:bg-muted",
                     )}
-                    aria-label="Decrease quantity"
+                    aria-label={t.product.decreaseQty}
                   >
                     <Minus className="w-4 h-4" />
                   </button>
@@ -275,7 +277,7 @@ export function ProductDetailSheet({
                     type="button"
                     onClick={() => setQuantity((q) => q + 1)}
                     className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 active:opacity-75 transition-opacity"
-                    aria-label="Increase quantity"
+                    aria-label={t.product.increaseQty}
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -283,7 +285,7 @@ export function ProductDetailSheet({
               </div>
 
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">Line total</p>
+                <p className="text-xs text-muted-foreground">{t.product.lineTotal}</p>
                 <p className="text-2xl font-bold tabular-nums text-foreground">
                   €{lineTotal.toFixed(2)}
                 </p>
@@ -305,12 +307,12 @@ export function ProductDetailSheet({
               {added ? (
                 <>
                   <Check className="w-5 h-5" />
-                  Added ✓
+                  {t.product.added}
                 </>
               ) : isUpdate ? (
-                "Update order"
+                t.product.updateOrder
               ) : (
-                "Add to order"
+                t.product.addToOrder
               )}
             </button>
           </div>

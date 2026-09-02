@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OrderHistoryTab } from "@/components/OrderHistoryTab";
 import { OrderDetailView } from "@/components/OrderDetailView";
+import { useT, useLang } from "@/i18n";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,6 +71,8 @@ export default function AccountPage({
   onLogout,
   onReorder,
 }: AccountPageProps) {
+  const t = useT();
+  const { lang, setLang } = useLang();
   const [activeTab, setActiveTab] = useState<Tab>("orders");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
@@ -177,9 +180,9 @@ export default function AccountPage({
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: "orders",    label: "Commandes", icon: ClipboardList },
-    { id: "profile",   label: "Profil",    icon: UserCircle2 },
-    { id: "addresses", label: "Adresses",  icon: MapPin },
+    { id: "orders",    label: t.account.tabOrders,    icon: ClipboardList },
+    { id: "profile",   label: t.account.tabProfile,   icon: UserCircle2 },
+    { id: "addresses", label: t.account.tabAddresses, icon: MapPin },
   ];
 
   return (
@@ -199,7 +202,7 @@ export default function AccountPage({
               ) : (
                 <>
                   <h1 className="text-base font-semibold text-foreground">
-                    {profile?.name ?? "Mon compte"}
+                    {profile?.name ?? t.account.myAccount}
                   </h1>
                   <p className="text-xs text-muted-foreground">{userEmail ?? ""}</p>
                 </>
@@ -259,7 +262,7 @@ export default function AccountPage({
           >
             <section className="rounded-2xl border border-border bg-card px-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1">
-                Entreprise
+                {t.account.sectionCompany}
               </p>
               {loadingProfile ? (
                 <div className="py-4 space-y-3 animate-pulse">
@@ -269,17 +272,17 @@ export default function AccountPage({
                 </div>
               ) : (
                 <>
-                  <ProfileField label="Nom commercial" value={profile?.name} />
-                  <ProfileField label="Raison sociale" value={profile?.legalName} />
-                  <ProfileField label="SIRET" value={profile?.siret} />
-                  <ProfileField label="N° TVA" value={profile?.vatNumber} />
+                  <ProfileField label={t.account.labelCommercialName} value={profile?.name} />
+                  <ProfileField label={t.account.labelLegalName} value={profile?.legalName} />
+                  <ProfileField label={t.account.labelSiret} value={profile?.siret} />
+                  <ProfileField label={t.account.labelVat} value={profile?.vatNumber} />
                 </>
               )}
             </section>
 
             <section className="rounded-2xl border border-border bg-card px-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1">
-                Contact
+                {t.account.sectionContact}
               </p>
               {loadingProfile ? (
                 <div className="py-4 space-y-3 animate-pulse">
@@ -289,14 +292,47 @@ export default function AccountPage({
                 </div>
               ) : (
                 <>
-                  <ProfileField label="Email" value={profile?.email ?? userEmail} />
-                  <ProfileField label="Téléphone" value={profile?.phone} />
+                  <ProfileField label={t.account.labelEmail} value={profile?.email ?? userEmail} />
+                  <ProfileField label={t.account.labelPhone} value={profile?.phone} />
                 </>
               )}
             </section>
 
+            {/* ── Language switcher ── */}
+            <section className="rounded-2xl border border-border bg-card px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pb-2">
+                {t.account.sectionLanguage}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLang("fr")}
+                  className={cn(
+                    "flex-1 rounded-xl border-2 py-2.5 text-sm font-medium transition-all duration-150",
+                    lang === "fr"
+                      ? "border-primary bg-primary/8 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                  )}
+                >
+                  🇫🇷 Français
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLang("en")}
+                  className={cn(
+                    "flex-1 rounded-xl border-2 py-2.5 text-sm font-medium transition-all duration-150",
+                    lang === "en"
+                      ? "border-primary bg-primary/8 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                  )}
+                >
+                  🇬🇧 English
+                </button>
+              </div>
+            </section>
+
             <p className="text-xs text-muted-foreground text-center pb-2">
-              Pour modifier ces informations, contactez votre chargé de compte.
+              {t.account.editHint}
             </p>
           </motion.div>
         )}
@@ -326,9 +362,9 @@ export default function AccountPage({
                   <MapPin className="h-7 w-7 text-muted-foreground" />
                 </div>
                 <div className="space-y-1">
-                  <p className="font-semibold text-foreground">Aucune adresse</p>
+                  <p className="font-semibold text-foreground">{t.account.noAddress}</p>
                   <p className="text-sm text-muted-foreground">
-                    Vos adresses de livraison apparaîtront ici.
+                    {t.account.noAddressHint}
                   </p>
                 </div>
               </div>
@@ -358,7 +394,7 @@ export default function AccountPage({
             )}
 
             <p className="text-xs text-muted-foreground text-center pb-2">
-              Pour modifier vos adresses, contactez votre chargé de compte.
+              {t.account.addressesEditHint}
             </p>
           </motion.div>
         )}
@@ -371,7 +407,7 @@ export default function AccountPage({
             onClick={onLogout}
           >
             <LogOut className="w-4 h-4" />
-            Se déconnecter
+            {t.account.signOut}
           </Button>
         </div>
       </main>
@@ -381,13 +417,13 @@ export default function AccountPage({
         <div className="max-w-lg mx-auto flex items-center justify-between rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-lg supports-[backdrop-filter]:bg-card/85 pointer-events-auto">
           {(
             [
-              { label: "Accueil", icon: House,       onClick: onGoHome,    active: false },
-              { label: "Boutique", icon: ShoppingBag, onClick: onGoShop,    active: false },
-              { label: "Compte",  icon: UserCircle2, onClick: onGoAccount, active: true  },
-            ] as const
-          ).map(({ label, icon: Icon, onClick, active }) => (
+              { labelKey: "home" as const,    icon: House,       onClick: onGoHome,    active: false },
+              { labelKey: "shop" as const,    icon: ShoppingBag, onClick: onGoShop,    active: false },
+              { labelKey: "account" as const, icon: UserCircle2, onClick: onGoAccount, active: true  },
+            ]
+          ).map(({ labelKey, icon: Icon, onClick, active }) => (
             <button
-              key={label}
+              key={labelKey}
               onClick={onClick}
               className={cn(
                 "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-medium transition-all duration-200",
@@ -397,7 +433,7 @@ export default function AccountPage({
               )}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {t.catalog[labelKey]}
             </button>
           ))}
         </div>

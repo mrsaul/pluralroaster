@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { useT } from "@/i18n";
 
 const hasRecoveryToken = (hash: string) => {
   const params = new URLSearchParams(hash.replace(/^#/, ""));
@@ -10,6 +11,7 @@ const hasRecoveryToken = (hash: string) => {
 };
 
 export default function ResetPasswordPage() {
+  const t = useT();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,17 +33,17 @@ export default function ResetPasswordPage() {
     setMessage(null);
 
     if (!ready) {
-      setError("This password reset link is invalid or expired.");
+      setError(t.reset.errInvalidLink);
       return;
     }
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError(t.reset.errTooShort);
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError(t.reset.errMismatch);
       return;
     }
 
@@ -54,11 +56,11 @@ export default function ResetPasswordPage() {
         throw updateError;
       }
 
-      setMessage("Password updated. You can now return to the app and sign in.");
+      setMessage(t.reset.msgUpdated);
       setPassword("");
       setConfirmPassword("");
     } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : "Unable to update password.");
+      setError(resetError instanceof Error ? resetError.message : t.reset.errUnableToUpdate);
     } finally {
       setLoading(false);
     }
@@ -73,15 +75,15 @@ export default function ResetPasswordPage() {
         className="w-full max-w-sm"
       >
         <div className="mb-8">
-          <h1 className="text-xl font-medium tracking-tight text-foreground">Reset password</h1>
+          <h1 className="text-xl font-medium tracking-tight text-foreground">{t.reset.title}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Choose a new password for your PluralRoaster account.
+            {t.reset.subtitle}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm text-foreground">New password</Label>
+            <Label htmlFor="password" className="text-sm text-foreground">{t.reset.newPassword}</Label>
             <Input
               id="password"
               type="password"
@@ -95,7 +97,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirm-password" className="text-sm text-foreground">Confirm password</Label>
+            <Label htmlFor="confirm-password" className="text-sm text-foreground">{t.reset.confirmPassword}</Label>
             <Input
               id="confirm-password"
               type="password"
@@ -110,7 +112,7 @@ export default function ResetPasswordPage() {
 
           {passwordMismatch ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              Passwords do not match.
+              {t.reset.errMismatch}
             </div>
           ) : null}
 
@@ -132,11 +134,11 @@ export default function ResetPasswordPage() {
             disabled={loading || passwordMismatch}
             className="w-full h-11 bg-primary text-primary-foreground text-sm font-medium rounded-lg transition-opacity duration-150 disabled:opacity-50"
           >
-            {loading ? "Updating password…" : "Update Password"}
+            {loading ? t.reset.btnUpdating : t.reset.btnUpdate}
           </motion.button>
 
           <a href="/" className="block w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Back to sign in
+            {t.reset.linkBack}
           </a>
         </form>
       </motion.div>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, useCallback } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
+import { useT } from "@/i18n";
 
 const LoginPage = lazy(() => import("./LoginPage"));
 const CatalogPage = lazy(() => import("./CatalogPage"));
@@ -113,6 +114,7 @@ const Index = () => {
   const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
+  const t = useT();
   const cart = useCart();
   const { clearCart } = cart;
   const { toast } = useToast();
@@ -244,7 +246,7 @@ const Index = () => {
       try {
         await syncUserRole();
       } catch (err) {
-        setAuthError(err instanceof Error ? err.message : "Authentication error. Please refresh and try again.");
+        setAuthError(err instanceof Error ? err.message : t.app.authError);
       } finally {
         setAuthLoading(false);
       }
@@ -366,8 +368,8 @@ const Index = () => {
     });
 
     if (rpcError || !rpcResult?.order_id) {
-      const msg = rpcError?.message ?? "Failed to create order";
-      toast({ title: "Order failed", description: msg, variant: "destructive" });
+      const msg = rpcError?.message ?? t.app.failedToCreate;
+      toast({ title: t.app.orderFailed, description: msg, variant: "destructive" });
       throw rpcError ?? new Error(msg);
     }
 
@@ -415,7 +417,7 @@ const Index = () => {
           onClick={() => window.location.reload()}
           className="text-sm underline text-muted-foreground hover:text-foreground"
         >
-          Reload page
+          {t.app.reloadPage}
         </button>
       </div>
     );
@@ -423,7 +425,7 @@ const Index = () => {
 
   const fallback = (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 text-sm text-muted-foreground">
-      Loading…
+      {t.app.loading}
     </div>
   );
 
