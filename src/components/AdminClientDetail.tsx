@@ -155,14 +155,40 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     if (!open || !client) return;
     setLoadingOrders(true);
     setExpandedOrderId(null);
+
+    // Fetch orders by company_id AND by user_id (older orders placed before company linking).
+    // Step 1: get all user_ids linked to this company via contacts.
     supabase
-      .from("orders")
-      .select("id, created_at, delivery_date, status, total_kg, total_price, sellsy_id, order_items(id, product_name, product_sku, quantity, price_per_kg, size_label)")
+      .from("contacts")
+      .select("user_id")
       .eq("company_id", client.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
+      .not("user_id", "is", null)
+      .then(async ({ data: contactRows }) => {
+        const userIds = (contactRows ?? []).map((c: any) => c.user_id as string).filter(Boolean);
+
+        // Step 2: build OR filter: company_id match OR user_id match
+        let query = supabase
+          .from("orders")
+          .select("id, created_at, delivery_date, status, total_kg, total_price, sellsy_id, order_items(id, product_name, product_sku, quantity, price_per_kg, size_label)");
+
+        if (userIds.length > 0) {
+          query = query.or(`company_id.eq.${client.id},user_id.in.(${userIds.join(",")})`);
+        } else {
+          query = query.eq("company_id", client.id);
+        }
+
+        const { data } = await query.order("created_at", { ascending: false });
+
+        // Deduplicate by id in case a row matched both conditions
+        const seen = new Set<string>();
+        const unique = (data ?? []).filter((o: any) => {
+          if (seen.has(o.id)) return false;
+          seen.add(o.id);
+          return true;
+        });
+
         setOrders(
-          (data ?? []).map((o: any) => ({
+          unique.map((o: any) => ({
             id: o.id,
             created_at: o.created_at,
             delivery_date: o.delivery_date ?? null,
