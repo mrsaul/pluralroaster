@@ -1,4 +1,5 @@
-import { AlertCircle, ChevronRight, Trash2, Users } from "lucide-react";
+import { useState, useMemo } from "react";
+import { AlertCircle, ChevronRight, Search, Trash2, Users, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -9,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { AppClient } from "./AdminClientDetail";
 
 interface AdminClientsSectionProps {
@@ -29,11 +31,45 @@ function resolveField(client: AppClient, field: "company_name" | "contact_name" 
 }
 
 export function AdminClientsSection({ clients, loading, error, onSelectClient, onDeleteClient }: AdminClientsSectionProps) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) => {
+      const name = resolveField(c, "company_name").toLowerCase();
+      const contact = resolveField(c, "contact_name").toLowerCase();
+      const email = resolveField(c, "email").toLowerCase();
+      return name.includes(q) || contact.includes(q) || email.includes(q);
+    });
+  }, [clients, query]);
+
   return (
     <section className="mt-8">
-      <div className="flex items-center gap-2 mb-3">
-        <Users className="w-4 h-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium text-muted-foreground">Clients ({clients.length})</h2>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Clients ({query ? `${filtered.length} / ${clients.length}` : clients.length})
+          </h2>
+        </div>
+        <div className="relative w-56">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un client…"
+            className="h-8 pl-8 pr-8 text-sm"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
@@ -68,14 +104,14 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
                   Loading clients…
                 </TableCell>
               </TableRow>
-            ) : clients.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                  No clients found.
+                  {query ? `Aucun client pour « ${query} »` : "No clients found."}
                 </TableCell>
               </TableRow>
             ) : (
-              clients.map((client) => {
+              filtered.map((client) => {
                 const isCustom = client.client_data_mode === "custom";
                 return (
                   <TableRow key={client.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onSelectClient(client)}>
