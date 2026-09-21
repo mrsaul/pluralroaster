@@ -25,8 +25,7 @@ type AppRole = "admin" | "user" | "roaster" | "packaging";
 const VIEW_KEY         = "pr_view";
 const DRAFT_DATE_KEY   = "pr_draft_delivery_date";
 
-// checkout included so users resuming after a tab discard land back in their flow
-const RESTORABLE_CLIENT_VIEWS: View[] = ["home", "shop", "orders", "account", "checkout"];
+const RESTORABLE_CLIENT_VIEWS: View[] = ["home", "shop", "orders", "account"];
 
 function saveView(v: View): void {
   try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
@@ -508,7 +507,7 @@ const Index = () => {
             lastOrder={orders[0] ?? null}
             mode="home"
             onCheckout={() => setView("checkout")}
-            onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("checkout"); }}
+            onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("shop"); }}
             onGoHome={() => setView("home")}
             onGoShop={() => setView("shop")}
             onGoAccount={() => setView("account")}
@@ -524,7 +523,7 @@ const Index = () => {
             lastOrder={orders[0] ?? null}
             mode="shop"
             onCheckout={() => setView("checkout")}
-            onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("checkout"); }}
+            onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("shop"); }}
             onGoHome={() => setView("home")}
             onGoShop={() => setView("shop")}
             onGoAccount={() => setView("account")}
@@ -538,7 +537,7 @@ const Index = () => {
             items={cart.items}
             totalKg={cart.totalKg}
             totalPrice={cart.totalPrice}
-            onBack={() => setView("home")}
+            onBack={() => setView("shop")}
             onConfirm={handleConfirmOrder}
             reorderedFromRef={reorderedFromId}
             clientName={String((onboardingData as any)?.company_name ?? '')}

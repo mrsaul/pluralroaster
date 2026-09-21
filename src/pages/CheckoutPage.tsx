@@ -337,6 +337,25 @@ export default function CheckoutPage({
     );
   }
 
+  // ── Empty cart guard ──────────────────────────────────────────────────────
+
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-sm text-center space-y-4">
+          <Package className="w-10 h-10 mx-auto text-muted-foreground/40" />
+          <div>
+            <h1 className="text-base font-semibold text-foreground">Your cart is empty</h1>
+            <p className="text-sm text-muted-foreground mt-1">Browse the catalog to add products.</p>
+          </div>
+          <Button className="w-full" size="lg" onClick={onBack}>
+            Browse catalog
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Review screen ─────────────────────────────────────────────────────────
 
   return (
