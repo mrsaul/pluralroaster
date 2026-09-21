@@ -230,6 +230,7 @@ export default function CatalogPage({
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
+  const [isOfflineCache, setIsOfflineCache] = useState(false);
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState("");
@@ -241,9 +242,12 @@ export default function CatalogPage({
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // ── Load products ─────────────────────────────────────────────────────────
+  const CATALOG_CACHE_KEY = "pr_catalog_cache";
+
   const loadProducts = useCallback(async () => {
     setLoadingProducts(true);
     setProductsError(null);
+    setIsOfflineCache(false);
 
     const { data, error } = await supabase
       .from("products")
@@ -254,6 +258,19 @@ export default function CatalogPage({
       .order("name", { ascending: true });
 
     if (error) {
+      // Serve from local cache if available
+      try {
+        const cached = localStorage.getItem(CATALOG_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached) as Product[];
+          if (parsed.length > 0) {
+            setProducts(parsed);
+            setIsOfflineCache(true);
+            setLoadingProducts(false);
+            return;
+          }
+        }
+      } catch { /* ignore */ }
       setProductsError(error.message);
       setProducts(MOCK_PRODUCTS.filter((p) => p.available));
       setLoadingProducts(false);
@@ -287,7 +304,10 @@ export default function CatalogPage({
     const remoteProducts = (data ?? []).map((p) => {
       return mapProductRow(p as unknown as ProductRow, variantsByProduct.get(p.id));
     });
-    setProducts(remoteProducts.length > 0 ? remoteProducts : []);
+    const resolved = remoteProducts.length > 0 ? remoteProducts : [];
+    setProducts(resolved);
+    // Persist to localStorage for offline use
+    try { localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(resolved)); } catch { /* ignore */ }
     setLoadingProducts(false);
   }, []);
 
@@ -590,6 +610,14 @@ export default function CatalogPage({
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Offline banner */}
+        {isOfflineCache && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 mb-2">
+            <span className="shrink-0">📶</span>
+            <span>Catalogue hors-ligne — données mises en cache. Connectez-vous pour voir les dernières mises à jour.</span>
           </div>
         )}
 

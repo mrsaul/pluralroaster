@@ -1,11 +1,67 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, parseISO } from "date-fns";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Order } from "@/lib/store";
+
+// ── Status timeline ───────────────────────────────────────────────────────────
+
+const TIMELINE_STEPS = [
+  { label: "Reçue",         statuses: ["received", "synced", "pending", "confirmed", "approved"] },
+  { label: "Torréfaction",  statuses: ["in_production"] },
+  { label: "Emballage",     statuses: ["ready_for_packaging", "packaging"] },
+  { label: "En livraison",  statuses: ["ready_for_delivery", "shipped"] },
+  { label: "Livrée",        statuses: ["delivered", "fulfilled"] },
+];
+
+function getStepIndex(status: string): number {
+  for (let i = TIMELINE_STEPS.length - 1; i >= 0; i--) {
+    if (TIMELINE_STEPS[i].statuses.includes(status)) return i;
+  }
+  return 0;
+}
+
+function OrderTimeline({ status }: { status: string }) {
+  const current = getStepIndex(status);
+  return (
+    <div className="relative flex items-center justify-between mb-5">
+      {/* connecting line */}
+      <div className="absolute inset-x-0 top-[14px] h-px bg-border" />
+      <div
+        className="absolute top-[14px] h-px bg-primary transition-all duration-500"
+        style={{ left: 0, width: `${(current / (TIMELINE_STEPS.length - 1)) * 100}%` }}
+      />
+      {TIMELINE_STEPS.map((step, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <div key={step.label} className="relative flex flex-col items-center gap-1.5 z-10">
+            <div className={cn(
+              "w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors",
+              done   ? "bg-primary border-primary" :
+              active ? "bg-background border-primary" :
+                       "bg-background border-border"
+            )}>
+              {done
+                ? <Check className="w-3.5 h-3.5 text-primary-foreground" />
+                : <div className={cn("w-2 h-2 rounded-full", active ? "bg-primary" : "bg-border")} />
+              }
+            </div>
+            <span className={cn(
+              "text-[10px] font-medium text-center leading-tight w-14",
+              active ? "text-primary" : done ? "text-foreground" : "text-muted-foreground"
+            )}>
+              {step.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface OrderCardProps {
   order: Order;
@@ -71,6 +127,9 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
             className="overflow-hidden"
           >
             <div className="space-y-4 px-4 pb-4">
+              {/* Status timeline */}
+              <OrderTimeline status={order.status} />
+
               {/* Info card */}
               <div className="rounded-xl bg-secondary/50 p-3 space-y-1 text-sm">
                 <p className="text-foreground">

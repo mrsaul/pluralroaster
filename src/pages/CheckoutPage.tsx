@@ -378,7 +378,7 @@ export default function CheckoutPage({
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-6 pb-10">
+      <main className="max-w-lg mx-auto px-4 py-6 space-y-6 pb-[calc(148px+env(safe-area-inset-bottom))]">
 
         {/* ── Re-order banner ── */}
         {reorderedFromRef && (
@@ -465,8 +465,11 @@ export default function CheckoutPage({
           />
         </section>
 
-        {/* ── Actions ── */}
-        <div className="flex flex-col gap-3">
+      </main>
+
+      {/* ── Sticky action footer (#5) ── */}
+      <div className="fixed bottom-0 inset-x-0 bg-background/95 backdrop-blur border-t border-border px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))] z-30">
+        <div className="max-w-lg mx-auto flex flex-col gap-2.5">
           <Button
             size="lg"
             className="w-full min-h-[52px]"
@@ -478,14 +481,14 @@ export default function CheckoutPage({
           <Button
             variant="outline"
             size="lg"
-            className="w-full min-h-[52px]"
+            className="w-full min-h-[48px]"
             disabled={submitting}
             onClick={onBack}
           >
             {t.checkout.editOrder}
           </Button>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -11,7 +11,7 @@ import {
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
    Menu, User, Settings, Warehouse, ExternalLink,
-   GitMerge, AlertTriangle, Pencil,
+   GitMerge, AlertTriangle, Pencil, BarChart2, TrendingUp,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -139,11 +139,167 @@ function formatDate(value: string | null) {
   try { return format(parseISO(value), "MMM d, yyyy"); } catch { return "—"; }
 }
 
+/* ─── Revenue Dashboard ─── */
+
+type _AdminOrderForRevenue = {
+  total_price: number;
+  client_name: string | null;
+  created_at: string;
+  items: { product_name: string; quantity: number; price_per_kg: number; kind: string | null }[];
+};
+
+function RevenueSection({ orders }: { orders: _AdminOrderForRevenue[] }) {
+  const now = new Date();
+
+  // Last 6 months — keyed YYYY-MM; stable array for the current render cycle
+  const months = useMemo(() => Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleString("fr-FR", { month: "short" }) };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
+  const revenueByMonth = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const m of months) map[m.key] = 0;
+    for (const o of orders) {
+      const key = o.created_at.slice(0, 7);
+      if (key in map) map[key] += o.total_price;
+    }
+    return map;
+  }, [orders, months]);
+
+  const topClients = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const o of orders) {
+      const name = o.client_name ?? "—";
+      map[name] = (map[name] ?? 0) + o.total_price;
+    }
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [orders]);
+
+  const topProducts = useMemo(() => {
+    const map: Record<string, { kg: number; revenue: number }> = {};
+    for (const o of orders) {
+      for (const item of o.items) {
+        if (item.kind === "service") continue;
+        if (!map[item.product_name]) map[item.product_name] = { kg: 0, revenue: 0 };
+        map[item.product_name].kg += item.quantity;
+        map[item.product_name].revenue += item.quantity * item.price_per_kg;
+      }
+    }
+    return Object.entries(map).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 5);
+  }, [orders]);
+
+  const maxMonthRevenue = Math.max(...months.map((m) => revenueByMonth[m.key]), 1);
+  const totalRevenue = months.reduce((s, m) => s + revenueByMonth[m.key], 0);
+
+  const fmt = (n: number) =>
+    n >= 1000 ? `${(n / 1000).toFixed(1)}k€` : `${n.toFixed(0)}€`;
+
+  return (
+    <div className="space-y-6">
+      {/* KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="bg-card border border-border rounded-lg p-4 col-span-2 sm:col-span-1">
+          <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
+            <TrendingUp className="w-3.5 h-3.5" /> 6-month revenue
+          </p>
+          <p className="text-2xl font-semibold tabular-nums text-foreground">{fmt(totalRevenue)}</p>
+        </div>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-xs text-muted-foreground mb-1">Active clients</p>
+          <p className="text-2xl font-semibold tabular-nums text-foreground">{topClients.length}</p>
+        </div>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-xs text-muted-foreground mb-1">Orders (6 mo)</p>
+          <p className="text-2xl font-semibold tabular-nums text-foreground">{orders.length}</p>
+        </div>
+      </div>
+
+      {/* Monthly bar chart */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <p className="text-sm font-medium text-foreground mb-4">Monthly revenue</p>
+        <div className="flex items-end gap-3 h-28">
+          {months.map((m) => {
+            const val = revenueByMonth[m.key];
+            const pct = val / maxMonthRevenue;
+            const isCurrentMonth = m.key === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+            return (
+              <div key={m.key} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                <span className="text-[10px] text-muted-foreground tabular-nums">{val > 0 ? fmt(val) : ""}</span>
+                <div className="w-full rounded-t overflow-hidden flex flex-col justify-end" style={{ height: "72px" }}>
+                  <div
+                    className={cn("w-full rounded-t transition-all duration-500", isCurrentMonth ? "bg-primary" : "bg-primary/40")}
+                    style={{ height: `${Math.max(pct * 100, val > 0 ? 6 : 0)}%` }}
+                  />
+                </div>
+                <span className={cn("text-[10px] font-medium", isCurrentMonth ? "text-primary" : "text-muted-foreground")}>{m.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        {/* Top clients */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-sm font-medium text-foreground mb-3">Top clients</p>
+          {topClients.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No data yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {topClients.map(([name, revenue], i) => {
+                const maxRev = topClients[0][1];
+                return (
+                  <div key={name} className="space-y-0.5">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[60%]">{i + 1}. {name}</span>
+                      <span className="tabular-nums text-muted-foreground">{fmt(revenue)}</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full" style={{ width: `${(revenue / maxRev) * 100}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Top products */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-sm font-medium text-foreground mb-3">Top products</p>
+          {topProducts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No data yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {topProducts.map(([name, { kg, revenue }], i) => {
+                const maxRev = topProducts[0][1].revenue;
+                return (
+                  <div key={name} className="space-y-0.5">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[55%]">{i + 1}. {name}</span>
+                      <span className="tabular-nums text-muted-foreground">{kg.toFixed(0)} kg · {fmt(revenue)}</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary/60 rounded-full" style={{ width: `${(revenue / maxRev) * 100}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Component ─── */
 
 const ADMIN_SECTION_KEY = "pr_admin_section";
-type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock";
-const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "invoicing", "team", "profile", "pricing", "stock"];
+type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock" | "revenue";
+const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "invoicing", "team", "profile", "pricing", "stock", "revenue"];
 
 function loadAdminSection(): AdminSection {
   try {
@@ -1006,8 +1162,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     clients: "Clients",
     products: "Products",
     pricing: "Pricing",
+    stock: "Stock",
     team: "Team",
     profile: "Profile Settings",
+    revenue: "Revenue",
   };
 
   /* ── Sidebar nav items ── */
@@ -1023,6 +1181,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const menuSubItems = [
     { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
+    { key: "revenue" as const, icon: BarChart2, label: "Revenue", badge: null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "pricing" as const, icon: BadgeEuro, label: "Pricing", badge: null },
@@ -2049,6 +2208,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
             {/* ═══════════ PROFILE ═══════════ */}
             {activeSection === "profile" && <ProfileSettingsView />}
+
+            {/* ═══════════ REVENUE ═══════════ */}
+            {activeSection === "revenue" && <RevenueSection orders={adminOrders} />}
           </div>
           </div>{/* /p-4 wrapper */}
         </main>

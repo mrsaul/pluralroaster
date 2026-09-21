@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useCallback, useRef } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
 import { useT } from "@/i18n";
@@ -15,6 +15,33 @@ const OnboardingPage = lazy(() => import("./OnboardingPage"));
 const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
 import { supabase } from "@/integrations/supabase/client";
 import { OTP_FLOW_KEY } from "./LoginPage";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+function ReorderDialog({ order, onConfirm, onCancel }: { order: Order | null; onConfirm: () => void; onCancel: () => void }) {
+  if (!order) return null;
+  const itemCount = order.items.length;
+  const kg = order.totalKg.toFixed(0);
+  const price = order.totalPrice.toFixed(2);
+  return (
+    <AlertDialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Répéter cette commande ?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {itemCount} article{itemCount > 1 ? "s" : ""} · {kg} kg · €{price} TTC — les articles seront ajoutés à votre panier et vous irez directement au paiement.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Annuler</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Commander</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding" | "reset-password";
 type AppRole = "admin" | "user" | "roaster" | "packaging";
@@ -137,6 +164,7 @@ const Index = () => {
   }, []);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
+  const [pendingReorder, setPendingReorder] = useState<Order | null>(null);
   const [clientTier, setClientTier] = useState<{ discountPercent: number; name: string } | null>(null);
   const t = useT();
   const cart = useCart();
@@ -451,10 +479,16 @@ const Index = () => {
   }, [cart.items.length, draftDeliveryDate, handleConfirmOrder]);
 
   const handleReorder = useCallback((order: Order) => {
-    cart.hydrateCart(order.items);
-    setReorderedFromId(order.id);
+    setPendingReorder(order);
+  }, []);
+
+  const confirmReorder = useCallback(() => {
+    if (!pendingReorder) return;
+    cart.hydrateCart(pendingReorder.items);
+    setReorderedFromId(pendingReorder.id);
+    setPendingReorder(null);
     setView("checkout");
-  }, [cart, setView]);
+  }, [cart, pendingReorder, setView]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
   const visibleOrders = role === "admin" ? [...orders, ...MOCK_ORDERS] : orders;
@@ -508,19 +542,22 @@ const Index = () => {
       );
     case "home":
       return (
-        <Suspense fallback={fallback}>
-          <CatalogPage
-            cart={cart}
-            usualOrderItems={usualOrderItems}
-            lastOrder={orders[0] ?? null}
-            mode="home"
-            onCheckout={() => setView("checkout")}
-            onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("shop"); }}
-            onGoHome={() => setView("home")}
-            onGoShop={() => setView("shop")}
-            onGoAccount={() => setView("account")}
-          />
-        </Suspense>
+        <>
+          <Suspense fallback={fallback}>
+            <CatalogPage
+              cart={cart}
+              usualOrderItems={usualOrderItems}
+              lastOrder={orders[0] ?? null}
+              mode="home"
+              onCheckout={() => setView("checkout")}
+              onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("shop"); }}
+              onGoHome={() => setView("home")}
+              onGoShop={() => setView("shop")}
+              onGoAccount={() => setView("account")}
+            />
+          </Suspense>
+          <ReorderDialog order={pendingReorder} onConfirm={confirmReorder} onCancel={() => setPendingReorder(null)} />
+        </>
       );
     case "shop":
       return (
@@ -565,23 +602,26 @@ const Index = () => {
       );
     case "orders":
       return (
-        <Suspense fallback={fallback}>
-          <OrderHistoryPage
-            orders={visibleOrders}
-            draftItems={cart.items}
-            draftTotalKg={cart.totalKg}
-            draftTotalPrice={cart.totalPrice}
-            draftDeliveryDate={draftDeliveryDate}
-            onDraftDeliveryDateChange={setDraftDeliveryDate}
-            onRemoveDraftItem={handleRemoveDraftItem}
-            onDraftQuantityChange={handleDraftQuantityChange}
-            onPlaceDraftOrder={handlePlaceDraftOrder}
-            onReorder={handleReorder}
-            onGoHome={() => setView("home")}
-            onGoShop={() => setView("shop")}
-            onGoAccount={() => setView("account")}
-          />
-        </Suspense>
+        <>
+          <Suspense fallback={fallback}>
+            <OrderHistoryPage
+              orders={visibleOrders}
+              draftItems={cart.items}
+              draftTotalKg={cart.totalKg}
+              draftTotalPrice={cart.totalPrice}
+              draftDeliveryDate={draftDeliveryDate}
+              onDraftDeliveryDateChange={setDraftDeliveryDate}
+              onRemoveDraftItem={handleRemoveDraftItem}
+              onDraftQuantityChange={handleDraftQuantityChange}
+              onPlaceDraftOrder={handlePlaceDraftOrder}
+              onReorder={handleReorder}
+              onGoHome={() => setView("home")}
+              onGoShop={() => setView("shop")}
+              onGoAccount={() => setView("account")}
+            />
+          </Suspense>
+          <ReorderDialog order={pendingReorder} onConfirm={confirmReorder} onCancel={() => setPendingReorder(null)} />
+        </>
       );
     case "account":
       return (
