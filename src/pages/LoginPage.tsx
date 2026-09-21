@@ -1,40 +1,178 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Mail, CheckCircle2, ArrowLeft, Coffee } from "lucide-react";
+import { Eye, EyeOff, Mail, ArrowLeft, Coffee, Loader2, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
+import { cn } from "@/lib/utils";
 
-type AuthMode = "sign-in" | "sign-up" | "forgot-password" | "reset-sent";
+// Flag key used by Index.tsx to detect the in-app OTP reset flow
+export const OTP_FLOW_KEY = "pr_otp_flow";
+
+type AuthMode = "sign-in" | "sign-up" | "forgot-password" | "otp-sent";
+
+// ── 6-digit OTP input ─────────────────────────────────────────────────────────
+
+function OtpInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  disabled?: boolean;
+}) {
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleChange = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "");
+    if (!raw) {
+      const next = [...value];
+      next[idx] = "";
+      onChange(next);
+      return;
+    }
+    // Paste of multiple digits
+    if (raw.length > 1) {
+      const next = [...value];
+      raw.split("").slice(0, 6 - idx).forEach((d, i) => { next[idx + i] = d; });
+      onChange(next);
+      const focusAt = Math.min(idx + raw.length, 5);
+      setTimeout(() => refs.current[focusAt]?.focus(), 0);
+      return;
+    }
+    const next = [...value];
+    next[idx] = raw;
+    onChange(next);
+    if (idx < 5) setTimeout(() => refs.current[idx + 1]?.focus(), 0);
+  };
+
+  const handleKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      if (value[idx]) {
+        const next = [...value];
+        next[idx] = "";
+        onChange(next);
+      } else if (idx > 0) {
+        const next = [...value];
+        next[idx - 1] = "";
+        onChange(next);
+        refs.current[idx - 1]?.focus();
+      }
+    }
+    if (e.key === "ArrowLeft" && idx > 0) refs.current[idx - 1]?.focus();
+    if (e.key === "ArrowRight" && idx < 5) refs.current[idx + 1]?.focus();
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = Array(6).fill("");
+    pasted.split("").forEach((d, i) => { next[i] = d; });
+    onChange(next);
+    const focusAt = Math.min(pasted.length, 5);
+    setTimeout(() => refs.current[focusAt]?.focus(), 0);
+  };
+
+  return (
+    <div className="flex gap-2 justify-center" onPaste={handlePaste}>
+      {Array(6).fill(null).map((_, idx) => (
+        <motion.input
+          key={idx}
+          ref={(el) => { refs.current[idx] = el; }}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={2}
+          value={value[idx]}
+          onChange={(e) => handleChange(idx, e)}
+          onKeyDown={(e) => handleKeyDown(idx, e)}
+          onFocus={(e) => e.target.select()}
+          disabled={disabled}
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: idx * 0.04, duration: 0.18 }}
+          className={cn(
+            "w-11 h-14 rounded-xl border-2 text-center text-xl font-bold tabular-nums",
+            "focus:outline-none transition-all duration-150",
+            "disabled:opacity-40",
+            value[idx]
+              ? "border-primary bg-primary/8 text-foreground shadow-sm shadow-primary/10"
+              : "border-border bg-muted/30 text-foreground hover:border-muted-foreground/40",
+            "focus:border-primary focus:ring-2 focus:ring-primary/20",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Resend countdown ──────────────────────────────────────────────────────────
+
+function useResendTimer(active: boolean) {
+  const [seconds, setSeconds] = useState(60);
+  const canResend = seconds === 0;
+
+  useEffect(() => {
+    if (!active) { setSeconds(60); return; }
+    setSeconds(60);
+    const interval = setInterval(() => {
+      setSeconds((s) => {
+        if (s <= 1) { clearInterval(interval); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [active]);
+
+  const reset = useCallback(() => setSeconds(60), []);
+
+  return { seconds, canResend, reset };
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
   const t = useT();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
+  const [sentEmail, setSentEmail] = useState(""); // email that received OTP
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const goTo = (next: AuthMode) => {
+  // OTP state
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(""));
+  const [otpVerifying, setOtpVerifying] = useState(false);
+
+  const { seconds: resendSeconds, canResend, reset: resetTimer } = useResendTimer(mode === "otp-sent");
+
+  const goTo = useCallback((next: AuthMode) => {
     setError(null);
     setMode(next);
-  };
+  }, []);
+
+  // ── Sign in / Sign up ───────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
       if (mode === "forgot-password") {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email,
+          options: { shouldCreateUser: false },
         });
-        if (resetError) throw resetError;
-        setMode("reset-sent");
+        if (otpError) throw otpError;
+        setSentEmail(email);
+        setOtpDigits(Array(6).fill(""));
+        goTo("otp-sent");
         return;
       }
 
@@ -63,51 +201,162 @@ export default function LoginPage() {
     }
   };
 
-  // ── Reset-sent success screen ─────────────────────────────────────────────
-  if (mode === "reset-sent") {
+  // ── OTP verify ──────────────────────────────────────────────────────────────
+
+  const handleOtpVerify = useCallback(async () => {
+    const code = otpDigits.join("");
+    if (code.length < 6) return;
+    setOtpVerifying(true);
+    setError(null);
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: sentEmail,
+        token: code,
+        type: "email",
+      });
+      if (verifyError) throw verifyError;
+      // Signal Index.tsx to intercept the resulting session and show set-password
+      localStorage.setItem(OTP_FLOW_KEY, "1");
+      // onAuthStateChange in Index.tsx fires; loading spinner shows while syncing
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Code incorrect ou expiré.";
+      setError(msg);
+      setOtpVerifying(false);
+    }
+  }, [otpDigits, sentEmail]);
+
+  // Auto-verify when all 6 digits filled
+  useEffect(() => {
+    if (mode === "otp-sent" && otpDigits.every((d) => d.length === 1)) {
+      void handleOtpVerify();
+    }
+  }, [otpDigits, mode, handleOtpVerify]);
+
+  // ── OTP resend ──────────────────────────────────────────────────────────────
+
+  const handleResend = async () => {
+    if (!canResend) return;
+    setError(null);
+    setOtpDigits(Array(6).fill(""));
+    resetTimer();
+    try {
+      await supabase.auth.signInWithOtp({
+        email: sentEmail,
+        options: { shouldCreateUser: false },
+      });
+    } catch {
+      // Silently ignore — user can retry again
+    }
+  };
+
+  // ── OTP entry screen ────────────────────────────────────────────────────────
+
+  if (mode === "otp-sent") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.25 }}
-          className="w-full max-w-sm text-center space-y-6"
+          key="otp-sent"
+          initial={{ opacity: 0, x: 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.22 }}
+          className="w-full max-w-sm"
         >
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
+          {/* Brand */}
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Coffee style={{ width: 18, height: 18 }} className="text-primary" />
             </div>
+            <span className="text-base font-semibold tracking-tight text-foreground">PluralRoaster</span>
           </div>
-          <div className="space-y-2">
-            <h1 className="text-xl font-semibold text-foreground">Vérifiez votre email</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Un lien de réinitialisation a été envoyé à{" "}
-              <span className="font-medium text-foreground">{email}</span>.
-              <br />
-              Vérifiez vos spams si vous ne le trouvez pas.
+
+          {/* Icon + heading */}
+          <div className="mb-7">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+              <ShieldCheck className="w-6 h-6 text-primary" />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Code de vérification
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+              Nous avons envoyé un code à 6 chiffres à{" "}
+              <span className="font-medium text-foreground">{sentEmail}</span>.
             </p>
           </div>
-          <div className="space-y-3">
+
+          {/* OTP boxes */}
+          <div className="mb-6">
+            <OtpInput value={otpDigits} onChange={setOtpDigits} disabled={otpVerifying} />
+          </div>
+
+          {/* Verifying / error */}
+          <AnimatePresence mode="wait">
+            {otpVerifying ? (
+              <motion.div
+                key="verifying"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4"
+              >
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Vérification…
+              </motion.div>
+            ) : error ? (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive mb-4 text-center"
+              >
+                {error}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          {/* Confirm button (fallback if auto-verify doesn't fire) */}
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => void handleOtpVerify()}
+            disabled={otpDigits.join("").length < 6 || otpVerifying}
+            className="w-full h-11 bg-primary text-primary-foreground text-sm font-semibold rounded-lg transition-opacity disabled:opacity-40 mb-4"
+          >
+            Confirmer le code
+          </motion.button>
+
+          {/* Resend + back */}
+          <div className="space-y-2 text-center">
+            <div className="text-sm">
+              {canResend ? (
+                <button
+                  type="button"
+                  onClick={() => void handleResend()}
+                  className="text-primary font-medium hover:underline transition-colors"
+                >
+                  Renvoyer le code
+                </button>
+              ) : (
+                <span className="text-muted-foreground">
+                  Renvoyer dans{" "}
+                  <span className="font-medium tabular-nums text-foreground">{resendSeconds}s</span>
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => goTo("forgot-password")}
-              className="w-full h-11 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              className="flex items-center justify-center gap-1.5 w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Renvoyer le lien
-            </button>
-            <button
-              type="button"
-              onClick={() => goTo("sign-in")}
-              className="w-full h-11 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Retour à la connexion
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Changer d'adresse email
             </button>
           </div>
         </motion.div>
       </div>
     );
   }
+
+  // ── Sign-in / Sign-up / Forgot forms ─────────────────────────────────────────
 
   const isForgot = mode === "forgot-password";
   const isSignUp = mode === "sign-up";
@@ -125,7 +374,7 @@ export default function LoginPage() {
         <div className="mb-8">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Coffee className="w-4.5 h-4.5 text-primary" style={{ width: 18, height: 18 }} />
+              <Coffee className="text-primary" style={{ width: 18, height: 18 }} />
             </div>
             <span className="text-base font-semibold tracking-tight text-foreground">PluralRoaster</span>
           </div>
@@ -134,7 +383,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             {isForgot
-              ? "Entrez votre email et nous vous enverrons un lien de réinitialisation."
+              ? "Entrez votre email — vous recevrez un code à 6 chiffres."
               : isSignUp
                 ? t.login.subtitleSignUp
                 : t.login.subtitleSignIn}
@@ -142,7 +391,7 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Full name (sign-up only) */}
+          {/* Full name — sign-up only */}
           <AnimatePresence initial={false}>
             {isSignUp && (
               <motion.div
@@ -180,7 +429,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="barista@cafepluralcafe.fr"
+                placeholder="barista@pluralcafe.fr"
                 required
                 className="h-11 pl-10"
                 autoComplete="email"
@@ -189,7 +438,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Password (hidden in forgot mode) */}
+          {/* Password — hidden in forgot mode */}
           <AnimatePresence initial={false}>
             {!isForgot && (
               <motion.div
@@ -259,11 +508,12 @@ export default function LoginPage() {
             type="submit"
             whileTap={{ scale: 0.98 }}
             disabled={loading}
-            className="w-full h-11 bg-primary text-primary-foreground text-sm font-semibold rounded-lg transition-opacity disabled:opacity-50 mt-2"
+            className="w-full h-11 flex items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg transition-opacity disabled:opacity-50 mt-2"
           >
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {loading
               ? (isForgot ? "Envoi…" : isSignUp ? t.login.btnCreating : t.login.btnSigningIn)
-              : (isForgot ? t.login.btnForgot : isSignUp ? t.login.btnSignUp : t.login.btnSignIn)}
+              : (isForgot ? "Envoyer le code" : isSignUp ? t.login.btnSignUp : t.login.btnSignIn)}
           </motion.button>
         </form>
 

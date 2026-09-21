@@ -12,9 +12,11 @@ const AdminDashboard = lazy(() => import("./AdminDashboard"));
 const RoasterDashboard = lazy(() => import("./RoasterDashboard"));
 const PackagingDashboard = lazy(() => import("./PackagingDashboard"));
 const OnboardingPage = lazy(() => import("./OnboardingPage"));
+const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
 import { supabase } from "@/integrations/supabase/client";
+import { OTP_FLOW_KEY } from "./LoginPage";
 
-type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding";
+type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding" | "reset-password";
 type AppRole = "admin" | "user" | "roaster" | "packaging";
 
 // ── View + draft persistence (localStorage) ───────────────────────────────────
@@ -216,6 +218,12 @@ const Index = () => {
     }
     if (normalizedRole === "packaging") {
       setView("packaging_dashboard");
+      return;
+    }
+
+    // OTP password-reset flow: intercept before normal user setup
+    if (localStorage.getItem(OTP_FLOW_KEY) === "1") {
+      setView("reset-password");
       return;
     }
 
@@ -594,6 +602,17 @@ const Index = () => {
       return <Suspense fallback={fallback}><RoasterDashboard onLogout={handleLogout} /></Suspense>;
     case "packaging_dashboard":
       return <Suspense fallback={fallback}><PackagingDashboard onLogout={handleLogout} /></Suspense>;
+    case "reset-password":
+      return (
+        <Suspense fallback={fallback}>
+          <InAppSetPasswordPage
+            onDone={async () => {
+              setAuthLoading(true);
+              try { await syncUserRole(); } catch { /* ignore */ } finally { setAuthLoading(false); }
+            }}
+          />
+        </Suspense>
+      );
     default:
       // Safety net: view is somehow unmapped — redirect to home rather than rendering null.
       setView("home");
