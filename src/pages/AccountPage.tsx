@@ -96,10 +96,13 @@ export default function AccountPage({
   const [editEmail, setEditEmail] = useState("");
   const [savingContact, setSavingContact] = useState(false);
 
-  // Name edit state
-  const [editingName, setEditingName] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [savingName, setSavingName] = useState(false);
+  // Company edit state
+  const [editingCompany, setEditingCompany] = useState(false);
+  const [editCompanyName, setEditCompanyName] = useState("");
+  const [editLegalName, setEditLegalName] = useState("");
+  const [editSiret, setEditSiret] = useState("");
+  const [editVat, setEditVat] = useState("");
+  const [savingCompany, setSavingCompany] = useState(false);
 
   // Load company profile from contacts → companies
   useEffect(() => {
@@ -171,36 +174,48 @@ export default function AccountPage({
     }
   }, [companyId, editPhone, editEmail, lang, toast]);
 
-  const startEditName = useCallback(() => {
-    setEditName(profile?.name ?? "");
-    setEditingName(true);
+  const startEditCompany = useCallback(() => {
+    setEditCompanyName(profile?.name ?? "");
+    setEditLegalName(profile?.legalName ?? "");
+    setEditSiret(profile?.siret ?? "");
+    setEditVat(profile?.vatNumber ?? "");
+    setEditingCompany(true);
   }, [profile]);
 
-  const cancelEditName = useCallback(() => {
-    setEditingName(false);
+  const cancelEditCompany = useCallback(() => {
+    setEditingCompany(false);
   }, []);
 
-  const saveName = useCallback(async () => {
+  const saveCompany = useCallback(async () => {
     if (!companyId) {
       toast({ title: lang === "fr" ? "Aucune entreprise liée" : "No company linked", variant: "destructive" });
       return;
     }
-    setSavingName(true);
+    setSavingCompany(true);
     try {
-      const { error } = await supabase.rpc("update_company_name" as any, {
+      const { error } = await supabase.rpc("update_company_info" as any, {
         p_company_id: companyId,
-        p_name: editName.trim() || null,
+        p_name:       editCompanyName.trim() || null,
+        p_legal_name: editLegalName.trim() || null,
+        p_siret:      editSiret.trim() || null,
+        p_vat_number: editVat.trim() || null,
       });
       if (error) throw error;
-      setProfile((p) => p ? { ...p, name: editName.trim() || null } : p);
-      setEditingName(false);
-      toast({ title: lang === "fr" ? "Nom mis à jour" : "Name updated" });
+      setProfile((p) => p ? {
+        ...p,
+        name: editCompanyName.trim() || null,
+        legalName: editLegalName.trim() || null,
+        siret: editSiret.trim() || null,
+        vatNumber: editVat.trim() || null,
+      } : p);
+      setEditingCompany(false);
+      toast({ title: lang === "fr" ? "Entreprise mise à jour" : "Company updated" });
     } catch (err) {
       toast({ title: lang === "fr" ? "Erreur" : "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
-      setSavingName(false);
+      setSavingCompany(false);
     }
-  }, [companyId, editName, lang, toast]);
+  }, [companyId, editCompanyName, editLegalName, editSiret, editVat, lang, toast]);
 
   // Load addresses when the addresses tab is first opened
   useEffect(() => {
@@ -343,33 +358,33 @@ export default function AccountPage({
             transition={{ duration: 0.18 }}
             className="space-y-4"
           >
-            <section className={cn("rounded-2xl border bg-card px-4 transition-colors", editingName ? "border-primary/50 bg-primary/[0.02]" : "border-border")}>
+            <section className={cn("rounded-2xl border bg-card px-4 transition-colors", editingCompany ? "border-primary/50 bg-primary/[0.02]" : "border-border")}>
               <div className="flex items-center justify-between pt-3 pb-1">
-                <p className={cn("text-[11px] font-semibold uppercase tracking-wider", editingName ? "text-primary" : "text-muted-foreground")}>
+                <p className={cn("text-[11px] font-semibold uppercase tracking-wider", editingCompany ? "text-primary" : "text-muted-foreground")}>
                   {t.account.sectionCompany}
                 </p>
-                {!loadingProfile && !editingName && (
+                {!loadingProfile && !editingCompany && (
                   <button
                     type="button"
-                    onClick={startEditName}
+                    onClick={startEditCompany}
                     className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
                   >
                     <Pencil className="w-3 h-3" />
                     {lang === "fr" ? "Modifier" : "Edit"}
                   </button>
                 )}
-                {editingName && (
+                {editingCompany && (
                   <div className="flex items-center gap-3">
-                    <button type="button" onClick={cancelEditName} disabled={savingName} className="text-muted-foreground hover:text-foreground transition-colors">
+                    <button type="button" onClick={cancelEditCompany} disabled={savingCompany} className="text-muted-foreground hover:text-foreground transition-colors">
                       <X className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
-                      onClick={() => void saveName()}
-                      disabled={savingName}
+                      onClick={() => void saveCompany()}
+                      disabled={savingCompany}
                       className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
                     >
-                      {savingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      {savingCompany ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                       {lang === "fr" ? "Enregistrer" : "Save"}
                     </button>
                   </div>
@@ -377,30 +392,34 @@ export default function AccountPage({
               </div>
               {loadingProfile ? (
                 <div className="py-4 space-y-3 animate-pulse">
-                  {[...Array(3)].map((_, i) => (
+                  {[...Array(4)].map((_, i) => (
                     <div key={i} className="h-4 w-full rounded bg-muted" />
+                  ))}
+                </div>
+              ) : editingCompany ? (
+                <div className="space-y-3 py-3">
+                  {([
+                    { label: t.account.labelCommercialName, value: editCompanyName, set: setEditCompanyName, autoFocus: true },
+                    { label: t.account.labelLegalName,      value: editLegalName,   set: setEditLegalName,   autoFocus: false },
+                    { label: t.account.labelSiret,          value: editSiret,       set: setEditSiret,       autoFocus: false },
+                    { label: t.account.labelVat,            value: editVat,         set: setEditVat,         autoFocus: false },
+                  ] as const).map(({ label, value, set, autoFocus }) => (
+                    <div key={label} className="space-y-1">
+                      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{label}</label>
+                      <Input
+                        type="text"
+                        value={value}
+                        onChange={(e) => set(e.target.value)}
+                        className="h-9 text-sm"
+                        // eslint-disable-next-line jsx-a11y/no-autofocus
+                        autoFocus={autoFocus}
+                      />
+                    </div>
                   ))}
                 </div>
               ) : (
                 <>
-                  {editingName ? (
-                    <div className="space-y-1 py-2.5 border-b border-border">
-                      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                        {t.account.labelCommercialName}
-                      </label>
-                      <Input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="h-9 text-sm"
-                        placeholder="Nom commercial"
-                        // eslint-disable-next-line jsx-a11y/no-autofocus
-                        autoFocus
-                      />
-                    </div>
-                  ) : (
-                    <ProfileField label={t.account.labelCommercialName} value={profile?.name} />
-                  )}
+                  <ProfileField label={t.account.labelCommercialName} value={profile?.name} />
                   <ProfileField label={t.account.labelLegalName} value={profile?.legalName} />
                   <ProfileField label={t.account.labelSiret} value={profile?.siret} />
                   <ProfileField label={t.account.labelVat} value={profile?.vatNumber} />
@@ -523,11 +542,6 @@ export default function AccountPage({
               </div>
             </section>
 
-            <p className="text-xs text-muted-foreground text-center pb-2">
-              {lang === "fr"
-                ? "Les données légales (SIRET, TVA…) sont gérées par votre chargé de compte."
-                : "Legal data (SIRET, VAT…) is managed by your account manager."}
-            </p>
           </motion.div>
         )}
 
