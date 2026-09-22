@@ -327,9 +327,9 @@ export default function AccountPage({
               )}
             </section>
 
-            <section className="rounded-2xl border border-border bg-card px-4">
+            <section className={cn("rounded-2xl border bg-card px-4 transition-colors", editingContact ? "border-primary/50 bg-primary/[0.02]" : "border-border")}>
               <div className="flex items-center justify-between pt-3 pb-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className={cn("text-[11px] font-semibold uppercase tracking-wider", editingContact ? "text-primary" : "text-muted-foreground")}>
                   {t.account.sectionContact}
                 </p>
                 {!loadingProfile && !editingContact && (
@@ -384,6 +384,8 @@ export default function AccountPage({
                       onChange={(e) => setEditEmail(e.target.value)}
                       className="h-9 text-sm"
                       placeholder="email@exemple.com"
+                      // eslint-disable-next-line jsx-a11y/no-autofocus
+                      autoFocus
                     />
                   </div>
                   <div className="space-y-1 pb-1">
