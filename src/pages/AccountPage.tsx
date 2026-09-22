@@ -144,13 +144,17 @@ export default function AccountPage({
   }, []);
 
   const saveContact = useCallback(async () => {
-    if (!companyId) return;
+    if (!companyId) {
+      toast({ title: lang === "fr" ? "Aucune entreprise liée à ce compte" : "No company linked to this account", variant: "destructive" });
+      return;
+    }
     setSavingContact(true);
     try {
-      const { error } = await supabase
-        .from("companies")
-        .update({ phone: editPhone || null, email: editEmail || null })
-        .eq("id", companyId);
+      const { error } = await supabase.rpc("update_company_contact" as any, {
+        p_company_id: companyId,
+        p_phone: editPhone || null,
+        p_email: editEmail || null,
+      });
       if (error) throw error;
       setProfile((p) => p ? { ...p, phone: editPhone || null, email: editEmail || null } : p);
       setEditingContact(false);
