@@ -96,6 +96,11 @@ export default function AccountPage({
   const [editEmail, setEditEmail] = useState("");
   const [savingContact, setSavingContact] = useState(false);
 
+  // Name edit state
+  const [editingName, setEditingName] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+
   // Load company profile from contacts → companies
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +170,37 @@ export default function AccountPage({
       setSavingContact(false);
     }
   }, [companyId, editPhone, editEmail, lang, toast]);
+
+  const startEditName = useCallback(() => {
+    setEditName(profile?.name ?? "");
+    setEditingName(true);
+  }, [profile]);
+
+  const cancelEditName = useCallback(() => {
+    setEditingName(false);
+  }, []);
+
+  const saveName = useCallback(async () => {
+    if (!companyId) {
+      toast({ title: lang === "fr" ? "Aucune entreprise liée" : "No company linked", variant: "destructive" });
+      return;
+    }
+    setSavingName(true);
+    try {
+      const { error } = await supabase.rpc("update_company_name" as any, {
+        p_company_id: companyId,
+        p_name: editName.trim() || null,
+      });
+      if (error) throw error;
+      setProfile((p) => p ? { ...p, name: editName.trim() || null } : p);
+      setEditingName(false);
+      toast({ title: lang === "fr" ? "Nom mis à jour" : "Name updated" });
+    } catch (err) {
+      toast({ title: lang === "fr" ? "Erreur" : "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setSavingName(false);
+    }
+  }, [companyId, editName, lang, toast]);
 
   // Load addresses when the addresses tab is first opened
   useEffect(() => {
@@ -307,10 +343,38 @@ export default function AccountPage({
             transition={{ duration: 0.18 }}
             className="space-y-4"
           >
-            <section className="rounded-2xl border border-border bg-card px-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1">
-                {t.account.sectionCompany}
-              </p>
+            <section className={cn("rounded-2xl border bg-card px-4 transition-colors", editingName ? "border-primary/50 bg-primary/[0.02]" : "border-border")}>
+              <div className="flex items-center justify-between pt-3 pb-1">
+                <p className={cn("text-[11px] font-semibold uppercase tracking-wider", editingName ? "text-primary" : "text-muted-foreground")}>
+                  {t.account.sectionCompany}
+                </p>
+                {!loadingProfile && !editingName && (
+                  <button
+                    type="button"
+                    onClick={startEditName}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    {lang === "fr" ? "Modifier" : "Edit"}
+                  </button>
+                )}
+                {editingName && (
+                  <div className="flex items-center gap-3">
+                    <button type="button" onClick={cancelEditName} disabled={savingName} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveName()}
+                      disabled={savingName}
+                      className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+                    >
+                      {savingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      {lang === "fr" ? "Enregistrer" : "Save"}
+                    </button>
+                  </div>
+                )}
+              </div>
               {loadingProfile ? (
                 <div className="py-4 space-y-3 animate-pulse">
                   {[...Array(3)].map((_, i) => (
@@ -319,7 +383,24 @@ export default function AccountPage({
                 </div>
               ) : (
                 <>
-                  <ProfileField label={t.account.labelCommercialName} value={profile?.name} />
+                  {editingName ? (
+                    <div className="space-y-1 py-2.5 border-b border-border">
+                      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                        {t.account.labelCommercialName}
+                      </label>
+                      <Input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="h-9 text-sm"
+                        placeholder="Nom commercial"
+                        // eslint-disable-next-line jsx-a11y/no-autofocus
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <ProfileField label={t.account.labelCommercialName} value={profile?.name} />
+                  )}
                   <ProfileField label={t.account.labelLegalName} value={profile?.legalName} />
                   <ProfileField label={t.account.labelSiret} value={profile?.siret} />
                   <ProfileField label={t.account.labelVat} value={profile?.vatNumber} />
