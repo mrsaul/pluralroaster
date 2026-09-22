@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   House,
@@ -7,14 +7,20 @@ import {
   LogOut,
   ClipboardList,
   MapPin,
+  Pencil,
+  Check,
+  X,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Order } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { OrderHistoryTab } from "@/components/OrderHistoryTab";
 import { OrderDetailView } from "@/components/OrderDetailView";
 import { useT, useLang } from "@/i18n";
+import { useToast } from "@/components/ui/use-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,14 +79,22 @@ export default function AccountPage({
 }: AccountPageProps) {
   const t = useT();
   const { lang, setLang } = useLang();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>("orders");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
+
+  // Contact edit state
+  const [editingContact, setEditingContact] = useState(false);
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [savingContact, setSavingContact] = useState(false);
 
   // Load company profile from contacts → companies
   useEffect(() => {
@@ -88,14 +102,13 @@ export default function AccountPage({
 
     const load = async () => {
       setLoadingProfile(true);
-      const [{ data: userData }, { data: contact }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase
-          .from("contacts")
-          .select("id, company_id, companies(name, email, phone, legal_company_name, siret, vat_number)")
-          .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
-          .maybeSingle(),
-      ]);
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id ?? "";
+      const { data: contact } = await supabase
+        .from("contacts")
+        .select("id, company_id, companies(name, email, phone, legal_company_name, siret, vat_number)")
+        .eq("user_id", userId)
+        .maybeSingle();
 
       if (cancelled) return;
 
@@ -111,6 +124,7 @@ export default function AccountPage({
           siret: company.siret,
           vatNumber: company.vat_number,
         });
+        setCompanyId((contact as any)?.company_id ?? null);
       }
       setLoadingProfile(false);
     };
@@ -118,6 +132,35 @@ export default function AccountPage({
     void load();
     return () => { cancelled = true; };
   }, []);
+
+  const startEditContact = useCallback(() => {
+    setEditPhone(profile?.phone ?? "");
+    setEditEmail(profile?.email ?? "");
+    setEditingContact(true);
+  }, [profile]);
+
+  const cancelEditContact = useCallback(() => {
+    setEditingContact(false);
+  }, []);
+
+  const saveContact = useCallback(async () => {
+    if (!companyId) return;
+    setSavingContact(true);
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({ phone: editPhone || null, email: editEmail || null })
+        .eq("id", companyId);
+      if (error) throw error;
+      setProfile((p) => p ? { ...p, phone: editPhone || null, email: editEmail || null } : p);
+      setEditingContact(false);
+      toast({ title: lang === "fr" ? "Contact mis à jour" : "Contact updated" });
+    } catch (err) {
+      toast({ title: lang === "fr" ? "Erreur lors de la mise à jour" : "Update failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setSavingContact(false);
+    }
+  }, [companyId, editPhone, editEmail, lang, toast]);
 
   // Load addresses when the addresses tab is first opened
   useEffect(() => {
@@ -281,14 +324,76 @@ export default function AccountPage({
             </section>
 
             <section className="rounded-2xl border border-border bg-card px-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1">
-                {t.account.sectionContact}
-              </p>
+              <div className="flex items-center justify-between pt-3 pb-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t.account.sectionContact}
+                </p>
+                {!loadingProfile && !editingContact && (
+                  <button
+                    type="button"
+                    onClick={startEditContact}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    {lang === "fr" ? "Modifier" : "Edit"}
+                  </button>
+                )}
+                {editingContact && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={cancelEditContact}
+                      disabled={savingContact}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveContact()}
+                      disabled={savingContact}
+                      className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+                    >
+                      {savingContact
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Check className="w-3.5 h-3.5" />}
+                      {lang === "fr" ? "Enregistrer" : "Save"}
+                    </button>
+                  </div>
+                )}
+              </div>
               {loadingProfile ? (
                 <div className="py-4 space-y-3 animate-pulse">
                   {[...Array(2)].map((_, i) => (
                     <div key={i} className="h-4 w-full rounded bg-muted" />
                   ))}
+                </div>
+              ) : editingContact ? (
+                <div className="space-y-3 py-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                      {t.account.labelEmail}
+                    </label>
+                    <Input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="h-9 text-sm"
+                      placeholder="email@exemple.com"
+                    />
+                  </div>
+                  <div className="space-y-1 pb-1">
+                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                      {t.account.labelPhone}
+                    </label>
+                    <Input
+                      type="tel"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      className="h-9 text-sm"
+                      placeholder="0600000000"
+                    />
+                  </div>
                 </div>
               ) : (
                 <>
@@ -332,7 +437,9 @@ export default function AccountPage({
             </section>
 
             <p className="text-xs text-muted-foreground text-center pb-2">
-              {t.account.editHint}
+              {lang === "fr"
+                ? "Les données légales (SIRET, TVA…) sont gérées par votre chargé de compte."
+                : "Legal data (SIRET, VAT…) is managed by your account manager."}
             </p>
           </motion.div>
         )}
