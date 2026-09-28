@@ -98,7 +98,7 @@ const mapProductRow = (product: ProductRow, variants?: ProductVariant[]): Produc
   return {
     id: product.id,
     name: isCustom && row.custom_name ? row.custom_name : product.name,
-    origin: product.origin ?? "Unknown origin",
+    origin: product.origin ?? null,
     sku: product.sku ?? product.sellsy_id,
     pricePerKg:
       isCustom && row.custom_price_per_kg != null

@@ -77,9 +77,11 @@ export function OrderDetailView({ order, onBack, onReorder }: OrderDetailViewPro
                     <p className="font-semibold text-sm leading-tight truncate">
                       {item.product.name}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.product.origin}
-                    </p>
+                    {item.product.origin && (
+                      <p className="text-xs text-muted-foreground">
+                        {item.product.origin}
+                      </p>
+                    )}
                     {item.sizeLabel && (
                       <p className="text-xs text-muted-foreground">
                         {resolveVariantLabel({ size_label: item.sizeLabel, size_kg: item.sizeKg ?? null })}

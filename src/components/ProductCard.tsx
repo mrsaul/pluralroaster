@@ -34,7 +34,7 @@ export function ProductCard({ product, quantity, onQuantityChange }: ProductCard
           {product.name}
         </p>
         <p className="text-xs text-muted-foreground">
-          {product.origin} · <span className="font-mono tabular-nums">{product.sku}</span>
+          {product.origin ? `${product.origin} · ` : ""}<span className="font-mono tabular-nums">{product.sku}</span>
           {isBag && <span className="ml-1">· 3kg/sac</span>}
         </p>
       </div>

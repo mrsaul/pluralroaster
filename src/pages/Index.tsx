@@ -137,7 +137,7 @@ const mapPersistedOrder = (order: PersistedOrderRow): Order => ({
     product: {
       id: item.products?.id ?? item.product_id,
       name: item.products?.name ?? item.product_name,
-      origin: item.products?.origin ?? "Unknown origin",
+      origin: item.products?.origin ?? null,
       sku: item.products?.sku ?? item.product_sku ?? item.product_id,
       pricePerKg: Number(item.products?.price_per_kg ?? item.price_per_kg),
       roastLevel: normalizeRoastLevel(item.products?.roast_level ?? null),
