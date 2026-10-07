@@ -405,24 +405,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               )}
             </div>
 
-            {/* 2. Sellsy Client ID */}
-            <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Sellsy Client ID (for invoicing)</p>
-              <Input
-                value={sellsyClientId}
-                onChange={(e) => setSellsyClientId(e.target.value)}
-                placeholder="e.g. 123456"
-                className="font-mono text-sm"
-              />
-              {!sellsyClientId.trim() && (
-                <p className="text-[11px] text-warning flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" />
-                  Without a Sellsy ID, invoices can't be sent for this client.
-                </p>
-              )}
-            </div>
-
-            {/* 3. Client company information */}
+            {/* 2. Client company information */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Company Name</p>
@@ -621,6 +604,23 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                     Sync from Sellsy
                   </Button>
                 </div>
+              )}
+            </div>
+
+            {/* 5. Sellsy Client ID */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Sellsy Client ID (for invoicing)</p>
+              <Input
+                value={sellsyClientId}
+                onChange={(e) => setSellsyClientId(e.target.value)}
+                placeholder="e.g. 123456"
+                className="font-mono text-sm"
+              />
+              {!sellsyClientId.trim() && (
+                <p className="text-[11px] text-warning flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Without a Sellsy ID, invoices can't be sent for this client.
+                </p>
               )}
             </div>
 
