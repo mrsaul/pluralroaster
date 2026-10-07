@@ -332,58 +332,80 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             {showDraftBanner && draftSavedAt && (
               <DraftBanner savedAt={draftSavedAt} onDiscard={discardDraft} />
             )}
-            {/* Data Source Mode */}
-            <div className="rounded-xl border-2 border-border p-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">Client Data Source</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleModeSwitch("sellsy")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                    isSellsyMode
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-muted-foreground/50"
-                  )}
-                >
-                  <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
-                  <div>
-                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
-                    <p className="text-[11px] text-muted-foreground">Read-only data</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleModeSwitch("custom")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                    !isSellsyMode
-                      ? "border-accent-foreground bg-accent/50"
-                      : "border-border hover:border-muted-foreground/50"
-                  )}
-                >
-                  <Unlink2 className={cn("h-4 w-4 shrink-0", !isSellsyMode ? "text-accent-foreground" : "text-muted-foreground")} />
-                  <div>
-                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Custom Override</p>
-                    <p className="text-[11px] text-muted-foreground">Edit in app</p>
-                  </div>
-                </button>
-              </div>
 
-              {isSellsyMode ? (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
-                  <Link2 className="h-3.5 w-3.5 text-primary" />
-                  <p className="text-xs text-primary font-medium">Synced with Sellsy — contact & delivery fields are read-only</p>
+            {/* 1. Order History */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Order History</p>
+                {loadingOrders && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              </div>
+              {!loadingOrders && orders.length === 0 && (
+                <div className="flex items-center gap-2 rounded-lg bg-muted/30 border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+                  <Package className="h-4 w-4 shrink-0" />
+                  No orders yet for this client.
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
-                  <AlertTriangle className="h-3.5 w-3.5 text-accent-foreground" />
-                  <p className="text-xs text-accent-foreground font-medium">Custom override — changes apply only inside the app</p>
+              )}
+              {orders.length > 0 && (
+                <div className="space-y-1.5">
+                  {orders.map((order) => {
+                    const isExpanded = expandedOrderId === order.id;
+                    const orderRef = `#${order.id.slice(0, 8).toUpperCase()}`;
+                    const statusColor =
+                      order.status === "confirmed" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                      order.status === "received" ? "bg-green-100 text-green-700 border-green-200" :
+                      order.status === "cancelled" ? "bg-red-100 text-red-700 border-red-200" :
+                      "bg-muted text-muted-foreground border-border";
+                    return (
+                      <div key={order.id} className="rounded-lg border border-border overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                          <span className="text-xs font-mono font-semibold text-foreground">{orderRef}</span>
+                          <span className="flex-1 text-xs text-muted-foreground tabular-nums">
+                            {format(parseISO(order.created_at), "d MMM yyyy")}
+                            {order.delivery_date && (
+                              <span className="ml-1.5">→ {format(parseISO(order.delivery_date), "d MMM")}</span>
+                            )}
+                          </span>
+                          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", statusColor)}>
+                            {order.status}
+                          </span>
+                          <span className="text-xs font-medium tabular-nums text-muted-foreground ml-2">
+                            {order.total_kg} kg
+                          </span>
+                          <span className="text-xs font-semibold tabular-nums text-foreground ml-2">
+                            €{order.total_price.toFixed(2)}
+                          </span>
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-border bg-muted/20 px-3 py-2 space-y-1">
+                            {order.items.map((item) => (
+                              <div key={item.id} className="flex items-baseline justify-between gap-2 text-xs">
+                                <span className="text-foreground font-medium truncate">{item.product_name}</span>
+                                <span className="shrink-0 text-muted-foreground tabular-nums">
+                                  {item.quantity} kg{item.size_label ? ` · ${item.size_label}` : ""}
+                                  {" · "}€{item.price_per_kg.toFixed(2)}/kg
+                                </span>
+                              </div>
+                            ))}
+                            {order.sellsy_id && (
+                              <p className="text-[10px] text-muted-foreground/60 pt-1">Sellsy #{order.sellsy_id}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Sellsy Client ID — editable */}
+            {/* 2. Sellsy Client ID */}
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Sellsy Client ID (for invoicing)</p>
               <Input
@@ -400,7 +422,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               )}
             </div>
 
-            {/* Editable / Read-only fields */}
+            {/* 3. Client company information */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Company Name</p>
@@ -452,179 +474,161 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                   <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Full delivery address" />
                 )}
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <p className="text-xs text-muted-foreground">Pricing Tier</p>
-                {tierOptions.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
+            </div>
+
+            {/* 4. Pricing Tier */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Pricing Tier</p>
+              {tierOptions.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setPricingTierId(null); setPricingTier("standard"); }}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                        !pricingTierId
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                      )}
+                    >
+                      No tier (standard)
+                    </button>
+                    {tierOptions.map((t) => (
                       <button
+                        key={t.id}
                         type="button"
-                        onClick={() => { setPricingTierId(null); setPricingTier("standard"); }}
+                        onClick={() => {
+                          if (pricingTierId && pricingTierId !== t.id) {
+                            setPendingTierChange(t.id);
+                          } else {
+                            setPricingTierId(t.id);
+                            setPricingTier(t.name);
+                          }
+                        }}
                         className={cn(
                           "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                          !pricingTierId
+                          pricingTierId === t.id
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                         )}
                       >
-                        No tier (standard)
+                        {t.name}
+                        {t.product_discount_percent > 0 && ` (${t.product_discount_percent}%)`}
                       </button>
-                      {tierOptions.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => {
-                            if (pricingTierId && pricingTierId !== t.id) {
-                              setPendingTierChange(t.id);
-                            } else {
-                              setPricingTierId(t.id);
-                              setPricingTier(t.name);
-                            }
-                          }}
-                          className={cn(
-                            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                            pricingTierId === t.id
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
-                          )}
-                        >
-                          {t.name}
-                          {t.product_discount_percent > 0 && ` (${t.product_discount_percent}%)`}
-                        </button>
-                      ))}
-                    </div>
-                    {pricingTierId && (() => {
-                      const sel = tierOptions.find((t) => t.id === pricingTierId);
-                      if (!sel) return null;
-                      return (
-                        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                          {sel.product_discount_percent > 0 && <span>{sel.product_discount_percent}% off products</span>}
-                          {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
-                          {sel.delivery_discount_percent > 0 && (
-                            <span>{sel.delivery_discount_percent === 100 ? "Free delivery" : `${sel.delivery_discount_percent}% off delivery`}</span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    ))}
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No pricing tiers created yet. Create tiers in the Pricing section.</p>
-                )}
-              </div>
+                  {pricingTierId && (() => {
+                    const sel = tierOptions.find((t) => t.id === pricingTierId);
+                    if (!sel) return null;
+                    return (
+                      <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                        {sel.product_discount_percent > 0 && <span>{sel.product_discount_percent}% off products</span>}
+                        {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
+                        {sel.delivery_discount_percent > 0 && (
+                          <span>{sel.delivery_discount_percent === 100 ? "Free delivery" : `${sel.delivery_discount_percent}% off delivery`}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No pricing tiers created yet. Create tiers in the Pricing section.</p>
+              )}
             </div>
 
-            {/* Sync from Sellsy */}
-            {client.sellsy_client_id && (
-              <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {client.last_synced_at
-                    ? `Last synced: ${format(parseISO(client.last_synced_at), "MMM d, yyyy HH:mm")}`
-                    : "Never synced with Sellsy"}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={syncing}
-                  className="gap-1.5 text-xs h-7"
-                  onClick={async () => {
-                    setSyncing(true);
-                    try {
-                      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
-                        body: { mode: "sync-client", sellsy_client_id: client.sellsy_client_id, client_id: client.id },
-                      });
-                      if (error) throw error;
-                      if (!data?.success) throw new Error(data?.error ?? "Sync failed");
-                      toast({ title: "Client synced from Sellsy" });
-                      onSaved();
-                    } catch (err) {
-                      toast({ title: "Sync failed", description: String(err), variant: "destructive" });
-                    } finally {
-                      setSyncing(false);
-                    }
-                  }}
+            {/* 5. Client Data Source */}
+            <div className="rounded-xl border-2 border-border p-4 space-y-3">
+              <p className="text-sm font-medium text-foreground">Client Data Source</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleModeSwitch("sellsy")}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
+                    isSellsyMode
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-muted-foreground/50"
+                  )}
                 >
-                  {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                  Sync from Sellsy
-                </Button>
+                  <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
+                  <div>
+                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
+                    <p className="text-[11px] text-muted-foreground">Read-only data</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleModeSwitch("custom")}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
+                    !isSellsyMode
+                      ? "border-accent-foreground bg-accent/50"
+                      : "border-border hover:border-muted-foreground/50"
+                  )}
+                >
+                  <Unlink2 className={cn("h-4 w-4 shrink-0", !isSellsyMode ? "text-accent-foreground" : "text-muted-foreground")} />
+                  <div>
+                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Custom Override</p>
+                    <p className="text-[11px] text-muted-foreground">Edit in app</p>
+                  </div>
+                </button>
               </div>
-            )}
+
+              {isSellsyMode ? (
+                <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
+                  <Link2 className="h-3.5 w-3.5 text-primary" />
+                  <p className="text-xs text-primary font-medium">Synced with Sellsy — contact & delivery fields are read-only</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
+                  <AlertTriangle className="h-3.5 w-3.5 text-accent-foreground" />
+                  <p className="text-xs text-accent-foreground font-medium">Custom override — changes apply only inside the app</p>
+                </div>
+              )}
+
+              {client.sellsy_client_id && (
+                <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {client.last_synced_at
+                      ? `Last synced: ${format(parseISO(client.last_synced_at), "MMM d, yyyy HH:mm")}`
+                      : "Never synced with Sellsy"}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={syncing}
+                    className="gap-1.5 text-xs h-7"
+                    onClick={async () => {
+                      setSyncing(true);
+                      try {
+                        const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+                          body: { mode: "sync-client", sellsy_client_id: client.sellsy_client_id, client_id: client.id },
+                        });
+                        if (error) throw error;
+                        if (!data?.success) throw new Error(data?.error ?? "Sync failed");
+                        toast({ title: "Client synced from Sellsy" });
+                        onSaved();
+                      } catch (err) {
+                        toast({ title: "Sync failed", description: String(err), variant: "destructive" });
+                      } finally {
+                        setSyncing(false);
+                      }
+                    }}
+                  >
+                    {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    Sync from Sellsy
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {/* Onboarding info */}
             <div className="rounded-lg bg-muted/30 border border-dashed border-border px-3 py-2">
               <p className="text-[11px] text-muted-foreground">
                 Registered: {format(parseISO(client.created_at), "MMM d, yyyy")} · Status: <span className="capitalize font-medium">{client.onboarding_status ?? "pending"}</span>
               </p>
-            </div>
-
-            {/* Order History */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-foreground">Order History</p>
-                {loadingOrders && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-              </div>
-              {!loadingOrders && orders.length === 0 && (
-                <div className="flex items-center gap-2 rounded-lg bg-muted/30 border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-                  <Package className="h-4 w-4 shrink-0" />
-                  No orders yet for this client.
-                </div>
-              )}
-              {orders.length > 0 && (
-                <div className="space-y-1.5">
-                  {orders.map((order) => {
-                    const isExpanded = expandedOrderId === order.id;
-                    const statusColor =
-                      order.status === "confirmed" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                      order.status === "received" ? "bg-green-100 text-green-700 border-green-200" :
-                      order.status === "cancelled" ? "bg-red-100 text-red-700 border-red-200" :
-                      "bg-muted text-muted-foreground border-border";
-                    return (
-                      <div key={order.id} className="rounded-lg border border-border overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
-                        >
-                          {isExpanded
-                            ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-                          <span className="flex-1 text-xs text-muted-foreground tabular-nums">
-                            {format(parseISO(order.created_at), "d MMM yyyy")}
-                            {order.delivery_date && (
-                              <span className="ml-1.5">→ {format(parseISO(order.delivery_date), "d MMM")}</span>
-                            )}
-                          </span>
-                          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", statusColor)}>
-                            {order.status}
-                          </span>
-                          <span className="text-xs font-medium tabular-nums text-muted-foreground ml-2">
-                            {order.total_kg} kg
-                          </span>
-                          <span className="text-xs font-semibold tabular-nums text-foreground ml-2">
-                            €{order.total_price.toFixed(2)}
-                          </span>
-                        </button>
-                        {isExpanded && (
-                          <div className="border-t border-border bg-muted/20 px-3 py-2 space-y-1">
-                            {order.items.map((item) => (
-                              <div key={item.id} className="flex items-baseline justify-between gap-2 text-xs">
-                                <span className="text-foreground font-medium truncate">{item.product_name}</span>
-                                <span className="shrink-0 text-muted-foreground tabular-nums">
-                                  {item.quantity} kg{item.size_label ? ` · ${item.size_label}` : ""}
-                                  {" · "}€{item.price_per_kg.toFixed(2)}/kg
-                                </span>
-                              </div>
-                            ))}
-                            {order.sellsy_id && (
-                              <p className="text-[10px] text-muted-foreground/60 pt-1">Sellsy #{order.sellsy_id}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             {/* Save */}
