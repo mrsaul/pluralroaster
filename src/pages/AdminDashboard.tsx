@@ -3,6 +3,7 @@ import { useUrlState, useUrlBoolState } from "@/hooks/useUrlState";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import { PricingTiersView } from "@/components/PricingTiersView";
+import { DeliveryDatesManager } from "@/components/DeliveryDatesManager";
 import { UserManagementView } from "@/components/UserManagementView";
 import { StockView } from "@/components/StockView";
 import {
@@ -298,8 +299,8 @@ function RevenueSection({ orders }: { orders: _AdminOrderForRevenue[] }) {
 /* ─── Component ─── */
 
 const ADMIN_SECTION_KEY = "pr_admin_section";
-type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock" | "revenue";
-const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "invoicing", "team", "profile", "pricing", "stock", "revenue"];
+type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock" | "revenue" | "delivery";
+const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "invoicing", "team", "profile", "pricing", "stock", "revenue", "delivery"];
 
 function loadAdminSection(): AdminSection {
   try {
@@ -1166,6 +1167,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     team: "Team",
     profile: "Profile Settings",
     revenue: "Revenue",
+    delivery: "Delivery Dates",
   };
 
   /* ── Sidebar nav items ── */
@@ -1185,6 +1187,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "pricing" as const, icon: BadgeEuro, label: "Pricing", badge: null },
+    { key: "delivery" as const, icon: Calendar, label: "Delivery Dates", badge: null },
     { key: "stock" as const, icon: Warehouse, label: "Stock", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
     { key: "profile" as const, icon: Settings, label: "Profile Settings", badge: null },
@@ -2196,6 +2199,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               </section>
             )}
+
+            {/* ═══════════ DELIVERY DATES ═══════════ */}
+            {activeSection === "delivery" && <DeliveryDatesManager />}
 
             {/* ═══════════ PRICING ═══════════ */}
             {activeSection === "pricing" && <PricingTiersView />}

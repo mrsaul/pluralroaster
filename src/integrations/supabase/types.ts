@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      delivery_dates: {
+        Row: {
+          id: string
+          date: string
+          is_default: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          date: string
+          is_default?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          date?: string
+          is_default?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       client_onboarding_legacy: {
         Row: {
           admin_notes: string | null

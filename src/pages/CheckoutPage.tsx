@@ -447,7 +447,11 @@ export default function CheckoutPage({
         {/* ── Delivery date ── */}
         <section className="bg-card border border-border rounded-lg p-4 space-y-3">
           <h2 className="text-sm font-medium text-foreground">{t.checkout.deliveryDate}</h2>
-          <DeliveryDatePicker selected={deliveryDate} onSelect={setDeliveryDate} />
+          <DeliveryDatePicker
+            selected={deliveryDate}
+            onSelect={setDeliveryDate}
+            onDefaultDate={(d) => setDeliveryDate((prev) => prev ?? d)}
+          />
         </section>
 
         {/* ── Notes ── */}

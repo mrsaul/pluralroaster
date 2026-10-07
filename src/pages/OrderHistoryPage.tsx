@@ -151,10 +151,14 @@ export default function OrderHistoryPage({
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-sm font-medium text-foreground">Delivery date</span>
                         <span className="text-xs text-muted-foreground">
-                          {draftDeliveryDate ? format(new Date(`${draftDeliveryDate}T00:00:00`), "EEE, MMM d") : "Tue or Fri only"}
+                          {draftDeliveryDate ? format(new Date(`${draftDeliveryDate}T00:00:00`), "EEE, MMM d") : "Pick a date"}
                         </span>
                       </div>
-                      <DeliveryDatePicker selected={draftDeliveryDate} onSelect={onDraftDeliveryDateChange} />
+                      <DeliveryDatePicker
+                        selected={draftDeliveryDate}
+                        onSelect={onDraftDeliveryDateChange}
+                        onDefaultDate={(d) => { if (!draftDeliveryDate) onDraftDeliveryDateChange(d); }}
+                      />
                     </div>
                   </div>
 
