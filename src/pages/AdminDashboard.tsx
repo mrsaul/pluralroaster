@@ -2224,8 +2224,22 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       {/* ── Order detail dialog ── */}
       <Dialog open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className={cn(
+          "sm:max-w-2xl overflow-y-auto p-0",
+          // Mobile: bottom sheet anchored to screen bottom
+          "fixed bottom-0 left-0 right-0 top-auto translate-x-0 translate-y-0 max-h-[92dvh] rounded-t-2xl rounded-b-none",
+          // Desktop: centered modal
+          "sm:bottom-auto sm:left-[50%] sm:right-auto sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-h-[90vh] sm:rounded-xl sm:w-full",
+          // Override slide animations for mobile (slide from bottom)
+          "data-[state=open]:slide-in-from-bottom-full sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]",
+          "data-[state=closed]:slide-out-to-bottom-full sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%]",
+        )}>
+          {/* Mobile drag handle */}
+          <div className="flex justify-center pt-3 pb-1 sm:hidden">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+          </div>
+          <div className="px-5 pb-5 pt-2 sm:p-6">
+          <DialogHeader className="pr-8">
             <DialogTitle className="flex items-center gap-3">
               Order {selectedOrder?.id.slice(0, 8)}
               {selectedOrder && (
@@ -2508,6 +2522,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             </div>
             );
           })()}
+          </div>{/* /inner px-5 wrapper */}
         </DialogContent>
       </Dialog>
 
