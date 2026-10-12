@@ -1,7 +1,7 @@
 // PluralRoaster — Service Worker
 // Strategy: cache-first for static shell; skip Supabase API requests.
 
-const CACHE = 'pluralroaster-v2';
+const CACHE = 'pluralroaster-v3';
 const SHELL = ['/', '/index.html'];
 
 // ── Install: pre-cache the app shell ─────────────────────────────────────────
@@ -32,6 +32,22 @@ self.addEventListener('fetch', (event) => {
   // Let Supabase API, auth and storage requests go straight to the network.
   if (url.origin !== self.location.origin) return;
   if (request.method !== 'GET') return;
+
+  // Pages: network-first so a new deploy shows on the next launch; cache only when offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached ?? caches.match('/index.html')))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {

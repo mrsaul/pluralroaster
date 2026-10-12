@@ -2231,12 +2231,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       {/* ── Order detail: bottom sheet on mobile, dialog on desktop ── */}
       {isMobile ? (
         <Sheet open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-          <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl p-0 pb-safe">
+          <SheetContent side="bottom" className="max-h-[calc(100dvh-env(safe-area-inset-top)-3rem)] overflow-y-auto rounded-t-2xl p-0">
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
-            <div className="px-5 pb-6 pt-1">
-            <SheetHeaderPrimitive className="pr-10 mb-4">
+            <div className="px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1">
+            <SheetHeaderPrimitive className="pr-10 mb-4 text-left">
               <SheetTitlePrimitive className="flex items-center gap-3 text-left">
                 Order {selectedOrder?.id.slice(0, 8)}
                 {selectedOrder && (
