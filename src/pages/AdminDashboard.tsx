@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useUrlState, useUrlBoolState } from "@/hooks/useUrlState";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Sheet, SheetContent, SheetHeader as SheetHeaderPrimitive,
+  SheetTitle as SheetTitlePrimitive, SheetDescription as SheetDescriptionPrimitive,
+} from "@/components/ui/sheet";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import { PricingTiersView } from "@/components/PricingTiersView";
 import { DeliveryDatesManager } from "@/components/DeliveryDatesManager";
@@ -312,6 +317,7 @@ function loadAdminSection(): AdminSection {
 }
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
+  const isMobile = useIsMobile();
   const [activeSection, setActiveSectionRaw] = useState<AdminSection>(() => loadAdminSection());
 
   const setActiveSection = useCallback((section: AdminSection) => {
@@ -2222,34 +2228,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         </main>
       </div>
 
-      {/* ── Order detail dialog ── */}
-      <Dialog open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <DialogContent className={cn(
-          "sm:max-w-2xl overflow-y-auto p-0",
-          // Mobile: bottom sheet anchored to screen bottom
-          "fixed bottom-0 left-0 right-0 top-auto translate-x-0 translate-y-0 max-h-[92dvh] rounded-t-2xl rounded-b-none",
-          // Desktop: centered modal
-          "sm:bottom-auto sm:left-[50%] sm:right-auto sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-h-[90vh] sm:rounded-xl sm:w-full",
-          // Override slide animations for mobile (slide from bottom)
-          "data-[state=open]:slide-in-from-bottom-full sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]",
-          "data-[state=closed]:slide-out-to-bottom-full sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%]",
-        )}>
-          {/* Mobile drag handle */}
-          <div className="flex justify-center pt-3 pb-1 sm:hidden">
-            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-          </div>
-          <div className="px-5 pb-5 pt-2 sm:p-6">
-          <DialogHeader className="pr-8">
-            <DialogTitle className="flex items-center gap-3">
-              Order {selectedOrder?.id.slice(0, 8)}
-              {selectedOrder && (
-                <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[selectedOrder.status])}>
-                  {ORDER_STATUS_LABEL[selectedOrder.status]}
-                </span>
-              )}
-            </DialogTitle>
-            <DialogDescription>Full order breakdown and actions.</DialogDescription>
-          </DialogHeader>
+      {/* ── Order detail: bottom sheet on mobile, dialog on desktop ── */}
+      {isMobile ? (
+        <Sheet open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
+          <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl p-0 pb-safe">
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            <div className="px-5 pb-6 pt-1">
+            <SheetHeaderPrimitive className="pr-10 mb-4">
+              <SheetTitlePrimitive className="flex items-center gap-3 text-left">
+                Order {selectedOrder?.id.slice(0, 8)}
+                {selectedOrder && (
+                  <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[selectedOrder.status])}>
+                    {ORDER_STATUS_LABEL[selectedOrder.status]}
+                  </span>
+                )}
+              </SheetTitlePrimitive>
+              <SheetDescriptionPrimitive>Full order breakdown and actions.</SheetDescriptionPrimitive>
+            </SheetHeaderPrimitive>
 
           {selectedOrder && (() => {
             const isEditable = selectedOrder.status === "received";
@@ -2522,11 +2519,299 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             </div>
             );
           })()}
-          </div>{/* /inner px-5 wrapper */}
-        </DialogContent>
-      </Dialog>
+            </div>{/* /inner px-5 pb-6 */}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="pr-8">
+              <DialogTitle className="flex items-center gap-3">
+                Order {selectedOrder?.id.slice(0, 8)}
+                {selectedOrder && (
+                  <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[selectedOrder.status])}>
+                    {ORDER_STATUS_LABEL[selectedOrder.status]}
+                  </span>
+                )}
+              </DialogTitle>
+              <DialogDescription>Full order breakdown and actions.</DialogDescription>
+            </DialogHeader>
 
-      {/* ── Client detail dialog ── */}
+            {selectedOrder && (() => {
+              const isEditable = selectedOrder.status === "received";
+              const canEdit = !["delivered"].includes(selectedOrder.status);
+              const hasSellsyWarning = canEdit && !isEditable && selectedOrder.sellsy_id;
+              return (
+              <div className="space-y-5">
+                {/* Info grid */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg bg-muted/40 p-3">
+                    <p className="text-xs text-muted-foreground">Client</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{selectedOrder.client_name || selectedOrder.user_email || "Unknown"}</p>
+                    {selectedOrder.user_email && selectedOrder.client_name && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{selectedOrder.user_email}</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg bg-muted/40 p-3">
+                    <p className="text-xs text-muted-foreground">Delivery date</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(selectedOrder.delivery_date), "EEEE d MMMM yyyy")}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/40 p-3">
+                    <p className="text-xs text-muted-foreground">Order date</p>
+                    <p className="mt-1 text-sm text-foreground">{format(parseISO(selectedOrder.created_at), "MMM d, yyyy HH:mm")}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/40 p-3">
+                    <p className="text-xs text-muted-foreground">Change status</p>
+                    <Select
+                      value={selectedOrder.status}
+                      onValueChange={(val) => {
+                        void changeOrderStatus(selectedOrder.id, val as OrderStatus);
+                        setSelectedOrder({ ...selectedOrder, status: val as OrderStatus });
+                      }}
+                    >
+                      <SelectTrigger className="mt-1 h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ORDER_STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>{ORDER_STATUS_LABEL[s]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Checklist */}
+                <div className="rounded-lg bg-muted/40 p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preparation checklist</p>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={selectedOrder.is_roasted}
+                      onCheckedChange={(v) => {
+                        void updateChecklist(selectedOrder.id, "is_roasted", Boolean(v));
+                        setSelectedOrder({ ...selectedOrder, is_roasted: Boolean(v) });
+                      }}
+                    />
+                    <span className={cn(selectedOrder.is_roasted && "line-through text-muted-foreground")}>Roasted</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={selectedOrder.is_packed}
+                      onCheckedChange={(v) => {
+                        void updateChecklist(selectedOrder.id, "is_packed", Boolean(v));
+                        setSelectedOrder({ ...selectedOrder, is_packed: Boolean(v) });
+                      }}
+                    />
+                    <span className={cn(selectedOrder.is_packed && "line-through text-muted-foreground")}>Packed</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={selectedOrder.is_labeled}
+                      onCheckedChange={(v) => {
+                        void updateChecklist(selectedOrder.id, "is_labeled", Boolean(v));
+                        setSelectedOrder({ ...selectedOrder, is_labeled: Boolean(v) });
+                      }}
+                    />
+                    <span className={cn(selectedOrder.is_labeled && "line-through text-muted-foreground")}>Labeled</span>
+                  </label>
+                </div>
+
+                {/* Items — mobile cards */}
+                <div className="lg:hidden space-y-2">
+                  {selectedOrder.items.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4 text-sm">No items</p>
+                  ) : selectedOrder.items.map((item) => {
+                    const size = normalizeSize(item.size_label, item.size_kg);
+                    const bags = size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
+                    return (
+                      <div key={item.id} className="rounded-xl border border-border bg-muted/20 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground leading-snug flex-1 min-w-0">{item.product_name}</p>
+                          {canEdit && (
+                            <button
+                              className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors active:scale-95"
+                              onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mt-2.5 gap-3">
+                          {canEdit ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors active:scale-95"
+                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - (item.size_kg ?? 1))}
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-10 text-center tabular-nums text-foreground font-semibold text-sm">
+                                  {bags ?? item.quantity}
+                                </span>
+                                <button
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors active:scale-95"
+                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + (item.size_kg ?? 1))}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              {size && <span className="text-xs text-muted-foreground pl-0.5">{size} / unité</span>}
+                            </div>
+                          ) : (
+                            <span className="text-sm font-semibold text-foreground tabular-nums">
+                              {bags != null ? `${bags} × ${size}` : `${item.quantity} kg`}
+                            </span>
+                          )}
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">€{item.price_per_kg.toFixed(2)}/kg</p>
+                            <p className="text-sm font-bold tabular-nums text-foreground">€{(item.quantity * item.price_per_kg).toFixed(2)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Items — desktop table */}
+                <div className="hidden lg:block rounded-lg border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50 hover:bg-muted/50">
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-right">Qté</TableHead>
+                        <TableHead className="text-right">€/kg</TableHead>
+                        <TableHead className="text-right">Subtotal</TableHead>
+                        {canEdit && <TableHead className="w-[80px]" />}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedOrder.items.length === 0 ? (
+                        <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
+                      ) : (
+                        selectedOrder.items.map((item) => {
+                          const size = normalizeSize(item.size_label, item.size_kg);
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
+                              <TableCell className="text-right">
+                                {canEdit ? (
+                                  <div className="inline-flex flex-col items-end gap-0.5">
+                                    <div className="inline-flex items-center gap-1">
+                                      <button
+                                        className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                        onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - (item.size_kg ?? 1))}
+                                      >
+                                        <Minus className="w-3 h-3" />
+                                      </button>
+                                      <span className="w-8 text-center tabular-nums text-foreground font-medium">
+                                        {size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : item.quantity}
+                                      </span>
+                                      <button
+                                        className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                        onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + (item.size_kg ?? 1))}
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                    {size && (
+                                      <span className="text-xs text-muted-foreground">{size}</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="tabular-nums text-foreground">
+                                    {size && item.size_kg != null
+                                      ? `${Math.round(item.quantity / item.size_kg)} × ${size}`
+                                      : `${item.quantity}`}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
+                              <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
+                              {canEdit && (
+                                <TableCell className="text-right">
+                                  <button
+                                    className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                                    onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Add product (editable orders) */}
+                {canEdit && (
+                  <div>
+                    {showAddProduct ? (
+                      <div className="rounded-lg border border-border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-foreground">Add a product</p>
+                          <button onClick={() => setShowAddProduct(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="grid gap-1 max-h-48 overflow-y-auto">
+                          {products.filter((p) => p.is_active && !selectedOrder.items.some((i) => i.product_id === p.id)).map((p) => (
+                            <button
+                              key={p.id}
+                              className="flex items-center justify-between rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
+                              onClick={() => { void addProductToOrder(selectedOrder.id, p); setShowAddProduct(false); }}
+                            >
+                              <span className="text-foreground">{p.custom_name || p.name}</span>
+                              <span className="text-xs text-muted-foreground tabular-nums">€{(p.custom_price_per_kg ?? p.price_per_kg).toFixed(2)}/kg</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowAddProduct(true)}>
+                        <Plus className="w-3.5 h-3.5" /> Add product
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Sellsy warning */}
+                {hasSellsyWarning && (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+                    <p className="text-sm font-medium text-foreground">⚠️ This order has been sent to Sellsy</p>
+                    <p className="text-xs text-muted-foreground mt-1">Changes will not update the existing invoice.</p>
+                  </div>
+                )}
+
+                {/* Totals */}
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <span className="text-sm text-muted-foreground">{selectedOrder.total_kg.toFixed(0)} kg total</span>
+                  <span className="text-lg font-semibold tabular-nums text-foreground">€{selectedOrder.total_price.toFixed(2)}</span>
+                </div>
+
+                {/* Actions */}
+                {selectedOrder.status === "received" && (
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      className="gap-2"
+                      disabled={approvingIds.has(selectedOrder.id)}
+                      onClick={() => {
+                        void approveOrder(selectedOrder);
+                        setSelectedOrder(null);
+                      }}
+                    >
+                      <Check className="w-4 h-4" /> Approve & Send to Sellsy
+                    </Button>
+                  </div>
+                )}
+              </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+      )}
+
       <AdminClientDetail
         client={selectedClient}
         open={Boolean(selectedClient)}
