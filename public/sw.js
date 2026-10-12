@@ -1,7 +1,7 @@
 // PluralRoaster — Service Worker
 // Strategy: cache-first for static shell; skip Supabase API requests.
 
-const CACHE = 'pluralroaster-v1';
+const CACHE = 'pluralroaster-v2';
 const SHELL = ['/', '/index.html'];
 
 // ── Install: pre-cache the app shell ─────────────────────────────────────────
