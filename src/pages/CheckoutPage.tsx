@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CartItem, Product } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
+import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel, computeVatLines, formatVatRate, DEFAULT_COFFEE_VAT_RATE } from "@/lib/orderUtils";
 import { SwipeableCartRow } from "@/components/SwipeableCartRow";
 import { useT } from "@/i18n";
 
@@ -35,7 +35,6 @@ interface CheckoutPageProps {
 
 type Step = "review" | "success" | "error";
 
-const VAT = 0.20;
 
 // ── Helper: compute line totals ───────────────────────────────────────────────
 
@@ -48,6 +47,15 @@ function lineHT(item: CartItem): number {
 function lineQtyKg(item: CartItem): number {
   return item.sizeKg ? item.sizeKg * item.quantity : item.quantity;
 }
+
+function vatLinesFor(items: CartItem[], discountPercent: number) {
+  return computeVatLines(
+    items.map((item) => ({ ht: lineHT(item), rate: item.product.vatRate ?? DEFAULT_COFFEE_VAT_RATE })),
+    discountPercent,
+  );
+}
+
+const sumVat = (lines: { amount: number }[]) => lines.reduce((sum, l) => sum + l.amount, 0);
 
 function linePricePerKg(item: CartItem): number {
   if (item.unitPrice != null && item.sizeKg) return item.unitPrice / item.sizeKg;
@@ -85,8 +93,8 @@ export default function CheckoutPage({
 
   const discountAmount = Math.round(totalPrice * discountPercent / 100 * 100) / 100;
   const discountedProductTotal = totalPrice - discountAmount;
-  const vatAmount = discountedProductTotal * VAT;
-  const totalTTC = discountedProductTotal + vatAmount;
+  const vatLines = vatLinesFor(items, discountPercent);
+  const totalTTC = discountedProductTotal + sumVat(vatLines);
 
   const handleConfirm = useCallback(async () => {
     if (!deliveryDate || submitting) return;
@@ -95,6 +103,7 @@ export default function CheckoutPage({
     const snapTotal = totalPrice;
     const snapDiscountAmount = Math.round(snapTotal * discountPercent / 100 * 100) / 100;
     const snapDiscountedProductTotal = snapTotal - snapDiscountAmount;
+    const snapVatLines = vatLinesFor(snap, discountPercent);
 
     setSubmitting(true);
     setOrderError(null);
@@ -122,8 +131,8 @@ export default function CheckoutPage({
           kind: 'coffee' as const,
         })),
         totalHT: snapDiscountedProductTotal,
-        vatRate: 0.20,
-        totalTTC: snapDiscountedProductTotal * (1 + VAT),
+        vatLines: snapVatLines,
+        totalTTC: snapDiscountedProductTotal + sumVat(snapVatLines),
         ...(discountPercent > 0 ? {
           discountPercent,
           discountAmount: snapDiscountAmount,
@@ -144,8 +153,8 @@ export default function CheckoutPage({
   if (step === "success") {
     const confirmedDiscountedTotal = confirmedTotal - confirmedDiscountAmt;
     const snapHT  = confirmedDiscountedTotal;
-    const snapVAT = snapHT * VAT;
-    const snapTTC = snapHT + snapVAT;
+    const snapVatLines = vatLinesFor(confirmedItems, discountPercent);
+    const snapTTC = snapHT + sumVat(snapVatLines);
 
     const receiptData: OrderReceiptData = {
       orderId:      confirmedOrderId ?? "",
@@ -162,7 +171,7 @@ export default function CheckoutPage({
         kind:       'coffee' as const,
       })),
       totalHT:  snapHT,
-      vatRate:  0.20,
+      vatLines: snapVatLines,
       totalTTC: snapTTC,
       ...(discountPercent > 0 ? {
         discountPercent,
@@ -263,10 +272,12 @@ export default function CheckoutPage({
                 <span>{t.checkout.subtotalHT}</span>
                 <span className="tabular-nums">€{snapHT.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between px-4 py-2 text-muted-foreground">
-                <span>{t.checkout.vat}</span>
-                <span className="tabular-nums">€{snapVAT.toFixed(2)}</span>
-              </div>
+              {snapVatLines.map(({ rate, amount }) => (
+                <div key={rate} className="flex justify-between px-4 py-2 text-muted-foreground">
+                  <span>{t.checkout.vat(formatVatRate(rate))}</span>
+                  <span className="tabular-nums">€{amount.toFixed(2)}</span>
+                </div>
+              ))}
               <div className="flex justify-between px-4 py-2 font-semibold text-foreground">
                 <span>{t.checkout.totalTTC}</span>
                 <span className="tabular-nums">€{snapTTC.toFixed(2)}</span>
@@ -433,10 +444,12 @@ export default function CheckoutPage({
                 <span className="tabular-nums text-emerald-600 dark:text-emerald-400">−€{discountAmount.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex justify-between px-4 py-2">
-              <span className="text-muted-foreground">{t.checkout.vat}</span>
-              <span className="tabular-nums text-foreground">€{vatAmount.toFixed(2)}</span>
-            </div>
+            {vatLines.map(({ rate, amount }) => (
+              <div key={rate} className="flex justify-between px-4 py-2">
+                <span className="text-muted-foreground">{t.checkout.vat(formatVatRate(rate))}</span>
+                <span className="tabular-nums text-foreground">€{amount.toFixed(2)}</span>
+              </div>
+            ))}
             <div className="flex justify-between px-4 py-2 font-semibold">
               <span className="text-foreground">{t.checkout.totalTTC}</span>
               <span className="tabular-nums text-foreground">€{totalTTC.toFixed(2)}</span>

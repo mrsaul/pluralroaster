@@ -25,6 +25,8 @@ export interface Product {
   tastingNotes?: string | null;
   process?: string | null;
   variants?: ProductVariant[];
+  /** VAT rate in percent, as configured on the product in Sellsy. */
+  vatRate?: number;
 }
 
 export interface CartItem {

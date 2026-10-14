@@ -5,6 +5,7 @@ import { Printer } from "lucide-react";
 import {
   type OrderReceiptData,
   formatDeliveryDate,
+  formatVatRate,
   inferGrind,
   GRIND_LABEL,
 } from "@/lib/orderUtils";
@@ -81,7 +82,6 @@ export default function OrderReceiptPage() {
   if (!data) return null;
 
   const ref = data.orderId.slice(0, 8).toUpperCase();
-  const snapVAT = data.totalHT * data.vatRate;
 
   return (
     <>
@@ -313,10 +313,12 @@ export default function OrderReceiptPage() {
                   <span>{fmtEur(data.totalHT)}</span>
                 </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" }}>
-                <span>TVA 20 %</span>
-                <span>{fmtEur(snapVAT)}</span>
-              </div>
+              {(data.vatLines ?? []).map(({ rate, amount }) => (
+                <div key={rate} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" }}>
+                  <span>TVA {formatVatRate(rate)} %</span>
+                  <span>{fmtEur(amount)}</span>
+                </div>
+              ))}
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 5px", fontSize: 14, fontWeight: 700, color: "#1A1A18", borderTop: "2px solid #1A1A18", marginTop: 3 }}>
                 <span>Total TTC</span>
                 <span>{fmtEur(data.totalTTC)}</span>

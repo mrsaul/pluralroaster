@@ -4,6 +4,12 @@ import { fr } from "date-fns/locale";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/** Rate in percent (5.5 = 5,5 %), amount in euros. */
+export type VatLine = { rate: number; amount: number };
+
+/** Used only when a product has no tax rate synced from Sellsy yet. */
+export const DEFAULT_COFFEE_VAT_RATE = 5.5;
+
 export type OrderReceiptData = {
   orderId: string;       // full UUID — display as slice(0,8).toUpperCase()
   placedAt: string;      // ISO timestamp
@@ -19,11 +25,26 @@ export type OrderReceiptData = {
     kind?: 'coffee' | 'service';  // optional for back-compat; service items = delivery fee
   }[];
   totalHT: number;
-  vatRate: 0.20;
+  vatLines: VatLine[];
   totalTTC: number;
   discountPercent?: number;
   discountAmount?: number;
 };
+
+// ── VAT ───────────────────────────────────────────────────────────────────────
+
+/** Groups line totals (HT) by VAT rate, applying the order-level discount before tax. */
+export function computeVatLines(lines: { ht: number; rate: number }[], discountPercent = 0): VatLine[] {
+  const htByRate = new Map<number, number>();
+  for (const { ht, rate } of lines) htByRate.set(rate, (htByRate.get(rate) ?? 0) + ht);
+  return [...htByRate.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([rate, ht]) => ({ rate, amount: Math.round(ht * (1 - discountPercent / 100) * rate) / 100 }));
+}
+
+export function formatVatRate(rate: number): string {
+  return rate.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+}
 
 // ── Size display helpers ──────────────────────────────────────────────────────
 

@@ -31,7 +31,7 @@ function ReorderDialog({ order, onConfirm, onCancel }: { order: Order | null; on
         <AlertDialogHeader>
           <AlertDialogTitle>Répéter cette commande ?</AlertDialogTitle>
           <AlertDialogDescription>
-            {itemCount} article{itemCount > 1 ? "s" : ""} · {kg} kg · €{price} TTC — les articles seront ajoutés à votre panier et vous irez directement au paiement.
+            {itemCount} article{itemCount > 1 ? "s" : ""} · {kg} kg · €{price} HT — les articles seront ajoutés à votre panier et vous irez directement au paiement.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -109,6 +109,7 @@ type PersistedOrderRow = {
       price_per_kg: number;
       roast_level: string | null;
       is_active: boolean;
+      sellsy_tax_rate: number | null;
     } | null;
   }[];
 };
@@ -142,6 +143,7 @@ const mapPersistedOrder = (order: PersistedOrderRow): Order => ({
       pricePerKg: Number(item.products?.price_per_kg ?? item.price_per_kg),
       roastLevel: normalizeRoastLevel(item.products?.roast_level ?? null),
       available: item.products?.is_active ?? true,
+      vatRate: item.products?.sellsy_tax_rate ?? undefined,
     },
   })),
 });
@@ -209,7 +211,8 @@ const Index = () => {
             sku,
             price_per_kg,
             roast_level,
-            is_active
+            is_active,
+            sellsy_tax_rate
           )
         )
       `)

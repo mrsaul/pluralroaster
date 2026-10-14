@@ -79,7 +79,6 @@ const FRENCH_MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet
 function monthTabName(year: number, month: number): string { return `${FRENCH_MONTHS[month]} ${year}`; }
 
 // ── Color constants ───────────────────────────────────────────────────────────
-const VAT_RATE = 20;
 const CLIENT_HEADER_COLORS: GoogleColor[] = [
   { red: 0.68, green: 0.85, blue: 0.90 },
   { red: 0.72, green: 0.88, blue: 0.73 },
@@ -96,6 +95,17 @@ const COLOR_NOT_INVOICED_RED: GoogleColor = { red: 0.99, green: 0.75, blue: 0.75
 const COLOR_DARK: GoogleColor = { red: 0.18, green: 0.18, blue: 0.18 };
 const COLOR_DARK_TEXT: GoogleColor = { red: 0.10, green: 0.10, blue: 0.10 };
 
+// ── VAT ───────────────────────────────────────────────────────────────────────
+// Rates come from each product's Sellsy tax (products.sellsy_tax_rate, in percent).
+const DEFAULT_COFFEE_VAT_RATE = 5.5;
+const DEFAULT_SERVICE_VAT_RATE = 20;
+type ItemProduct = { sellsy_tax_rate: number | null; kind: string | null } | null;
+function itemVatRate(product: ItemProduct): number {
+  if (product?.sellsy_tax_rate != null) return Number(product.sellsy_tax_rate);
+  return product?.kind === "service" ? DEFAULT_SERVICE_VAT_RATE : DEFAULT_COFFEE_VAT_RATE;
+}
+function frRate(rate: number): string { return rate.toLocaleString("fr-FR", { maximumFractionDigits: 2 }); }
+
 // ── Domain types ──────────────────────────────────────────────────────────────
 type OrderItem = {
   product_name: string | null;
@@ -103,6 +113,7 @@ type OrderItem = {
   price_per_kg: number;
   quantity: number;
   size_label: string | null;
+  products: ItemProduct;
 };
 type RawOrder = {
   id: string;
@@ -131,7 +142,7 @@ type YearSummaryOrder = {
   delivery_date: string;
   total_price: number;
   invoicing_status: string;
-  order_items: Pick<OrderItem, "price_per_kg" | "quantity">[];
+  order_items: Pick<OrderItem, "price_per_kg" | "quantity" | "products">[];
   companies: { id: string; name: string | null } | null;
 };
 function emptyCells(n: number): string[] { return Array(n).fill(""); }
@@ -150,7 +161,7 @@ async function fetchOrdersForMonth(
     .select(`
       id, user_id, company_id, delivery_date, total_price, status,
       sellsy_id, sellsy_invoice_id, invoicing_status, notes,
-      order_items ( product_name, product_sku, price_per_kg, quantity, size_label ),
+      order_items ( product_name, product_sku, price_per_kg, quantity, size_label, products ( sellsy_tax_rate, kind ) ),
       companies ( id, name, email )
     `)
     .in("status", ["received", "approved", "packaging", "ready_for_delivery", "delivered"])
@@ -217,7 +228,7 @@ async function fetchAllOrdersForYear(
 ): Promise<YearSummaryOrder[]> {
   const { data, error } = await (db as any)
     .from("orders")
-    .select(`id, user_id, company_id, delivery_date, total_price, invoicing_status, order_items ( price_per_kg, quantity ), companies ( id, name )`)
+    .select(`id, user_id, company_id, delivery_date, total_price, invoicing_status, order_items ( price_per_kg, quantity, products ( sellsy_tax_rate, kind ) ), companies ( id, name )`)
     .in("status", ["received", "approved", "packaging", "ready_for_delivery", "delivered"])
     .gte("delivery_date", `${year}-01-01`)
     .lte("delivery_date", `${year}-12-31`);
@@ -287,7 +298,7 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
       },
     );
 
-    let clientHt = 0, clientUnbilledHt = 0, clientUnbilledCount = 0;
+    let clientHt = 0, clientVat = 0, clientUnbilledHt = 0, clientUnbilledCount = 0;
 
     group.orders.forEach((order) => {
       // Order header row
@@ -310,11 +321,15 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
 
       // Product rows
       const items = [...(order.order_items ?? [])].sort((a, b) => (a.product_name ?? "").localeCompare(b.product_name ?? "", "fr"));
-      let orderHt = 0;
+      let orderHt = 0, orderVat = 0;
+      const orderRates = new Set<number>();
       items.forEach((item, itemIdx) => {
         const productRowIdx = rows.length;
         const ht = Number(item.quantity) * Number(item.price_per_kg);
+        const rate = itemVatRate(item.products);
         orderHt += ht;
+        orderVat += ht * rate / 100;
+        orderRates.add(rate);
         rows.push([
           item.product_name ?? "—",
           item.size_label ?? "—",
@@ -322,7 +337,7 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
           Number(item.quantity),
           Number(item.price_per_kg),
           `=D${productRowIdx + 1}*E${productRowIdx + 1}`,
-          VAT_RATE / 100,
+          rate / 100,
           `=F${productRowIdx + 1}*(1+G${productRowIdx + 1})`,
           "", "", "", "",
         ]);
@@ -331,12 +346,18 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
           { repeatCell: { range: { sheetId, startRowIndex: productRowIdx, endRowIndex: productRowIdx + 1 }, cell: { userEnteredFormat: { backgroundColor: rowBg, textFormat: { fontSize: 10 } } }, fields: "userEnteredFormat(backgroundColor,textFormat)" } },
           { repeatCell: { range: { sheetId, startRowIndex: productRowIdx, endRowIndex: productRowIdx + 1, startColumnIndex: 4, endColumnIndex: 6 }, cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: "#,##0.00 €" } } }, fields: "userEnteredFormat.numberFormat" } },
           { repeatCell: { range: { sheetId, startRowIndex: productRowIdx, endRowIndex: productRowIdx + 1, startColumnIndex: 7, endColumnIndex: 8 }, cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: "#,##0.00 €" } } }, fields: "userEnteredFormat.numberFormat" } },
-          { repeatCell: { range: { sheetId, startRowIndex: productRowIdx, endRowIndex: productRowIdx + 1, startColumnIndex: 6, endColumnIndex: 7 }, cell: { userEnteredFormat: { numberFormat: { type: "PERCENT", pattern: "0%" } } }, fields: "userEnteredFormat.numberFormat" } },
+          { repeatCell: { range: { sheetId, startRowIndex: productRowIdx, endRowIndex: productRowIdx + 1, startColumnIndex: 6, endColumnIndex: 7 }, cell: { userEnteredFormat: { numberFormat: { type: "PERCENT", pattern: "0.0%" } } }, fields: "userEnteredFormat.numberFormat" } },
         );
       });
 
-      if (items.length === 0) orderHt = Number(order.total_price);
+      if (items.length === 0) {
+        orderHt = Number(order.total_price);
+        orderVat = orderHt * DEFAULT_COFFEE_VAT_RATE / 100;
+        orderRates.add(DEFAULT_COFFEE_VAT_RATE);
+      }
       clientHt += orderHt;
+      clientVat += orderVat;
+      const vatLabel = orderRates.size === 1 ? `TVA ${frRate([...orderRates][0])} %:` : "TVA:";
 
       // Subtotal rows (label in col J, value in col K)
       const isSent = order.invoicing_status === "sent";
@@ -345,8 +366,8 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
 
       for (const [label, val] of [
         ["Sous-total HT:", orderHt],
-        [`TVA ${VAT_RATE}%:`, orderHt * VAT_RATE / 100],
-        ["Total TTC:", orderHt * (1 + VAT_RATE / 100)],
+        [vatLabel, orderVat],
+        ["Total TTC:", orderHt + orderVat],
       ] as [string, number][]) {
         const stRowIdx = rows.length;
         const stRow = emptyCells(COLS) as unknown[];
@@ -370,7 +391,7 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
 
     // Client total block
     const totalRowIdx = rows.length;
-    const totalTtc = clientHt * (1 + VAT_RATE / 100);
+    const totalTtc = clientHt + clientVat;
     const totalRow = emptyCells(COLS) as unknown[];
     totalRow[0] = `TOTAL ${group.companyName.toUpperCase()} — ${group.orders.length} commande${group.orders.length > 1 ? "s" : ""}`;
     totalRow[9] = `HT: ${clientHt.toFixed(2)} €`;
@@ -473,7 +494,7 @@ async function writeResumeAnnuel(
 
   // Aggregate data
   const clientNames = new Map<string, string>();
-  const clientMonthHt = new Map<string, Map<number, number>>();
+  const clientMonthTtc = new Map<string, Map<number, number>>();
   const monthOrderCount = new Map<number, number>();
   const monthInvoicedCount = new Map<number, number>();
 
@@ -481,10 +502,13 @@ async function writeResumeAnnuel(
     const key = (o.company_id ?? o.user_id) ?? "unknown";
     const name = o.companies?.name ?? key.slice(0, 8);
     const m = parseInt(o.delivery_date.split("-")[1], 10) - 1; // timezone-safe month extraction
-    const ht = (o.order_items ?? []).reduce((s, i) => s + Number(i.quantity) * Number(i.price_per_kg), 0) || Number(o.total_price);
+    const items = o.order_items ?? [];
+    const ttc = items.length > 0
+      ? items.reduce((s, i) => s + Number(i.quantity) * Number(i.price_per_kg) * (1 + itemVatRate(i.products) / 100), 0)
+      : Number(o.total_price) * (1 + DEFAULT_COFFEE_VAT_RATE / 100);
     clientNames.set(key, name);
-    if (!clientMonthHt.has(key)) clientMonthHt.set(key, new Map());
-    clientMonthHt.get(key)!.set(m, (clientMonthHt.get(key)!.get(m) ?? 0) + ht);
+    if (!clientMonthTtc.has(key)) clientMonthTtc.set(key, new Map());
+    clientMonthTtc.get(key)!.set(m, (clientMonthTtc.get(key)!.get(m) ?? 0) + ttc);
     monthOrderCount.set(m, (monthOrderCount.get(m) ?? 0) + 1);
     if (o.invoicing_status === "sent") monthInvoicedCount.set(m, (monthInvoicedCount.get(m) ?? 0) + 1);
   }
@@ -506,19 +530,18 @@ async function writeResumeAnnuel(
   const revHeaderIdx = rows.length - 1;
   fmtReqs.push({ repeatCell: { range: { sheetId: resumeSheetId, startRowIndex: revHeaderIdx, endRowIndex: revHeaderIdx + 1 }, cell: { userEnteredFormat: { backgroundColor: { red: 0.25, green: 0.25, blue: 0.25 }, textFormat: { bold: true, foregroundColor: COLOR_WHITE, fontSize: 10 }, horizontalAlignment: "CENTER" } }, fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)" } });
 
-  const monthTotalsHt = Array(12).fill(0) as number[];
-  let grandHt = 0;
+  const monthTotalsTtc = Array(12).fill(0) as number[];
+  let grandTtc = 0;
 
   for (const key of clientKeys) {
-    const mMap = clientMonthHt.get(key) ?? new Map<number, number>();
-    const totalHt = [...mMap.values()].reduce((s, v) => s + v, 0);
-    const totalTtc = totalHt * (1 + VAT_RATE / 100);
-    grandHt += totalHt;
+    const mMap = clientMonthTtc.get(key) ?? new Map<number, number>();
+    const totalTtc = [...mMap.values()].reduce((s, v) => s + v, 0);
+    grandTtc += totalTtc;
     const rowVals: unknown[] = [clientNames.get(key) ?? "—"];
     for (let m = 0; m < 12; m++) {
-      const ht = mMap.get(m) ?? 0;
-      monthTotalsHt[m] += ht;
-      rowVals.push(ht > 0 ? ht * (1 + VAT_RATE / 100) : "");
+      const ttc = mMap.get(m) ?? 0;
+      monthTotalsTtc[m] += ttc;
+      rowVals.push(ttc > 0 ? ttc : "");
     }
     rowVals.push(totalTtc);
     const dataRowIdx = rows.length;
@@ -529,8 +552,8 @@ async function writeResumeAnnuel(
   // Grand total row
   const grandRowIdx = rows.length;
   const grandRow: unknown[] = ["TOTAL"];
-  for (let m = 0; m < 12; m++) grandRow.push(monthTotalsHt[m] > 0 ? monthTotalsHt[m] * (1 + VAT_RATE / 100) : "");
-  grandRow.push(grandHt * (1 + VAT_RATE / 100));
+  for (let m = 0; m < 12; m++) grandRow.push(monthTotalsTtc[m] > 0 ? monthTotalsTtc[m] : "");
+  grandRow.push(grandTtc);
   rows.push(grandRow);
   // Apply background + text to entire row, currency format only to numeric columns (B–N, indices 1–13)
   fmtReqs.push(
@@ -576,10 +599,10 @@ async function writeResumeAnnuel(
 
   const topClients = clientKeys
     .map((key) => {
-      const mMap = clientMonthHt.get(key) ?? new Map<number, number>();
-      const totalHt = [...mMap.values()].reduce((s, v) => s + v, 0);
+      const mMap = clientMonthTtc.get(key) ?? new Map<number, number>();
+      const totalTtc = [...mMap.values()].reduce((s, v) => s + v, 0);
       const orderCount = allOrders.filter((o) => (o.company_id ?? o.user_id) === key).length;
-      return { name: clientNames.get(key) ?? "—", totalTtc: totalHt * (1 + VAT_RATE / 100), orderCount };
+      return { name: clientNames.get(key) ?? "—", totalTtc, orderCount };
     })
     .sort((a, b) => b.totalTtc - a.totalTtc);
 

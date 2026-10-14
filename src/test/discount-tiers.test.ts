@@ -39,7 +39,7 @@ describe("OrderReceiptData type", () => {
       notes: null,
       items: [],
       totalHT: 252,
-      vatRate: 0.20,
+      vatLines: [{ rate: 5.5, amount: 0 }],
       totalTTC: 302.4,
       discountPercent: 10,
       discountAmount: 28,
@@ -56,7 +56,7 @@ describe("OrderReceiptData type", () => {
       notes: null,
       items: [],
       totalHT: 280,
-      vatRate: 0.20,
+      vatLines: [{ rate: 5.5, amount: 0 }],
       totalTTC: 336,
     };
     expect(data.discountPercent).toBeUndefined();

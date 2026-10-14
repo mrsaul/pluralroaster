@@ -844,18 +844,32 @@ function extractProductPrice(product: JsonRecord) {
   return { price: 0, parseError };
 }
 
-function normalizeProduct(product: JsonRecord) {
+async function fetchSellsyTaxRates(accessToken: string): Promise<Map<string, number>> {
+  const rates = new Map<string, number>();
+  const { response, payload } = await fetchSellsy("/v2/taxes?limit=100", accessToken, { method: "GET" });
+  if (!response.ok) {
+    console.warn(`[sync] GET /v2/taxes failed (${response.status}); product tax rates left empty`);
+    return rates;
+  }
+  for (const tax of extractSellsyCollection(payload.data)) {
+    const rate = Number(tax.rate);
+    if (tax.id != null && Number.isFinite(rate)) rates.set(String(tax.id), rate);
+  }
+  return rates;
+}
+
+function normalizeProduct(product: JsonRecord, taxRates: Map<string, number>) {
   const sellsyId = String(product.id ?? product.sellsy_id ?? product.reference ?? crypto.randomUUID());
   const description = typeof product.description === "string" ? product.description : null;
   const { price, parseError } = extractProductPrice(product);
 
-  // Extract tax info from Sellsy product response
+  // Sellsy v2 items carry a numeric `tax_id`; the rate comes from /v2/taxes.
   const taxes = Array.isArray(product.taxes) ? product.taxes : [];
   const firstTax = taxes[0] && typeof taxes[0] === "object" ? taxes[0] as JsonRecord : null;
-  const sellsyTaxId = firstTax ? (typeof firstTax.id === "string" ? firstTax.id : String(firstTax.id ?? "")) || null : null;
-  const sellsyTaxRate = firstTax && firstTax.rate != null
-    ? (Number.isFinite(Number(firstTax.rate)) ? Number(firstTax.rate) : null)
-    : null;
+  const rawTaxId = product.tax_id ?? firstTax?.id ?? null;
+  const sellsyTaxId = rawTaxId != null && String(rawTaxId) !== "" ? String(rawTaxId) : null;
+  const fallbackRate = firstTax && Number.isFinite(Number(firstTax.rate)) ? Number(firstTax.rate) : null;
+  const sellsyTaxRate = sellsyTaxId ? (taxRates.get(sellsyTaxId) ?? fallbackRate) : fallbackRate;
 
   const sellsyType = typeof product.type === 'string' ? product.type : null;
   const kind: 'coffee' | 'service' = sellsyType === 'service' ? 'service' : 'coffee';
@@ -1038,7 +1052,9 @@ async function handleProductSync(user: AuthenticatedUser, accessToken: string): 
   console.log(`[sync] Fetched ${rawProducts.length} items from Sellsy`);
 
   // ── 2. Normalize + upsert products ────────────────────────────────────────
-  const normalized = rawProducts.map(normalizeProduct);
+  const taxRates = await fetchSellsyTaxRates(accessToken);
+  console.log(`[sync] Loaded ${taxRates.size} Sellsy tax rates`);
+  const normalized = rawProducts.map((p) => normalizeProduct(p, taxRates));
   const productRows = normalized.map((n) => n.row);
   const parseErrorsFromProducts: ProductParseError[] = normalized
     .map((n) => n.parseError)

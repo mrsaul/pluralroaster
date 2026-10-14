@@ -112,6 +112,7 @@ const mapProductRow = (product: ProductRow, variants?: ProductVariant[]): Produc
     tastingNotes: row.tasting_notes ?? null,
     process: row.process ?? null,
     variants: variants && variants.length > 0 ? variants : undefined,
+    vatRate: product.sellsy_tax_rate ?? undefined,
   };
 };
 
@@ -252,7 +253,7 @@ export default function CatalogPage({
     const { data, error } = await supabase
       .from("products")
       .select(
-        "id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg",
+        "id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg, sellsy_tax_rate",
       )
       .eq("is_active", true)
       .order("name", { ascending: true });
