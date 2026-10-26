@@ -18,8 +18,8 @@ CREATE TABLE public.kitchen_settings (
   id int PRIMARY KEY CHECK (id = 1),
   cutoff_weekday int NOT NULL DEFAULT 0 CHECK (cutoff_weekday BETWEEN 0 AND 6),
   cutoff_time time NOT NULL DEFAULT '20:00',
-  reminder_hours_before int NOT NULL DEFAULT 2,
-  weekly_capacity_minutes int NOT NULL DEFAULT 1800,
+  reminder_hours_before int NOT NULL DEFAULT 2 CHECK (reminder_hours_before >= 0),
+  weekly_capacity_minutes int NOT NULL DEFAULT 1800 CHECK (weekly_capacity_minutes > 0),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -69,32 +69,56 @@ AS $$
 $$;
 
 -- Last cutoff_weekday at cutoff_time (Europe/Paris) strictly before p_week_start 00:00 Paris.
+-- SECURITY DEFINER so RLS on kitchen_settings cannot hide the row; access is checked explicitly.
+-- Callers without auth.uid() (postgres, service role, other definer functions) are allowed.
 CREATE FUNCTION public.kitchen_cutoff_for_week(p_week_start date)
 RETURNS timestamptz
-LANGUAGE sql STABLE
+LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
-  SELECT ((p_week_start - d.k) + s.cutoff_time) AT TIME ZONE 'Europe/Paris'
-  FROM public.kitchen_settings s,
-  LATERAL (
-    SELECT CASE WHEN ((EXTRACT(DOW FROM p_week_start)::int - s.cutoff_weekday + 7) % 7) = 0 THEN 7
-                ELSE (EXTRACT(DOW FROM p_week_start)::int - s.cutoff_weekday + 7) % 7 END AS k
-  ) d
-  WHERE s.id = 1
+DECLARE
+  s public.kitchen_settings%ROWTYPE;
+  k int;
+BEGIN
+  IF auth.uid() IS NOT NULL
+     AND public.kitchen_role_of(auth.uid()) IS NULL
+     AND NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'not_kitchen_member';
+  END IF;
+
+  SELECT * INTO s FROM public.kitchen_settings WHERE id = 1;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'kitchen_settings row missing';
+  END IF;
+
+  k := (EXTRACT(DOW FROM p_week_start)::int - s.cutoff_weekday + 7) % 7;
+  IF k = 0 THEN k := 7; END IF;
+  RETURN ((p_week_start - k) + s.cutoff_time) AT TIME ZONE 'Europe/Paris';
+END;
 $$;
 
 -- Earliest Monday whose cutoff is after p_now.
 CREATE FUNCTION public.kitchen_current_week(p_now timestamptz DEFAULT public.kitchen_now())
 RETURNS TABLE(week_start date, cutoff_at timestamptz)
-LANGUAGE plpgsql STABLE
+LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
   d date := date_trunc('week', (p_now AT TIME ZONE 'Europe/Paris'))::date - 7;
   c timestamptz;
+  i int := 0;
 BEGIN
+  IF auth.uid() IS NOT NULL
+     AND public.kitchen_role_of(auth.uid()) IS NULL
+     AND NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'not_kitchen_member';
+  END IF;
+
   LOOP
     c := public.kitchen_cutoff_for_week(d);
+    IF c IS NULL THEN
+      RAISE EXCEPTION 'kitchen cutoff could not be computed';
+    END IF;
     IF c > p_now THEN
       week_start := d;
       cutoff_at := c;
@@ -102,6 +126,10 @@ BEGIN
       RETURN;
     END IF;
     d := d + 7;
+    i := i + 1;
+    IF i > 10 THEN
+      RAISE EXCEPTION 'kitchen_current_week did not converge';
+    END IF;
   END LOOP;
 END;
 $$;
