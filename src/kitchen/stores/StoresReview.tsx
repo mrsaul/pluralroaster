@@ -11,6 +11,7 @@ import { useKitchenT } from "../i18n";
 import { computeCapacity, computeProduction } from "../lib/production";
 import { formatWhen, useNow } from "../cafe/useNow";
 import type { KitchenOrder } from "../types";
+import WeekPicker from "../components/WeekPicker";
 import CapacityBar from "./CapacityBar";
 import OrderReviewSheet from "./OrderReviewSheet";
 
@@ -93,19 +94,11 @@ export default function StoresReview() {
 
   if (!current || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{s.loading}</p>;
 
-  const shift = (days: number) => setPicked(iso(addDays(parseISO(weekStart), days)));
   const openOrder = [...weekly, ...urgentAll].find((o) => o.id === openId) ?? null;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <Button variant="outline" className="h-11" onClick={() => shift(-7)}>{s.prevWeek}</Button>
-        <span className="text-sm font-medium">{s.weekOf(format(parseISO(weekStart), "dd/MM"))}</span>
-        <Button variant="outline" className="h-11" onClick={() => shift(7)}>{s.nextWeek}</Button>
-      </div>
-      {weekStart !== current.weekStart && (
-        <Button variant="ghost" className="mb-2 h-9" onClick={() => setPicked(null)}>{s.thisWeek}</Button>
-      )}
+      <WeekPicker weekStart={weekStart} currentWeekStart={current.weekStart} onChange={setPicked} />
       <CapacityBar neededMinutes={capacity.neededMinutes} availableMinutes={available} />
 
       <Section title={s.sectionUrgent}>
