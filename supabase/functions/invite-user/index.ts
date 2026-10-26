@@ -19,6 +19,23 @@ function validateKitchen(
   return null;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// For coffee_manager, the café must be a UUID that exists and is active. Returns an error code or null.
+// deno-lint-ignore no-explicit-any
+async function checkCafe(adminClient: any, kitchen: { role?: string; cafeId?: string } | null | undefined) {
+  if (!kitchen || kitchen.role !== "coffee_manager") return null;
+  const id = kitchen.cafeId;
+  if (typeof id !== "string" || !UUID_RE.test(id)) return "invalid_cafe";
+  const { data } = await adminClient
+    .from("kitchen_cafes")
+    .select("id")
+    .eq("id", id)
+    .eq("is_active", true)
+    .maybeSingle();
+  return data ? null : "invalid_cafe";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -94,8 +111,23 @@ Deno.serve(async (req) => {
         });
       }
 
+      const cafeError = await checkCafe(adminClient, kitchen);
+      if (cafeError) {
+        return new Response(JSON.stringify({ error: cafeError }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const upsertKitchenMember = async (userId: string) => {
         if (!kitchen) return null;
+        const cafeError = await checkCafe(adminClient, kitchen);
+        if (cafeError) {
+          return new Response(JSON.stringify({ error: cafeError }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         const { error } = await adminClient.from("kitchen_members").upsert({
           user_id: userId,
           role: kitchen.role,
@@ -145,6 +177,15 @@ Deno.serve(async (req) => {
 
       // Assign role to the invited user
       if (inviteData?.user) {
+        const kErr = await upsertKitchenMember(inviteData.user.id);
+        if (kErr) {
+          // Roll back: otherwise the invitee has no role rows and would become a coffee client on first login.
+          await adminClient.auth.admin.deleteUser(inviteData.user.id);
+          return new Response(JSON.stringify({ error: kErr.message }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         if (role !== "none") {
           await adminClient.from("user_roles").delete().eq("user_id", inviteData.user.id);
           await adminClient.from("user_roles").insert({
@@ -153,13 +194,6 @@ Deno.serve(async (req) => {
             status: "invited",
             invited_by: caller.id,
             invited_at: new Date().toISOString(),
-          });
-        }
-        const kErr = await upsertKitchenMember(inviteData.user.id);
-        if (kErr) {
-          return new Response(JSON.stringify({ error: kErr.message }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
       }

@@ -213,8 +213,8 @@ export function UserManagementView() {
       kitchenRole: editKitchenRole === "none" ? null : editKitchenRole,
       cafeId: editCafeId || null,
     });
-    // Removing Kitchen access from a kitchen-only user would leave no access at all; that is allowed
-    // via "Remove user", so block it here.
+    // A kitchen-only user must keep some Kitchen access (otherwise they would have no access at all);
+    // to revoke everything, use "Remove user".
     if (check.ok === false) {
       toast({ title: "Kitchen access not saved", description: KITCHEN_ERRORS[check.error], variant: "destructive" });
       return;
@@ -228,11 +228,11 @@ export function UserManagementView() {
       });
       if (error || !data?.success) throw new Error(data?.error || error?.message);
       toast({ title: "Kitchen access updated", description: kitchenEditUser.email });
+      setKitchenEditUser(null);
       await loadUsers();
     } catch (err) {
       toast({ title: "Kitchen access update failed", description: String(err), variant: "destructive" });
     }
-    setKitchenEditUser(null);
   };
 
   const stats = {
@@ -377,7 +377,11 @@ export function UserManagementView() {
                                 Resend invitation
                               </DropdownMenuItem>
                             )}
-                            {user.status === "active" ? (
+                            {user.role === null ? (
+                              <p className="px-2 py-1.5 text-xs text-muted-foreground max-w-[200px]">
+                                Kitchen-only users are removed with "Remove user".
+                              </p>
+                            ) : user.status === "active" ? (
                               <DropdownMenuItem onClick={() => setConfirmAction({ type: "disable", user })}>
                                 Disable access
                               </DropdownMenuItem>
