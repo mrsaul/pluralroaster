@@ -478,6 +478,288 @@ export type Database = {
           },
         ]
       }
+      kitchen_cafes: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
+      kitchen_members: {
+        Row: {
+          cafe_id: string | null
+          created_at: string
+          role: Database["public"]["Enums"]["kitchen_role"]
+          user_id: string
+        }
+        Insert: {
+          cafe_id?: string | null
+          created_at?: string
+          role: Database["public"]["Enums"]["kitchen_role"]
+          user_id: string
+        }
+        Update: {
+          cafe_id?: string | null
+          created_at?: string
+          role?: Database["public"]["Enums"]["kitchen_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_members_cafe_id_fkey"
+            columns: ["cafe_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_cafes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_order_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          id: string
+          note: string | null
+          order_id: string
+          status: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id: string
+          status: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_order_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_order_items: {
+        Row: {
+          adjusted_units: number | null
+          id: string
+          order_id: string
+          pieces_per_unit: number
+          product_id: string
+          product_name: string
+          production_minutes: number
+          served_from_stock_units: number
+          unit_label: string
+          units: number
+        }
+        Insert: {
+          adjusted_units?: number | null
+          id?: string
+          order_id: string
+          pieces_per_unit: number
+          product_id: string
+          product_name: string
+          production_minutes: number
+          served_from_stock_units?: number
+          unit_label: string
+          units: number
+        }
+        Update: {
+          adjusted_units?: number | null
+          id?: string
+          order_id?: string
+          pieces_per_unit?: number
+          product_id?: string
+          product_name?: string
+          production_minutes?: number
+          served_from_stock_units?: number
+          unit_label?: string
+          units?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kitchen_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_orders: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          cafe_id: string
+          created_at: string
+          created_by: string | null
+          decline_note: string | null
+          id: string
+          kind: string
+          locked_at: string | null
+          locked_by: string | null
+          needed_by: string | null
+          ready_at: string | null
+          ready_eta: string | null
+          received_at: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+          urgent_reason: string | null
+          week_start: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          cafe_id: string
+          created_at?: string
+          created_by?: string | null
+          decline_note?: string | null
+          id?: string
+          kind: string
+          locked_at?: string | null
+          locked_by?: string | null
+          needed_by?: string | null
+          ready_at?: string | null
+          ready_eta?: string | null
+          received_at?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          urgent_reason?: string | null
+          week_start: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          cafe_id?: string
+          created_at?: string
+          created_by?: string | null
+          decline_note?: string | null
+          id?: string
+          kind?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          needed_by?: string | null
+          ready_at?: string | null
+          ready_eta?: string | null
+          received_at?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          urgent_reason?: string | null
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_orders_cafe_id_fkey"
+            columns: ["cafe_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_cafes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_products: {
+        Row: {
+          created_at: string
+          id: string
+          is_visible: boolean
+          name: string
+          photo_url: string | null
+          pieces_per_unit: number
+          production_minutes: number
+          sort_order: number | null
+          stock_units: number
+          unit_label: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          name: string
+          photo_url?: string | null
+          pieces_per_unit: number
+          production_minutes?: number
+          sort_order?: number | null
+          stock_units?: number
+          unit_label: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          name?: string
+          photo_url?: string | null
+          pieces_per_unit?: number
+          production_minutes?: number
+          sort_order?: number | null
+          stock_units?: number
+          unit_label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kitchen_settings: {
+        Row: {
+          cutoff_time: string
+          cutoff_weekday: number
+          id: number
+          reminder_hours_before: number
+          updated_at: string
+          weekly_capacity_minutes: number
+        }
+        Insert: {
+          cutoff_time?: string
+          cutoff_weekday?: number
+          id: number
+          reminder_hours_before?: number
+          updated_at?: string
+          weekly_capacity_minutes?: number
+        }
+        Update: {
+          cutoff_time?: string
+          cutoff_weekday?: number
+          id?: number
+          reminder_hours_before?: number
+          updated_at?: string
+          weekly_capacity_minutes?: number
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           created_at: string
@@ -1225,6 +1507,14 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_my_company_id: { Args: never; Returns: string }
+      get_my_kitchen_access: {
+        Args: never
+        Returns: {
+          cafe_id: string
+          cafe_name: string
+          role: Database["public"]["Enums"]["kitchen_role"]
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1232,6 +1522,73 @@ export type Database = {
         }
         Returns: boolean
       }
+      kitchen_adjust_item: {
+        Args: {
+          p_adjusted_units: number
+          p_order_id: string
+          p_product_id: string
+        }
+        Returns: undefined
+      }
+      kitchen_approve_order: { Args: { p_order_id: string }; Returns: Json }
+      kitchen_cafe_of: { Args: { uid: string }; Returns: string }
+      kitchen_create_order_for_cafe: {
+        Args: { p_cafe_id: string; p_week_start?: string }
+        Returns: string
+      }
+      kitchen_create_urgent_order: {
+        Args: {
+          p_cafe_id: string
+          p_items: Json
+          p_needed_by: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      kitchen_current_week: {
+        Args: { p_now?: string }
+        Returns: {
+          cutoff_at: string
+          week_start: string
+        }[]
+      }
+      kitchen_cutoff_for_week: {
+        Args: { p_week_start: string }
+        Returns: string
+      }
+      kitchen_decline_order: {
+        Args: { p_note: string; p_order_id: string }
+        Returns: undefined
+      }
+      kitchen_get_or_create_draft: {
+        Args: { p_cafe_id?: string }
+        Returns: string
+      }
+      kitchen_lock_order: { Args: { p_order_id: string }; Returns: undefined }
+      kitchen_mark_ready: { Args: { p_order_id: string }; Returns: undefined }
+      kitchen_mark_received: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
+      kitchen_now: { Args: never; Returns: string }
+      kitchen_require_role: {
+        Args: { p_roles: Database["public"]["Enums"]["kitchen_role"][] }
+        Returns: Database["public"]["Enums"]["kitchen_role"]
+      }
+      kitchen_role_of: {
+        Args: { uid: string }
+        Returns: Database["public"]["Enums"]["kitchen_role"]
+      }
+      kitchen_send_order: { Args: { p_order_id: string }; Returns: undefined }
+      kitchen_set_item: {
+        Args: { p_order_id: string; p_product_id: string; p_units: number }
+        Returns: undefined
+      }
+      kitchen_set_ready_eta: {
+        Args: { p_eta: string; p_order_id: string }
+        Returns: undefined
+      }
+      kitchen_unlock_order: { Args: { p_order_id: string }; Returns: undefined }
       user_save_onboarding_progress:
         | {
             Args: {
@@ -1307,6 +1664,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user" | "roaster" | "packaging"
+      kitchen_role: "coffee_manager" | "stores_manager" | "kitchen_manager"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1435,6 +1793,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user", "roaster", "packaging"],
+      kitchen_role: ["coffee_manager", "stores_manager", "kitchen_manager"],
     },
   },
 } as const
