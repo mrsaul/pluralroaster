@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useKitchenT } from "./i18n";
 import CafeHome from "./cafe/CafeHome";
 import CafeOrders from "./cafe/CafeOrders";
+import StoresReview from "./stores/StoresReview";
 
 // Placeholder shell — real screens per role arrive in later tasks.
 export default function KitchenApp({
@@ -45,6 +46,24 @@ export default function KitchenApp({
           </div>
         </header>
         {tab === "order" ? <CafeHome cafeId={access.cafeId} cafeName={access.cafeName} /> : <CafeOrders cafeId={access.cafeId} />}
+      </div>
+    );
+  }
+  if (access.role === "stores_manager") {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+          <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-2">
+            <h1 className="text-lg font-semibold">{t.title}</h1>
+            <div className="flex gap-3">
+              {onSwitchToCoffee && (
+                <button type="button" onClick={onSwitchToCoffee} className="text-sm underline text-muted-foreground">{t.backToCoffee}</button>
+              )}
+              <button type="button" onClick={onLogout} className="text-sm underline text-muted-foreground">{t.logout}</button>
+            </div>
+          </div>
+        </header>
+        <StoresReview />
       </div>
     );
   }
