@@ -258,12 +258,12 @@ export const useUnlockOrder = () =>
   });
 
 export const useAdjustItem = () =>
-  useRpcMutation<{ orderId: string; productId: string; adjustedUnits: number | null }>({
+  useRpcMutation<{ orderId: string; productId: string; adjustedUnits: number }>({
     call: (v) =>
       supabase.rpc("kitchen_adjust_item", {
         p_order_id: v.orderId,
         p_product_id: v.productId,
-        p_adjusted_units: v.adjustedUnits as number,
+        p_adjusted_units: v.adjustedUnits,
       }),
   });
 

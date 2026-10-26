@@ -53,22 +53,81 @@ function initVapid(): boolean {
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
-async function isAuthorized(req: Request, event: string): Promise<boolean> {
-  if (event === "cutoff_reminder") {
-    const expected = Deno.env.get("KITCHEN_CRON_SECRET");
-    const got = req.headers.get("x-kitchen-cron-secret");
-    return !!expected && got === expected;
-  }
+function safeEqual(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a);
+  const y = new TextEncoder().encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let k = 0; k < x.length; k++) diff |= x[k] ^ y[k];
+  return diff === 0;
+}
+
+type Caller = { role: "admin" | "coffee_manager" | "stores_manager" | "kitchen_manager"; cafeId: string | null };
+
+function cronAuthorized(req: Request): boolean {
+  const expected = Deno.env.get("KITCHEN_CRON_SECRET");
+  const got = req.headers.get("x-kitchen-cron-secret");
+  return !!expected && !!got && safeEqual(got, expected);
+}
+
+async function getCaller(req: Request): Promise<Caller | null> {
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!jwt) return false;
+  if (!jwt) return null;
   const { data, error } = await db.auth.getUser(jwt);
-  if (error || !data?.user) return false;
+  if (error || !data?.user) return null;
   const uid = data.user.id;
-  const { data: member } = await db.from("kitchen_members").select("user_id").eq("user_id", uid).maybeSingle();
-  if (member) return true;
   const { data: admin } = await db.from("user_roles").select("user_id")
     .eq("user_id", uid).eq("role", "admin").maybeSingle();
-  return !!admin;
+  if (admin) return { role: "admin", cafeId: null };
+  const { data: member } = await db.from("kitchen_members").select("role, cafe_id").eq("user_id", uid).maybeSingle();
+  if (member) return { role: member.role, cafeId: member.cafe_id };
+  return null;
+}
+
+type OrderInfo = {
+  cafe_id: string; kind: string; status: string; ready_eta: string | null;
+};
+
+// Per-event rules: who may trigger it, and which order state it requires.
+function authorizeEvent(
+  event: KitchenEvent,
+  caller: Caller,
+  order: OrderInfo,
+): "ok" | "forbidden" | "wrong_status" {
+  const isAdmin = caller.role === "admin";
+  const ownCafe = caller.role === "coffee_manager" && caller.cafeId === order.cafe_id;
+  let roleOk: boolean;
+  let stateOk: boolean;
+  switch (event) {
+    case "order_sent":
+      roleOk = isAdmin || ownCafe || caller.role === "stores_manager";
+      stateOk = order.status === "sent";
+      break;
+    case "urgent_created":
+      roleOk = isAdmin || ownCafe || caller.role === "stores_manager";
+      stateOk = order.status === "sent" && order.kind === "urgent";
+      break;
+    case "order_approved":
+      roleOk = isAdmin || caller.role === "stores_manager";
+      stateOk = order.status === "approved";
+      break;
+    case "urgent_declined":
+      roleOk = isAdmin || caller.role === "stores_manager";
+      stateOk = order.status === "declined";
+      break;
+    case "ready_eta":
+      roleOk = isAdmin || caller.role === "kitchen_manager";
+      stateOk = order.status === "approved" && order.kind === "urgent" && order.ready_eta !== null;
+      break;
+    case "order_ready":
+      roleOk = isAdmin || caller.role === "kitchen_manager";
+      stateOk = order.status === "ready";
+      break;
+    default: // urgent_approved is internal only; cutoff_reminder is cron only
+      return "forbidden";
+  }
+  if (!roleOk) return "forbidden";
+  return stateOk ? "ok" : "wrong_status";
 }
 
 // ── Recipients ───────────────────────────────────────────────────────────────
@@ -114,11 +173,13 @@ async function deliver(userIds: string[], msg: Message): Promise<number> {
   await Promise.allSettled(ids.map(async (uid) => {
     try {
       const userSubs = byUser.get(uid) ?? [];
-      if (userSubs.length > 0 && pushOk) {
+      let pushed = false;
+      if (pushOk) {
         await Promise.allSettled(userSubs.map(async (sub) => {
           try {
             await webpush.sendNotification(
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+            pushed = true;
           } catch (err: any) {
             console.warn("[notify-kitchen] push failed:", sub.endpoint.slice(0, 40), err?.statusCode);
             if (err?.statusCode === 404 || err?.statusCode === 410) {
@@ -126,10 +187,9 @@ async function deliver(userIds: string[], msg: Message): Promise<number> {
             }
           }
         }));
-        reached++;
-        return;
       }
-      if (userSubs.length > 0) return; // has subscriptions but VAPID missing: no email either
+      if (pushed) { reached++; return; }
+      // No push delivered (no subscription, or all failed/expired): fall back to email.
       const { data } = await db.auth.admin.getUserById(uid);
       const email = data?.user?.email;
       if (!email) return;
@@ -149,12 +209,16 @@ function changesText(changes: Change[]): string {
   return "Modifications :\n" + changes.map((c) => `${c.product_name} : ${c.from} → ${c.to}`).join("\n");
 }
 
-async function handleOrderEvent(event: KitchenEvent, orderId: string, extra: any): Promise<number> {
-  const { data: order, error } = await db.from("kitchen_orders")
-    .select("id, cafe_id, kind, status, urgent_reason, needed_by, ready_eta, decline_note, kitchen_cafes(name)")
-    .eq("id", orderId).maybeSingle();
-  if (error || !order) { console.warn("[notify-kitchen] order not found", orderId); return 0; }
-  const cafe = (order as any).kitchen_cafes?.name ?? "Café";
+async function serverChanges(orderId: string): Promise<Change[]> {
+  const { data } = await db.from("kitchen_order_items")
+    .select("product_name, units, adjusted_units").eq("order_id", orderId).order("product_name");
+  return (data ?? [])
+    .filter((r: any) => r.adjusted_units !== null && r.adjusted_units !== r.units)
+    .map((r: any) => ({ product_name: r.product_name, from: r.units, to: r.adjusted_units }));
+}
+
+async function sendOrderEvent(event: KitchenEvent, order: any): Promise<number> {
+  const cafe = order.kitchen_cafes?.name ?? "Café";
   const urgent = order.kind === "urgent";
 
   switch (event) {
@@ -169,9 +233,8 @@ async function handleOrderEvent(event: KitchenEvent, orderId: string, extra: any
         body: `${cafe} : ${order.urgent_reason ?? "commande urgente"}` +
           (order.needed_by ? `\nPour le ${fmtDateTime(order.needed_by)}` : ""),
       });
-    case "order_approved":
-    case "urgent_approved": {
-      const changes: Change[] = Array.isArray(extra?.changes) ? extra.changes : [];
+    case "order_approved": {
+      const changes = await serverChanges(order.id);
       const msg = {
         title: urgent ? "Commande urgente approuvée" : "Commande approuvée",
         body: `${cafe} : la commande est approuvée.\n${changesText(changes)}`,
@@ -218,7 +281,7 @@ async function handleCutoffReminder(): Promise<{ cafes: number; notified: number
   const [{ data: cafes }, { data: orders }, { data: already }] = await Promise.all([
     db.from("kitchen_cafes").select("id, name").eq("is_active", true),
     db.from("kitchen_orders").select("cafe_id").eq("week_start", week.week_start).eq("kind", "weekly")
-      .in("status", ["sent", "approved", "ready"]),
+      .in("status", ["sent", "approved", "ready", "received"]),
     db.from("kitchen_reminders_sent").select("cafe_id").eq("week_start", week.week_start),
   ]);
   const skip = new Set([...(orders ?? []), ...(already ?? [])].map((r: { cafe_id: string }) => r.cafe_id));
@@ -245,21 +308,36 @@ async function handleCutoffReminder(): Promise<{ cafes: number; notified: number
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const body = await req.json().catch(() => ({})) as { event?: KitchenEvent; orderId?: string; extra?: unknown };
+    const body = await req.json().catch(() => ({})) as { event?: KitchenEvent; orderId?: string };
     const event = body.event;
-    if (!event || !(await isAuthorized(req, event))) return json({ error: "unauthorized" }, 401);
+    if (!event) return json({ error: "unauthorized" }, 401);
 
     if (event === "cutoff_reminder") {
+      if (!cronAuthorized(req)) return json({ error: "unauthorized" }, 401);
       const r = await handleCutoffReminder();
       console.log("[notify-kitchen] cutoff_reminder", r);
       return json({ success: true, ...r });
     }
+
+    const caller = await getCaller(req);
+    if (!caller) return json({ error: "unauthorized" }, 401);
     if (!body.orderId) return json({ error: "orderId required" }, 400);
-    const notified = await handleOrderEvent(event, body.orderId, body.extra);
+
+    // Note: request-supplied `extra` is deliberately ignored; content is derived server-side.
+    const { data: order } = await db.from("kitchen_orders")
+      .select("id, cafe_id, kind, status, urgent_reason, needed_by, ready_eta, decline_note, kitchen_cafes(name)")
+      .eq("id", body.orderId).maybeSingle();
+    if (!order) return json({ error: "order_not_found" }, 404);
+
+    const verdict = authorizeEvent(event, caller, order);
+    if (verdict === "forbidden") return json({ error: "forbidden" }, 403);
+    if (verdict === "wrong_status") return json({ error: "wrong_status" }, 409);
+
+    const notified = await sendOrderEvent(event, order);
     console.log(`[notify-kitchen] ${event} ${body.orderId.slice(0, 8)} notified: ${notified}`);
     return json({ success: true, notified });
   } catch (err) {
     console.error("[notify-kitchen]", err);
-    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    return json({ error: "internal_error" }, 500);
   }
 });
