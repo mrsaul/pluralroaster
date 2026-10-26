@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useLang } from "@/i18n";
 import {
   kitchenErrorMessage, useAdjustItem, useApproveOrder, useDeclineOrder, useLockOrder,
-  useSendOrder, useSetItem, useUnlockOrder, type KitchenChange,
+  useKitchenOrders, useSendOrder, useSetItem, useUnlockOrder, type KitchenChange,
 } from "../api";
 import { useKitchenT } from "../i18n";
 import { unitsToPieces } from "../lib/format";
@@ -21,17 +21,17 @@ const DEBOUNCE_MS = 400;
 
 type Props = {
   order: KitchenOrder;
-  /** Orders counted for the week (used for the capacity preview). */
-  orders: KitchenOrder[];
   products: KitchenProduct[];
   availableMinutes: number;
   onClose: () => void;
 };
 
-export default function OrderReviewSheet({ order, orders, products, availableMinutes, onClose }: Props) {
+export default function OrderReviewSheet({ order, products, availableMinutes, onClose }: Props) {
   const t = useKitchenT();
   const s = t.stores;
   const { lang } = useLang();
+  const { data: weekOrders = [] } = useKitchenOrders({ weekStart: order.weekStart });
+  const orders = useMemo(() => weekOrders.filter((o) => o.status === "approved"), [weekOrders]);
   const lock = useLockOrder();
   const unlock = useUnlockOrder();
   const adjust = useAdjustItem();
@@ -52,24 +52,26 @@ export default function OrderReviewSheet({ order, orders, products, availableMin
   const pending = useRef<Record<string, number>>({});
   const orderRef = useRef(order);
   orderRef.current = order;
-  const flushRef = useRef<(id: string, v: number) => Promise<void>>(async () => {});
+  const flushRef = useRef<(id: string, v: number) => Promise<boolean>>(async () => true);
   const unlockRef = useRef(unlock.mutate);
   unlockRef.current = unlock.mutate;
-  const lockFailed = useRef(false);
-  lockFailed.current = lockError !== null;
+  const lockRef = useRef<Promise<boolean> | null>(null);
+  const flushAllRef = useRef<() => Promise<boolean>>(async () => true);
 
-  // Lock on open, unlock on unmount.
+  // Lock on open; on unmount wait for the lock, flush pending edits, then unlock.
   useEffect(() => {
-    lock.mutate({ orderId: order.id }, {
-      onError: (err) => { setLockError(kitchenErrorMessage(err, t)); },
-    });
+    const lockPromise = lock.mutateAsync({ orderId: order.id }).then(
+      () => true,
+      (err) => { setLockError(kitchenErrorMessage(err, t)); return false; },
+    );
+    lockRef.current = lockPromise;
     return () => {
-      for (const [id, v] of Object.entries(pending.current)) {
-        clearTimeout(timers.current[id]);
-        void flushRef.current(id, v);
-      }
-      timers.current = {};
-      if (!lockFailed.current) unlockRef.current({ orderId: order.id });
+      void lockPromise
+        .then(async (ok) => {
+          if (!ok) return;
+          try { await flushAllRef.current(); } finally { unlockRef.current({ orderId: order.id }); }
+        })
+        .catch((err) => console.warn("[OrderReviewSheet] unlock", err));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.id]);
@@ -85,16 +87,18 @@ export default function OrderReviewSheet({ order, orders, products, availableMin
 
   const readOnly = lockError !== null || !["draft", "sent", "approved"].includes(order.status) || !!changes;
 
-  const flush = async (productId: string, units: number) => {
+  const flush = async (productId: string, units: number): Promise<boolean> => {
     delete timers.current[productId];
     delete pending.current[productId];
     try {
       if (orderRef.current.status === "draft") await setItem.mutateAsync({ orderId: order.id, productId, units });
       else await adjust.mutateAsync({ orderId: order.id, productId, adjustedUnits: units });
+      return true;
     } catch (err) {
       toast.error(kitchenErrorMessage(err, t));
       const it = orderRef.current.items.find((i) => i.productId === productId);
       if (!timers.current[productId]) setQty((q) => ({ ...q, [productId]: it ? effectiveUnits(it) : 0 }));
+      return false;
     }
   };
   flushRef.current = flush;
@@ -110,8 +114,10 @@ export default function OrderReviewSheet({ order, orders, products, availableMin
   const flushAll = async () => {
     const entries = Object.entries(pending.current);
     for (const [id] of entries) clearTimeout(timers.current[id]);
-    await Promise.all(entries.map(([id, v]) => flush(id, v)));
+    const results = await Promise.all(entries.map(([id, v]) => flush(id, v)));
+    return results.every(Boolean);
   };
+  flushAllRef.current = flushAll;
 
   // Lines: existing items, then added ones.
   const lineIds = useMemo(() => {
@@ -153,7 +159,7 @@ export default function OrderReviewSheet({ order, orders, products, availableMin
   };
 
   const doApprove = async () => {
-    await flushAll();
+    if (!(await flushAll())) return;
     approve.mutate({ orderId: order.id }, {
       onSuccess: (data) => {
         toast.success(s.approvedToast);
@@ -164,7 +170,7 @@ export default function OrderReviewSheet({ order, orders, products, availableMin
     });
   };
   const doSend = async () => {
-    await flushAll();
+    if (!(await flushAll())) return;
     send.mutate({ orderId: order.id }, { onError: (err) => toast.error(kitchenErrorMessage(err, t)) });
   };
   const doDecline = () => {

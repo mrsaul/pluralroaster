@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { addDays, format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { useLang } from "@/i18n";
+import { useLang, type Lang } from "@/i18n";
 import {
   kitchenErrorMessage, useCreateOrderForCafe, useCurrentWeek, useKitchenCafes, useKitchenOrders,
   useKitchenProducts, useKitchenSettings,
@@ -22,6 +22,28 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
       <ul className="flex flex-col gap-2">{children}</ul>
     </section>
+  );
+}
+
+function Badge({ n }: { n: number }) {
+  const s = useKitchenT().stores;
+  return n > 0 ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-950">{s.urgentCount(n)}</span> : null;
+}
+
+function Row({ o, flag, n, lang, onOpen }: { o: KitchenOrder; flag?: string; n: number; lang: Lang; onOpen: (id: string) => void }) {
+  const s = useKitchenT().stores;
+  return (
+    <li className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="font-medium">{o.cafeName}</p>
+        <p className="text-xs text-muted-foreground">
+          {s.itemsCount(o.items.length)}{o.neededBy ? ` · ${s.neededBy(formatWhen(o.neededBy, lang))}` : ""}
+        </p>
+        {flag && <p className="text-xs font-medium text-destructive">{flag}</p>}
+        <Badge n={n} />
+      </div>
+      <Button className="h-11" onClick={() => onOpen(o.id)}>{s.review}</Button>
+    </li>
   );
 }
 
@@ -74,24 +96,6 @@ export default function StoresReview() {
   const shift = (days: number) => setPicked(iso(addDays(parseISO(weekStart), days)));
   const openOrder = [...weekly, ...urgentAll].find((o) => o.id === openId) ?? null;
 
-  const Badge = ({ cafeId }: { cafeId: string }) => {
-    const n = urgentCounts.get(cafeId) ?? 0;
-    return n > 0 ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-950">{s.urgentCount(n)}</span> : null;
-  };
-  const Row = ({ o, flag }: { o: KitchenOrder; flag?: string }) => (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="font-medium">{o.cafeName}</p>
-        <p className="text-xs text-muted-foreground">
-          {s.itemsCount(o.items.length)}{o.neededBy ? ` · ${s.neededBy(formatWhen(o.neededBy, lang))}` : ""}
-        </p>
-        {flag && <p className="text-xs font-medium text-destructive">{flag}</p>}
-        <Badge cafeId={o.cafeId} />
-      </div>
-      <Button className="h-11" onClick={() => setOpenId(o.id)}>{s.review}</Button>
-    </li>
-  );
-
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -106,15 +110,15 @@ export default function StoresReview() {
 
       <Section title={s.sectionUrgent}>
         {urgentWaiting.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
-        {urgentWaiting.map((o) => <Row key={o.id} o={o} />)}
+        {urgentWaiting.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={setOpenId} />)}
       </Section>
       <Section title={s.sectionReview}>
         {toReview.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
-        {toReview.map((o) => <Row key={o.id} o={o} flag={afterCutoff ? s.flagNotApproved : undefined} />)}
+        {toReview.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={setOpenId} flag={afterCutoff ? s.flagNotApproved : undefined} />)}
       </Section>
       <Section title={s.sectionApproved}>
         {approved.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
-        {approved.map((o) => <Row key={o.id} o={o} />)}
+        {approved.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={setOpenId} />)}
       </Section>
       <Section title={s.sectionNotSent}>
         {notSent.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
@@ -125,7 +129,7 @@ export default function StoresReview() {
               <div className="flex min-w-0 flex-col gap-1">
                 <p className="font-medium">{c.name}</p>
                 {afterCutoff && <p className="text-xs font-medium text-destructive">{s.flagNotSent}</p>}
-                <Badge cafeId={c.id} />
+                <Badge n={urgentCounts.get(c.id) ?? 0} />
               </div>
               <Button
                 variant="outline"
@@ -150,7 +154,6 @@ export default function StoresReview() {
         <OrderReviewSheet
           key={openOrder.id}
           order={openOrder}
-          orders={counted}
           products={products}
           availableMinutes={available}
           onClose={() => setOpenId(null)}
