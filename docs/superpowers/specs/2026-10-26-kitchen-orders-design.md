@@ -6,12 +6,12 @@
 **Date:** 2026-10-26
 **Lives in:** this repo (`pluralroaster`), as a separate "Kitchen" space next to the existing coffee B2B app.
 
-Marked **[Claude's call]** = decided by Claude during brainstorming, not confirmed by the owner. Marked **[TO CONFIRM]** = a question put to the owner that hasn't been answered yet. Claude's suggested answer is written in and the plan should assume it until the owner says otherwise. Everything else was said or chosen by the owner.
+Marked **[Claude's call]** = decided by Claude during brainstorming, not confirmed by the owner. Everything else was said or chosen by the owner.
 
-### Open questions for the owner
-1. **[TO CONFIRM]** Can a café edit its order after sending it, before the cutoff? Suggested: yes. See section 7, step 2.
-2. **[TO CONFIRM]** Is it OK to change the existing login/invite code so kitchen-only people don't get coffee access? Suggested: yes, with tests for existing clients. See section 4.
-3. **[TO CONFIRM]** Is the stores manager kitchen-only? Suggested: yes. See section 4.
+### Owner answers to the review questions (2026-10-26)
+1. **Cafés can edit their order after sending, until the cutoff.** Confirmed. See section 7, step 2.
+2. **Changing the existing login/invite code is approved**, as far as needed. Some users have **both** Coffee and Kitchen access. Most coffee clients have Coffee only and must **never see any visual or data related to food or the Kitchen**. See section 4.
+3. **The stores manager has both Kitchen and Coffee access** and places both orders every Sunday. See section 4.
 
 ---
 
@@ -64,7 +64,7 @@ A typical order: *Artivistas orders 1 banana bread, 1 batch of cookies and 1 bat
 |---|---|---|
 | B2B coffee client (e.g. Les Crèmes) | ✅ as today | ❌ never, unless invited by admin |
 | **Coffee manager** (one per café) | ✅ orders coffee exactly like any B2B client | ✅ orders food for **their café** |
-| **Stores manager** | ❌ [TO CONFIRM: assumed kitchen-only. If they also order coffee, they get both sides with the switch] | ✅ sees and approves all cafés' food orders, can order for any café, approves urgent orders |
+| **Stores manager** | ✅ orders coffee from the roaster every Sunday, through the existing B2B flow, unchanged | ✅ sees and approves all cafés' food orders, can order for any café, approves urgent orders |
 | **Kitchen manager** | ❌ never | ✅ catalog, stock, settings, production, marks orders ready |
 | Roaster / packaging | ✅ as today | ❌ never |
 | Admin (owner) | ✅ | ✅ invites people, assigns kitchen roles and cafés |
@@ -76,10 +76,18 @@ A typical order: *Artivistas orders 1 banana bread, 1 batch of cookies and 1 bat
 ### Access model — important for the builder
 Today each user has **one** `app_role` (`admin`, `user`, `roaster`, `packaging`), and `ensure_current_user_role` routes each role to one dedicated view. A coffee manager is **both** a coffee client (`user`) **and** a kitchen member. So kitchen access must be **separate from `app_role`** [Claude's call]: a kitchen membership record (user → kitchen role → café, when relevant), managed by the admin. Adding kitchen roles to the `app_role` enum would break the one-role routing.
 
-- Users with kitchen access get a simple **Coffee / Kitchen switch**. Users without it see no menu, no route and no data.
-- **Enforcement must be in the database (RLS)**, not only in the UI. A coffee client calling the API directly must get nothing from kitchen tables.
-- Kitchen manager and stores manager may have **no coffee access at all**. They land straight in the Kitchen space.
-- **[TO CONFIRM] Touching existing login code.** Today `ensure_current_user_role` gives every new login the `user` (coffee client) role, and `invite-user` only accepts the four coffee roles. For kitchen-only users to stay out of the coffee catalog, both need a small change: the invite gets kitchen options, and a kitchen-only invitee does not get the `user` role by default. Suggested: allowed, as long as existing coffee clients behave exactly as before, with tests covering existing client, admin, roaster and packaging logins.
+Three kinds of access, all set by the admin:
+- **Coffee only:** most B2B clients, roaster, packaging.
+- **Kitchen only:** kitchen manager.
+- **Both:** coffee managers and the stores manager (both order every week).
+
+Rules:
+- Only users with **both** get a **Coffee / Kitchen switch**. Each side keeps its own cart. The coffee cart and the kitchen cart are never mixed, because they go to two different companies.
+- **Coffee-only users must never see anything related to food or the Kitchen.** That means no switch, no menu item, no route, no empty state, no badge, no notification, no email, and no Kitchen wording anywhere in their app. Kitchen routes and screens are not even loaded for them.
+- **Enforcement must be in the database (RLS)**, not only in the UI. A coffee client calling the API directly must get nothing from kitchen tables. Tests must prove this for a coffee-only client.
+- Kitchen-only users (kitchen manager) have **no coffee access**. They land straight in the Kitchen space.
+- [Claude's call] Users with both land on the side they used last, defaulting to Coffee.
+- **Changing existing login code is approved** (owner). Today `ensure_current_user_role` gives every new login the `user` (coffee client) role, and `invite-user` only accepts the four coffee roles. Both change as needed: the invite gets Kitchen access and kitchen-role options, and a kitchen-only invitee does not get the `user` role. The admin can also give Kitchen access to an **existing** coffee client. Existing coffee clients, admin, roaster and packaging must behave exactly as before, with tests covering each of those logins.
 
 ## 5. Food catalog (kitchen manager owns it)
 
@@ -121,7 +129,7 @@ Stock is **updated by hand** by the kitchen manager (after a production run or a
 
 1. **Coffee manager: draft cart.** During service, they add items whenever they notice a need. The cart **saves automatically** and is **not sent**. It works well on a phone behind the counter. It can stay open for hours or days until the cutoff. One draft per café per week [Claude's call].
 2. **Coffee manager: send.** Usually at closing. Before sending, the cart shows the cutoff countdown ("Deadline: Sun 20:00, in 1 day 4h").
-   **[TO CONFIRM] Editing after sending.** Suggested: the café can reopen and edit its sent order **until the cutoff**. That stays **one order per café per week**. If the order was already approved, editing sends it back to the stores manager as "sent", and the stores manager's earlier adjustments stay visible. While the stores manager is editing an order, the café's edit is blocked with a clear message, so they never edit at the same time. After the cutoff, cafés can only add through an urgent order.
+   **Editing after sending (confirmed by owner).** The café can reopen and edit its sent order **until the cutoff**. That stays **one order per café per week**. If the order was already approved, editing sends it back to the stores manager as "sent", and the stores manager's earlier adjustments stay visible. While the stores manager is editing an order, the café's edit is blocked with a clear message, so they never edit at the same time. After the cutoff, cafés can only add through an urgent order.
 3. **Reminder** before the cutoff if a café hasn't sent its order (push, falling back to email) [Claude's call: 2 hours before].
 4. **Stores manager: review.** Sees all cafés' sent orders for the week. Can **change quantities, add or remove lines, and approve**. The stores manager can also **create an order for any café** directly.
 5. **Changes are applied and notified, not negotiated** (owner's choice). The coffee manager gets a notification listing what changed. The order shows **original → adjusted** quantities (e.g. "50 → 40") so the delivery is no surprise.
