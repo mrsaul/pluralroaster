@@ -28,5 +28,6 @@ export type KitchenOrder = {
   urgentReason: string | null;
   neededBy: string | null;
   readyEta: string | null;
+  declineNote: string | null;
   items: KitchenOrderItem[];
 };

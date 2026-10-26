@@ -49,6 +49,7 @@ const fr = {
     copied: "Copié dans le presse-papiers",
     kitchenReady: (eta: string) => `Cuisine : prête ${eta}`,
     waitingApproval: "En attente d'approbation",
+    declinedNote: (n: string) => `Refusée : ${n}`,
     reason: "Raison",
     status: {
       draft: "Brouillon",
@@ -121,6 +122,7 @@ const en: KitchenStrings = {
     copied: "Copied to clipboard",
     kitchenReady: (eta: string) => `Kitchen: ready ${eta}`,
     waitingApproval: "Waiting for approval",
+    declinedNote: (n: string) => `Declined: ${n}`,
     reason: "Reason",
     status: {
       draft: "Draft",

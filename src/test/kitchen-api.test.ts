@@ -74,13 +74,14 @@ describe("mapOrder", () => {
   it("maps a joined row to a KitchenOrder", () => {
     const o = mapOrder({
       id: "o1", cafe_id: "c1", week_start: "2026-11-02", kind: "weekly", status: "sent",
-      urgent_reason: null, needed_by: null, ready_eta: null,
+      urgent_reason: null, needed_by: null, ready_eta: null, decline_note: "Pas de stock",
       kitchen_cafes: { name: "Artivistas" },
       kitchen_order_items: [
         { product_id: "p1", product_name: "Pandebono", unit_label: "Batch", pieces_per_unit: 50, units: 2, adjusted_units: 1, served_from_stock_units: 0 },
       ],
     } as any);
     expect(o.cafeName).toBe("Artivistas");
+    expect(o.declineNote).toBe("Pas de stock");
     expect(o.items[0]).toEqual({
       productId: "p1", productName: "Pandebono", unitLabel: "Batch", piecesPerUnit: 50,
       units: 2, adjustedUnits: 1, servedFromStockUnits: 0,

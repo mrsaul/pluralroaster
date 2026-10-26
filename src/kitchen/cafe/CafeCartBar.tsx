@@ -23,7 +23,7 @@ export default function CafeCartBar({ totalUnits, status, countdown, cutoffLabel
             {status === "sent" ? t.sentNote(cutoffLabel) : status === "approved" ? t.approvedNote : t.cutoffIn(countdown)}
           </p>
         </div>
-        {!submitted && (
+        {(status === "none" || status === "draft") && (
           <Button size="lg" className="h-12 px-6" disabled={totalUnits === 0 || sending} onClick={onSend}>
             {sending ? t.sending : t.send}
           </Button>

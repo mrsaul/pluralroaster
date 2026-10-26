@@ -70,6 +70,12 @@ function OrderCard({ order }: { order: KitchenOrder }) {
       {order.kind === "urgent" && order.urgentReason && (
         <p className="mt-2 text-sm text-muted-foreground">{c.reason} : {order.urgentReason}</p>
       )}
+      {order.kind === "urgent" && order.neededBy && (
+        <p className="mt-1 text-sm text-muted-foreground">{c.urgentNeededBy} : {formatWhen(order.neededBy, lang)}</p>
+      )}
+      {order.kind === "urgent" && order.status === "declined" && order.declineNote && (
+        <p className="mt-2 text-sm text-destructive">{c.declinedNote(order.declineNote)}</p>
+      )}
       {order.kind === "urgent" && order.status === "approved" && order.readyEta && (
         <p className="mt-2 text-sm font-medium">{c.kitchenReady(formatWhen(order.readyEta, lang))}</p>
       )}

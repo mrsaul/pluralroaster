@@ -12,5 +12,5 @@ export function useNow(intervalMs = 30_000): Date {
 
 export function formatWhen(iso: string | Date, lang: string): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return new Intl.DateTimeFormat(lang, { weekday: "short", hour: "2-digit", minute: "2-digit" }).format(d);
+  return new Intl.DateTimeFormat(lang, { timeZone: "Europe/Paris", weekday: "short", hour: "2-digit", minute: "2-digit" }).format(d);
 }

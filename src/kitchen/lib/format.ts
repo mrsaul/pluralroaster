@@ -24,3 +24,33 @@ export function formatMinutes(min: number): string {
   if (h === 0) return `${m} min`;
   return `${h} h ${String(m).padStart(2, "0")}`;
 }
+
+export const PARIS_TZ = "Europe/Paris";
+
+function parisOffsetMs(utcMs: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: PARIS_TZ, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+  const g = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  const asUtc = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second"));
+  return asUtc - Math.floor(utcMs / 1000) * 1000;
+}
+
+/** "2026-03-29T10:00" (a Paris wall-clock time from datetime-local) -> UTC ISO string. */
+export function parisLocalToIso(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+  if (!m) return "";
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  let utc = wall - parisOffsetMs(wall);
+  utc = wall - parisOffsetMs(utc); // second pass settles around DST changes
+  return new Date(utc).toISOString();
+}
+
+/** "tomorrow 10:00" in Paris, as a datetime-local value. */
+export function defaultParisNeededBy(now: Date = new Date()): string {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: PARIS_TZ }).format(now); // YYYY-MM-DD
+  const [y, mo, d] = day.split("-").map(Number);
+  const next = new Date(Date.UTC(y, mo - 1, d + 1));
+  return `${next.toISOString().slice(0, 10)}T10:00`;
+}

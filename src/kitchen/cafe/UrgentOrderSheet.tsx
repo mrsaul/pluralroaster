@@ -1,17 +1,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { format, addDays, set } from "date-fns";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { kitchenErrorMessage, useCreateUrgentOrder } from "../api";
 import { useKitchenT } from "../i18n";
+import { defaultParisNeededBy, parisLocalToIso } from "../lib/format";
 import type { KitchenProduct } from "../types";
-
-const LOCAL_FMT = "yyyy-MM-dd'T'HH:mm";
-const defaultNeededBy = () =>
-  format(set(addDays(new Date(), 1), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }), LOCAL_FMT);
 
 type Props = { open: boolean; onOpenChange: (o: boolean) => void; cafeId: string; products: KitchenProduct[] };
 
@@ -21,22 +17,24 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId, products 
   const create = useCreateUrgentOrder();
   const [qty, setQty] = useState<Record<string, number>>({});
   const [reason, setReason] = useState("");
-  const [neededBy, setNeededBy] = useState(defaultNeededBy);
+  const [neededBy, setNeededBy] = useState(defaultParisNeededBy);
 
   const items = products
     .filter((p) => p.isVisible && (qty[p.id] ?? 0) > 0)
     .map((p) => ({ productId: p.id, units: qty[p.id] }));
-  const neededDate = neededBy ? new Date(neededBy) : null;
-  const valid = items.length > 0 && reason.trim().length > 0 && !!neededDate && !isNaN(neededDate.getTime());
+  const neededIso = neededBy ? parisLocalToIso(neededBy) : "";
+  const neededDate = neededIso ? new Date(neededIso) : null;
+  const valid =
+    items.length > 0 && reason.trim().length > 0 && !!neededDate && !isNaN(neededDate.getTime()) && neededDate.getTime() > Date.now();
 
   const submit = () => {
     if (!valid || !neededDate) return;
     create.mutate(
-      { cafeId, reason: reason.trim(), neededBy: neededDate.toISOString(), items },
+      { cafeId, reason: reason.trim(), neededBy: neededIso, items },
       {
         onSuccess: () => {
           toast.success(c.urgentSent);
-          setQty({}); setReason(""); setNeededBy(defaultNeededBy());
+          setQty({}); setReason(""); setNeededBy(defaultParisNeededBy());
           onOpenChange(false);
         },
         onError: (err) => toast.error(kitchenErrorMessage(err, t)),
@@ -76,7 +74,7 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId, products 
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium">
-            {c.urgentNeededBy}
+            {c.urgentNeededBy} (Paris)
             <input
               type="datetime-local"
               value={neededBy}

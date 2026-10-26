@@ -67,7 +67,7 @@ type ItemRow = {
 };
 type OrderRow = {
   id: string; cafe_id: string; week_start: string; kind: string; status: string;
-  urgent_reason: string | null; needed_by: string | null; ready_eta: string | null;
+  urgent_reason: string | null; needed_by: string | null; ready_eta: string | null; decline_note?: string | null;
   kitchen_cafes?: { name: string } | null;
   kitchen_order_items?: ItemRow[] | null;
 };
@@ -107,6 +107,7 @@ export function mapOrder(r: OrderRow): KitchenOrder {
     urgentReason: r.urgent_reason,
     neededBy: r.needed_by,
     readyEta: r.ready_eta,
+    declineNote: r.decline_note ?? null,
     items: (r.kitchen_order_items ?? []).map(mapItem),
   };
 }

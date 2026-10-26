@@ -46,6 +46,11 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const orderIdRef = useRef<string | undefined>(order?.id);
   orderIdRef.current = order?.id;
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const pending = useRef<Record<string, number>>({});
+  const draftPromise = useRef<Promise<string> | null>(null);
+  const flushRef = useRef<(id: string, v: number) => Promise<void>>(async () => {});
   const [urgentOpen, setUrgentOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [pendingEdit, setPendingEdit] = useState<{ id: string; v: number } | null>(null);
@@ -63,28 +68,45 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
     });
   }, [order, visible]);
 
-  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout); }, []);
+  // On unmount, flush every pending edit instead of dropping it.
+  useEffect(() => () => {
+    for (const [id, v] of Object.entries(pending.current)) {
+      clearTimeout(timers.current[id]);
+      void flushRef.current(id, v);
+    }
+    timers.current = {};
+  }, []);
   useEffect(() => { setConfirmed(false); }, [order?.status]);
 
   const flush = useCallback(
     async (productId: string, units: number) => {
       delete timers.current[productId];
+      delete pending.current[productId];
       try {
         let orderId = orderIdRef.current;
-        if (!orderId) orderId = (await draft.mutateAsync({ cafeId })) as string;
+        if (!orderId) {
+          // Share one in-flight get-or-create so quick changes create the draft once.
+          draftPromise.current ??= draft.mutateAsync({ cafeId }).then((id) => id as string);
+          try { orderId = await draftPromise.current; } finally { draftPromise.current = null; }
+        }
         await setItem.mutateAsync({ orderId, productId, units });
       } catch (err) {
         toast.error(kitchenErrorMessage(err, t));
+        // Revert the optimistic value to what the server last told us.
+        const server = orderRef.current?.items.find((i) => i.productId === productId)?.units ?? 0;
+        if (!timers.current[productId]) setQty((q) => ({ ...q, [productId]: server }));
         void qc.invalidateQueries({ queryKey: ["kitchen"] });
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cafeId, t],
   );
+  flushRef.current = flush;
 
   const apply = (id: string, v: number) => {
     setQty((q) => ({ ...q, [id]: v }));
     clearTimeout(timers.current[id]);
+    pending.current[id] = v;
     timers.current[id] = setTimeout(() => void flush(id, v), DEBOUNCE_MS);
   };
 
