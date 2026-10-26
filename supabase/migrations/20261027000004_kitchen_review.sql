@@ -297,7 +297,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.kitchen_create_order_for_cafe(p_cafe_id uuid)
+CREATE FUNCTION public.kitchen_create_order_for_cafe(p_cafe_id uuid, p_week_start date DEFAULT NULL)
 RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path TO 'public'
@@ -305,6 +305,7 @@ AS $$
 DECLARE
   v_uid uuid := auth.uid();
   v_week date;
+  v_today date := (public.kitchen_now() AT TIME ZONE 'Europe/Paris')::date;
   v_id uuid;
 BEGIN
   PERFORM public.kitchen_require_role(ARRAY['stores_manager']::public.kitchen_role[]);
@@ -313,7 +314,18 @@ BEGIN
     RAISE EXCEPTION 'invalid_input';
   END IF;
 
-  SELECT week_start INTO v_week FROM public.kitchen_current_week();
+  IF p_week_start IS NOT NULL THEN
+    IF extract(isodow FROM p_week_start) <> 1 OR p_week_start + 7 <= v_today THEN
+      RAISE EXCEPTION 'invalid_input';
+    END IF;
+    v_week := p_week_start;
+  ELSE
+    SELECT week_start INTO v_week FROM public.kitchen_current_week();
+    -- Past the cutoff of a week that has not started yet: target that locked week.
+    IF public.kitchen_now() >= public.kitchen_cutoff_for_week(v_week - 7) AND v_today < v_week - 7 THEN
+      v_week := v_week - 7;
+    END IF;
+  END IF;
 
   INSERT INTO public.kitchen_orders (cafe_id, week_start, kind, status, created_by)
   VALUES (p_cafe_id, v_week, 'weekly', 'draft', v_uid)
@@ -335,7 +347,7 @@ REVOKE EXECUTE ON FUNCTION
   public.kitchen_create_urgent_order(uuid, text, timestamptz, jsonb),
   public.kitchen_set_ready_eta(uuid, timestamptz),
   public.kitchen_mark_ready(uuid),
-  public.kitchen_create_order_for_cafe(uuid)
+  public.kitchen_create_order_for_cafe(uuid, date)
 FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION
   public.kitchen_lock_order(uuid),
@@ -346,6 +358,6 @@ GRANT EXECUTE ON FUNCTION
   public.kitchen_create_urgent_order(uuid, text, timestamptz, jsonb),
   public.kitchen_set_ready_eta(uuid, timestamptz),
   public.kitchen_mark_ready(uuid),
-  public.kitchen_create_order_for_cafe(uuid)
+  public.kitchen_create_order_for_cafe(uuid, date)
 TO authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.kitchen_require_role(public.kitchen_role[]) FROM authenticated;

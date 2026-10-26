@@ -1,5 +1,5 @@
 begin;
-select plan(48);
+select plan(57);
 \ir support/kitchen_setup.psql
 
 set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
@@ -103,10 +103,32 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 select lives_ok(format('select public.kitchen_mark_received(%L)', :'urg'), 'café receives ready order');
 reset role;
 
--- create order for cafe (after cutoff)
+-- create order for cafe (after cutoff 2026-11-01 21:00)
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select is(public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2'), public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2'), 'create order for cafe is idempotent');
+select is((select week_start from public.kitchen_orders where id = public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2')), '2026-11-02'::date, 'default targets the locked week after cutoff');
+select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-11-09') as onext \gset
+select is((select week_start from public.kitchen_orders where id = :'onext'), '2026-11-09'::date, 'explicit next week');
+select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-11-10')$q$, 'invalid_input', 'non-Monday rejected');
+select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-10-19')$q$, 'invalid_input', 'past week rejected');
 select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000ff')$q$, 'invalid_input', 'unknown café');
+reset role;
+
+-- adjust after cutoff, mark_ready uses adjusted units, hidden product in urgent
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
+select lives_ok(format('select public.kitchen_adjust_item(%L, %L, 1)', public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2'), :'bread'), 'stores manager adjusts after cutoff');
+reset role;
+update public.kitchen_products set stock_units = 5 where id = :'cook';
+insert into public.kitchen_orders (cafe_id, week_start, kind, status, urgent_reason, needed_by) values ('00000000-0000-0000-0000-0000000000c2', '2026-11-02', 'urgent', 'approved', 'r', now()) returning id as o3 \gset
+insert into public.kitchen_order_items (order_id, product_id, product_name, unit_label, pieces_per_unit, production_minutes, units, adjusted_units) values (:'o3', :'cook', 'Cookies', 'Batch', 50, 60, 3, 1);
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a2');
+select lives_ok(format('select public.kitchen_mark_ready(%L)', :'o3'), 'mark ready with adjusted units');
+reset role;
+select is((select served_from_stock_units from public.kitchen_order_items where order_id = :'o3'), 1, 'served uses adjusted units');
+select is((select stock_units from public.kitchen_products where id = :'cook'), 4, 'stock 5 -> 4');
+update public.kitchen_products set is_visible = false where id = :'bread';
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
+select throws_ok(format($q$select public.kitchen_create_urgent_order(null, 'x', '2026-11-04 10:00 Europe/Paris', '[{"product_id":"%s","units":1}]')$q$, :'bread'), 'product_hidden', 'coffee manager urgent with hidden product');
 reset role;
 
 -- Coffee-only client
