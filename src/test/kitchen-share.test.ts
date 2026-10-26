@@ -1,0 +1,40 @@
+import { describe, expect, it } from "vitest";
+import { buildChangesShareText, buildOrderShareText, buildPackingListText, buildProductionShareText } from "@/kitchen/lib/share";
+import { computeProduction } from "@/kitchen/lib/production";
+import { item, order, products } from "./kitchen-fixtures";
+
+describe("share texts", () => {
+  it("changes text", () => {
+    const t = buildChangesShareText("Artivistas", [{ productName: "Cookies", from: 1, to: 0 }], "fr");
+    expect(t).toContain("Cookies : 1 → 0");
+    expect(t).toContain("Artivistas");
+    expect(t).not.toContain("*");
+  });
+
+  it("order text lists lines and adjustments", () => {
+    const o = order({ cafeName: "Artivistas", items: [item("p1", 2), item("p2", 1, 2)] });
+    const fr = buildOrderShareText(o, "fr");
+    expect(fr).toContain("Artivistas");
+    expect(fr).toContain("Commande de la semaine du 02/11");
+    expect(fr).toContain("Pandebono — 2 × Batch (100 pcs)");
+    expect(fr).toContain("Cookies — 1 → 2 × Batch (48 pcs)");
+    expect(buildOrderShareText(o, "en")).toContain("Order for week of 02/11");
+    expect(buildOrderShareText({ ...o, kind: "urgent" }, "fr")).toContain("Commande urgente");
+    expect(buildOrderShareText({ ...o, kind: "urgent" }, "en")).toContain("Urgent order");
+  });
+
+  it("production text", () => {
+    const rows = computeProduction([order({ items: [item("p1", 3)] })], products);
+    const t = buildProductionShareText("2026-11-02", rows, "fr");
+    expect(t).toContain("02/11");
+    expect(t).toContain("Pandebono");
+    expect(t).toContain("2");
+  });
+
+  it("packing list uses effective units", () => {
+    const o = order({ cafeName: "Artivistas", items: [item("p1", 1, 2)] });
+    const t = buildPackingListText(o, "en");
+    expect(t).toContain("Pandebono — 2 × Batch (100 pcs)");
+    expect(t).not.toContain("→");
+  });
+});
