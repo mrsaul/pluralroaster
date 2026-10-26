@@ -9,10 +9,11 @@ interface QuantityStepperProps {
   min?: number;
   max?: number;
   className?: string;
+  disabled?: boolean;
   renderValue?: (value: number) => string;
 }
 
-export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999, className, renderValue }: QuantityStepperProps) {
+export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999, className, renderValue, disabled }: QuantityStepperProps) {
   const decrement = () => onChange(Math.max(min, value - step));
   const increment = () => onChange(Math.min(max, value + step));
 
@@ -27,7 +28,8 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
       <motion.button
         whileTap={{ scale: 0.92 }}
         onClick={decrement}
-        className="w-9 h-9 rounded-lg border border-border bg-secondary flex items-center justify-center text-foreground transition-colors duration-150 hover:bg-muted"
+        disabled={disabled}
+        className="w-9 h-9 rounded-lg border border-border bg-secondary disabled:opacity-40 flex items-center justify-center text-foreground transition-colors duration-150 hover:bg-muted"
         aria-label="Decrease quantity"
       >
         <Minus className="w-4 h-4" />
@@ -38,8 +40,9 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
       <motion.button
         whileTap={{ scale: 0.92 }}
         onClick={increment}
+        disabled={disabled}
         className={cn(
-          "w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150",
+          "w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 disabled:opacity-40",
           value > 0
             ? "bg-primary text-primary-foreground"
             : "border border-border bg-secondary text-foreground hover:bg-muted"

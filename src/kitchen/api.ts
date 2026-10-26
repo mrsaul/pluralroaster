@@ -236,6 +236,11 @@ export const useSetItem = () =>
     call: (v) => supabase.rpc("kitchen_set_item", { p_order_id: v.orderId, p_product_id: v.productId, p_units: v.units }),
   });
 
+export const useGetOrCreateDraft = () =>
+  useRpcMutation<{ cafeId?: string | null }, string>({
+    call: (v) => supabase.rpc("kitchen_get_or_create_draft", v.cafeId ? { p_cafe_id: v.cafeId } : {}),
+  });
+
 export const useSendOrder = () =>
   useRpcMutation<OrderArg>({
     call: (v) => supabase.rpc("kitchen_send_order", { p_order_id: v.orderId }),

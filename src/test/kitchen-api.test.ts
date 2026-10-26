@@ -7,6 +7,7 @@ import {
   kitchenErrorMessage,
   notifyKitchen,
   useApproveOrder,
+  useGetOrCreateDraft,
   mapOrder,
 } from "@/kitchen/api";
 
@@ -84,5 +85,19 @@ describe("mapOrder", () => {
       productId: "p1", productName: "Pandebono", unitLabel: "Batch", piecesPerUnit: 50,
       units: 2, adjustedUnits: 1, servedFromStockUnits: 0,
     });
+  });
+});
+
+describe("useGetOrCreateDraft", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it("calls the RPC with p_cafe_id and returns the order id", async () => {
+    (supabase.rpc as any).mockResolvedValue({ data: "o9", error: null });
+    const { result } = renderHook(() => useGetOrCreateDraft(), { wrapper: wrapper() });
+    let id: unknown;
+    await act(async () => {
+      id = await result.current.mutateAsync({ cafeId: "c1" });
+    });
+    expect(id).toBe("o9");
+    expect(supabase.rpc).toHaveBeenCalledWith("kitchen_get_or_create_draft", { p_cafe_id: "c1" });
   });
 });

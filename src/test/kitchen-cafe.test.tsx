@@ -1,0 +1,90 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import { products, item, order } from "./kitchen-fixtures";
+
+const mocks = vi.hoisted(() => ({
+  products: [] as any[],
+  week: { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" },
+  orders: [] as any[],
+  createUrgent: vi.fn(),
+}));
+
+vi.mock("@/kitchen/api", () => {
+  const mut = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue("o1"), isPending: false });
+  return {
+    useKitchenProducts: () => ({ data: mocks.products, isLoading: false }),
+    useCurrentWeek: () => ({ data: mocks.week, isLoading: false }),
+    useKitchenOrders: () => ({ data: mocks.orders, isLoading: false }),
+    useSetItem: mut,
+    useGetOrCreateDraft: mut,
+    useSendOrder: mut,
+    useMarkReceived: mut,
+    useCreateUrgentOrder: () => ({ mutate: mocks.createUrgent, mutateAsync: mocks.createUrgent, isPending: false }),
+    kitchenErrorMessage: () => "err",
+  };
+});
+
+import CafeHome from "@/kitchen/cafe/CafeHome";
+import CafeOrders from "@/kitchen/cafe/CafeOrders";
+import UrgentOrderSheet from "@/kitchen/cafe/UrgentOrderSheet";
+
+const render = (ui: ReactElement) =>
+  rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+
+const hidden = { id: "p4", name: "Secret scone", unitLabel: "Batch", piecesPerUnit: 10, stockUnits: 3, productionMinutes: 10, isVisible: false };
+
+beforeEach(() => {
+  mocks.products = [...products, hidden];
+  mocks.week = { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" };
+  mocks.orders = [];
+  mocks.createUrgent.mockClear();
+});
+
+describe("CafeHome", () => {
+  it("renders the 3 visible products and not the hidden one", () => {
+    render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
+    expect(screen.getByText("Pandebono")).toBeInTheDocument();
+    expect(screen.getByText("Cookies")).toBeInTheDocument();
+    expect(screen.getByText("Banana bread")).toBeInTheDocument();
+    expect(screen.queryByText("Secret scone")).toBeNull();
+  });
+
+  it("shows the will-be-produced hint when stock is 0", () => {
+    render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
+    expect(screen.getAllByText(/0 en stock, sera produit/).length).toBe(2);
+  });
+
+  it("is read-only after the cutoff and offers the urgent order", () => {
+    mocks.week = { weekStart: "2026-11-02", cutoffAt: "2020-01-01T20:00:00Z" };
+    mocks.orders = [order({ cafeId: "c1", status: "sent", items: [item("p1", 2)] })];
+    render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
+    for (const b of screen.getAllByLabelText("Increase quantity")) expect(b).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Commande urgente" })).toBeInTheDocument();
+  });
+});
+
+describe("CafeOrders", () => {
+  it("renders an adjusted line as 1 → 2", () => {
+    mocks.orders = [order({ cafeId: "c1", status: "approved", items: [item("p1", 1, 2)] })];
+    render(<CafeOrders cafeId="c1" />);
+    expect(screen.getByText(/1 → 2/)).toBeInTheDocument();
+  });
+
+  it("offers confirm-received on a ready order", () => {
+    mocks.orders = [order({ cafeId: "c1", status: "ready", items: [item("p1", 1)] })];
+    render(<CafeOrders cafeId="c1" />);
+    expect(screen.getByRole("button", { name: "Confirmer la réception" })).toBeInTheDocument();
+  });
+});
+
+describe("UrgentOrderSheet", () => {
+  it("disables submit with an empty reason", () => {
+    render(<UrgentOrderSheet open onOpenChange={() => {}} cafeId="c1" products={products} />);
+    fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+    expect(screen.getByRole("button", { name: "Envoyer la demande" })).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText(/Pourquoi/), { target: { value: "Rupture" } });
+    expect(screen.getByRole("button", { name: "Envoyer la demande" })).toBeEnabled();
+  });
+});

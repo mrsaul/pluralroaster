@@ -1,0 +1,194 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle } from "lucide-react";
+import { QuantityStepper } from "@/components/QuantityStepper";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useLang } from "@/i18n";
+import {
+  kitchenErrorMessage, useCurrentWeek, useGetOrCreateDraft, useKitchenOrders,
+  useKitchenProducts, useSendOrder, useSetItem,
+} from "../api";
+import { useKitchenT } from "../i18n";
+import { formatCountdown, unitsToPieces } from "../lib/format";
+import CafeCartBar from "./CafeCartBar";
+import UrgentOrderSheet from "./UrgentOrderSheet";
+import { formatWhen, useNow } from "./useNow";
+
+const DEBOUNCE_MS = 400;
+
+export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeName: string | null }) {
+  const t = useKitchenT();
+  const c = t.cafeApp;
+  const { lang } = useLang();
+  const qc = useQueryClient();
+  const now = useNow();
+
+  const { data: products = [], isLoading } = useKitchenProducts();
+  const { data: week } = useCurrentWeek();
+  const { data: orders = [] } = useKitchenOrders({ weekStart: week?.weekStart, cafeId, kind: "weekly" });
+  const draft = useGetOrCreateDraft();
+  const setItem = useSetItem();
+  const send = useSendOrder();
+
+  const order = orders[0];
+  const visible = useMemo(() => products.filter((p) => p.isVisible), [products]);
+  const cutoff = week ? new Date(week.cutoffAt) : null;
+  const beforeCutoff = !!cutoff && now < cutoff;
+  const editableStatus = !order || order.status === "draft" || order.status === "sent" || order.status === "approved";
+  const canEdit = beforeCutoff && editableStatus;
+
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const orderIdRef = useRef<string | undefined>(order?.id);
+  orderIdRef.current = order?.id;
+  const [urgentOpen, setUrgentOpen] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [pendingEdit, setPendingEdit] = useState<{ id: string; v: number } | null>(null);
+
+  // Sync server quantities into the local map, except for products being edited.
+  useEffect(() => {
+    if (!order) return;
+    setQty((prev) => {
+      const next = { ...prev };
+      for (const p of visible) {
+        if (timers.current[p.id]) continue;
+        next[p.id] = order.items.find((i) => i.productId === p.id)?.units ?? 0;
+      }
+      return next;
+    });
+  }, [order, visible]);
+
+  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout); }, []);
+  useEffect(() => { setConfirmed(false); }, [order?.status]);
+
+  const flush = useCallback(
+    async (productId: string, units: number) => {
+      delete timers.current[productId];
+      try {
+        let orderId = orderIdRef.current;
+        if (!orderId) orderId = (await draft.mutateAsync({ cafeId })) as string;
+        await setItem.mutateAsync({ orderId, productId, units });
+      } catch (err) {
+        toast.error(kitchenErrorMessage(err, t));
+        void qc.invalidateQueries({ queryKey: ["kitchen"] });
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cafeId, t],
+  );
+
+  const apply = (id: string, v: number) => {
+    setQty((q) => ({ ...q, [id]: v }));
+    clearTimeout(timers.current[id]);
+    timers.current[id] = setTimeout(() => void flush(id, v), DEBOUNCE_MS);
+  };
+
+  const change = (id: string, v: number) => {
+    if (!canEdit) return;
+    if (order?.status === "approved" && !confirmed) {
+      setPendingEdit({ id, v });
+      return;
+    }
+    apply(id, v);
+  };
+
+  const total = visible.reduce((s, p) => s + (qty[p.id] ?? 0), 0);
+
+  const handleSend = () => {
+    if (!order) return;
+    send.mutate({ orderId: order.id }, {
+      onSuccess: () => toast.success(c.sentToast),
+      onError: (err) => toast.error(kitchenErrorMessage(err, t)),
+    });
+  };
+
+  if (isLoading || !week) return <p className="p-4 text-sm text-muted-foreground">{c.loading}</p>;
+
+  const status = !order ? "none" : (order.status as "draft" | "sent" | "approved") ;
+  const missed = !order || order.status === "draft";
+
+  return (
+    <div className="mx-auto max-w-xl px-4 pb-32 pt-4">
+      {cafeName && <p className="mb-3 text-sm text-muted-foreground">{cafeName}</p>}
+
+      {!beforeCutoff && (
+        <div role="status" className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <p className="flex items-start gap-2 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            {missed ? c.missedBanner : c.closedBanner}
+          </p>
+          <Button className="h-12" onClick={() => setUrgentOpen(true)}>{c.urgentButton}</Button>
+        </div>
+      )}
+
+      {visible.length === 0 && <p className="text-sm text-muted-foreground">{c.noProducts}</p>}
+      <ul className="flex flex-col gap-3">
+        {visible.map((p) => (
+          <li key={p.id} className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">{p.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {p.unitLabel} · {p.piecesPerUnit} {c.pcs}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {p.stockUnits === 0 ? c.stockZero : c.stockSome(p.stockUnits)}
+                </p>
+              </div>
+              <QuantityStepper
+                step={1}
+                value={qty[p.id] ?? 0}
+                disabled={!canEdit}
+                onChange={(v) => change(p.id, v)}
+                renderValue={(v) => String(v)}
+              />
+            </div>
+            {(qty[p.id] ?? 0) > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                = {unitsToPieces(qty[p.id], p.piecesPerUnit)} {c.pcs}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {beforeCutoff && (
+        <CafeCartBar
+          totalUnits={total}
+          status={status}
+          countdown={formatCountdown(cutoff!, now, lang)}
+          cutoffLabel={formatWhen(cutoff!, lang)}
+          sending={send.isPending}
+          onSend={handleSend}
+        />
+      )}
+
+      <AlertDialog open={!!pendingEdit} onOpenChange={(o) => !o && setPendingEdit(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{c.confirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{c.confirmBody}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{c.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingEdit) { setConfirmed(true); apply(pendingEdit.id, pendingEdit.v); }
+                setPendingEdit(null);
+              }}
+            >
+              {c.confirmOk}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <UrgentOrderSheet open={urgentOpen} onOpenChange={setUrgentOpen} cafeId={cafeId} products={visible} />
+    </div>
+  );
+}
