@@ -22,13 +22,20 @@ export function computeProduction(orders: KitchenOrder[], products: KitchenProdu
   const rows: ProductionRow[] = [];
   for (const product of products) {
     const byCafe: { cafeName: string; units: number }[] = [];
+    const byCafeId = new Map<string, { cafeName: string; units: number }>();
     let orderedUnits = 0;
     for (const order of orders) {
       if (order.status !== "approved") continue;
       let units = 0;
       for (const it of order.items) if (it.productId === product.id) units += effectiveUnits(it);
       if (units <= 0) continue;
-      byCafe.push({ cafeName: order.cafeName, units });
+      const existing = byCafeId.get(order.cafeId);
+      if (existing) existing.units += units;
+      else {
+        const entry = { cafeName: order.cafeName, units };
+        byCafeId.set(order.cafeId, entry);
+        byCafe.push(entry);
+      }
       orderedUnits += units;
     }
     if (orderedUnits === 0) continue;

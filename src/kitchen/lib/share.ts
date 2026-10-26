@@ -29,7 +29,7 @@ export function buildChangesShareText(
   lang: Lang,
 ): string {
   const header = lang === "fr" ? `${cafeName} — modifications de commande` : `${cafeName} — order changes`;
-  return [header, "", ...changes.map((c) => `${c.productName} : ${c.from} → ${c.to}`)].join("\n");
+  return [header, "", ...changes.map((c) => `${c.productName}${lang === "fr" ? " :" : ":"} ${c.from} → ${c.to}`)].join("\n");
 }
 
 export function buildProductionShareText(weekStart: string, rows: ProductionRow[], lang: Lang): string {

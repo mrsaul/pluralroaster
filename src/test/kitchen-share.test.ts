@@ -9,6 +9,7 @@ describe("share texts", () => {
     expect(t).toContain("Cookies : 1 → 0");
     expect(t).toContain("Artivistas");
     expect(t).not.toContain("*");
+    expect(buildChangesShareText("Artivistas", [{ productName: "Cookies", from: 1, to: 0 }], "en")).toContain("Cookies: 1 → 0");
   });
 
   it("order text lists lines and adjustments", () => {
@@ -27,8 +28,7 @@ describe("share texts", () => {
     const rows = computeProduction([order({ items: [item("p1", 3)] })], products);
     const t = buildProductionShareText("2026-11-02", rows, "fr");
     expect(t).toContain("02/11");
-    expect(t).toContain("Pandebono");
-    expect(t).toContain("2");
+    expect(t).toContain("Pandebono — à produire : 2 × Batch (commandé 3, stock 1)");
   });
 
   it("packing list uses effective units", () => {

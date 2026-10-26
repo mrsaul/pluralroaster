@@ -42,4 +42,23 @@ describe("production", () => {
     const pending = order({ kind: "urgent", status: "sent", items: [item("p1", 1)] });
     expect(capacityIfApproved(orders, pending, products, 180).neededMinutes).toBe(330);
   });
+
+  it("merges byCafe for the same café across orders", () => {
+    const rows = computeProduction(
+      [
+        order({ cafeName: "Artivistas", items: [item("p1", 1)] }),
+        order({ cafeName: "New café", items: [item("p1", 2)] }),
+        order({ cafeName: "Artivistas", kind: "urgent", items: [item("p1", 3)] }),
+      ],
+      products,
+    );
+    expect(rows[0].byCafe).toEqual([{ cafeName: "Artivistas", units: 4 }, { cafeName: "New café", units: 2 }]);
+    expect(rows[0].orderedUnits).toBe(6);
+  });
+
+  it("capacityIfApproved does not double count a pending order already in orders", () => {
+    const pending = order({ status: "sent", items: [item("p1", 1)] });
+    const withPending = [...orders, pending];
+    expect(capacityIfApproved(withPending, pending, products, 180).neededMinutes).toBe(330);
+  });
 });
