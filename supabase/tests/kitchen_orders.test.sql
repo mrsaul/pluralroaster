@@ -1,5 +1,5 @@
 begin;
-select plan(35);
+select plan(40);
 \ir support/kitchen_setup.psql
 
 set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
@@ -100,6 +100,22 @@ set local kitchen.now_override = '2026-11-01 20:00:30 Europe/Paris';
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 select throws_ok(format('select public.kitchen_set_item(%L, %L, 1)', :'oid', :'pand'), 'cutoff_passed', 'set_item after cutoff');
 select throws_ok(format('select public.kitchen_send_order(%L)', :'oid'), 'cutoff_passed', 'send after cutoff');
+reset role;
+
+-- Stores manager / kitchen manager / urgent
+update public.kitchen_orders set status = 'approved' where id = :'oid';
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
+select lives_ok(format('select public.kitchen_set_item(%L, %L, 5)', :'oid', :'pand'), 'stores manager edits after cutoff');
+select throws_ok('select public.kitchen_get_or_create_draft()', 'invalid_input', 'stores manager needs a cafe for drafts');
+reset role;
+select is((select status from public.kitchen_orders where id = :'oid'), 'approved', 'stores manager edit keeps approved');
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a2');
+select throws_ok(format('select public.kitchen_set_item(%L, %L, 1)', :'oid', :'pand'), 'forbidden', 'kitchen manager cannot set items');
+reset role;
+insert into public.kitchen_orders (cafe_id, week_start, kind, status) values ('00000000-0000-0000-0000-0000000000c1', '2026-11-02', 'urgent', 'draft');
+select id as uid2 from public.kitchen_orders where kind = 'urgent' \gset
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
+select throws_ok(format('select public.kitchen_set_item(%L, %L, 1)', :'uid2', :'pand'), 'forbidden', 'cafe manager cannot edit urgent order');
 reset role;
 
 select * from finish();

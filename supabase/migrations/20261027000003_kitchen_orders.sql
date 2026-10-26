@@ -39,7 +39,7 @@ CREATE TABLE public.kitchen_order_items (
   UNIQUE (order_id, product_id)
 );
 
-CREATE INDEX kitchen_order_items_order_id_idx ON public.kitchen_order_items (order_id);
+CREATE INDEX kitchen_order_items_product_id_idx ON public.kitchen_order_items (product_id);
 
 CREATE TABLE public.kitchen_order_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -145,7 +145,7 @@ BEGIN
     RAISE EXCEPTION 'invalid_input';
   END IF;
 
-  IF v_role = 'coffee_manager' AND v_order.cafe_id IS DISTINCT FROM public.kitchen_cafe_of(v_uid) THEN
+  IF v_role = 'coffee_manager' AND (v_order.cafe_id IS DISTINCT FROM public.kitchen_cafe_of(v_uid) OR v_order.kind <> 'weekly') THEN
     RAISE EXCEPTION 'forbidden';
   END IF;
 
@@ -178,7 +178,7 @@ BEGIN
     ON CONFLICT (order_id, product_id) DO UPDATE SET units = EXCLUDED.units;
   END IF;
 
-  IF v_order.status = 'approved' THEN
+  IF v_order.status = 'approved' AND v_role = 'coffee_manager' THEN
     UPDATE public.kitchen_orders SET status = 'sent', updated_at = now() WHERE id = p_order_id;
     INSERT INTO public.kitchen_order_history (order_id, status, changed_by, note)
     VALUES (p_order_id, 'sent', v_uid, 'edited by café');
@@ -210,7 +210,7 @@ BEGIN
     RAISE EXCEPTION 'invalid_input';
   END IF;
 
-  IF v_role = 'coffee_manager' AND v_order.cafe_id IS DISTINCT FROM public.kitchen_cafe_of(v_uid) THEN
+  IF v_role = 'coffee_manager' AND (v_order.cafe_id IS DISTINCT FROM public.kitchen_cafe_of(v_uid) OR v_order.kind <> 'weekly') THEN
     RAISE EXCEPTION 'forbidden';
   END IF;
 
