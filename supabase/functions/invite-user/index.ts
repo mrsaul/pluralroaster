@@ -121,13 +121,7 @@ Deno.serve(async (req) => {
 
       const upsertKitchenMember = async (userId: string) => {
         if (!kitchen) return null;
-        const cafeError = await checkCafe(adminClient, kitchen);
-        if (cafeError) {
-          return new Response(JSON.stringify({ error: cafeError }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+        // Callers must have run checkCafe first; this only ever returns an error object.
         const { error } = await adminClient.from("kitchen_members").upsert({
           user_id: userId,
           role: kitchen.role,
@@ -180,7 +174,8 @@ Deno.serve(async (req) => {
         const kErr = await upsertKitchenMember(inviteData.user.id);
         if (kErr) {
           // Roll back: otherwise the invitee has no role rows and would become a coffee client on first login.
-          await adminClient.auth.admin.deleteUser(inviteData.user.id);
+          const { error: delErr } = await adminClient.auth.admin.deleteUser(inviteData.user.id);
+          if (delErr) console.error("Rollback deleteUser failed", inviteData.user.id, delErr.message);
           return new Response(JSON.stringify({ error: kErr.message }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -218,6 +213,13 @@ Deno.serve(async (req) => {
         const kitchenError = validateKitchen("user", kitchen);
         if (kitchenError) {
           return new Response(JSON.stringify({ error: kitchenError }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const cafeError = await checkCafe(adminClient, kitchen);
+        if (cafeError) {
+          return new Response(JSON.stringify({ error: cafeError }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
