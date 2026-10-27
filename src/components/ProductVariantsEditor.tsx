@@ -35,7 +35,7 @@ export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps)
       .then(({ data, error }) => {
         if (!cancelled) {
           if (error) {
-            setFetchError("Failed to load variants.");
+            setFetchError("Impossible de charger les formats.");
           } else {
             setVariants(
               (data ?? []).map((v) => ({
@@ -78,10 +78,10 @@ export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps)
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">Bag Sizes & Pricing</p>
+        <p className="text-sm font-medium text-foreground">Formats de sachet et prix</p>
         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
           <ExternalLink className="w-3 h-3" aria-hidden="true" />
-          Managed in Sellsy
+          Géré dans Sellsy
         </span>
       </div>
 
@@ -114,13 +114,13 @@ export function ProductVariantsEditor({ productId }: ProductVariantsEditorProps)
       ) : (
         <div className="rounded-lg border border-dashed border-border p-4 text-center">
           <p className="text-xs text-muted-foreground">
-            No Sellsy variants found. Run a product sync to import sizes from Sellsy.
+            Aucun format Sellsy. Lancez une synchronisation produits pour importer les formats depuis Sellsy.
           </p>
         </div>
       )}
 
       <p className="text-[11px] text-muted-foreground">
-        Variants are managed in Sellsy as Declinations. Run a product sync to refresh.
+        Les formats sont gérés dans Sellsy (déclinaisons). Lancez une synchronisation produits pour actualiser.
       </p>
     </div>
   );

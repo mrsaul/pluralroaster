@@ -11,11 +11,11 @@ export const ORDER_STATUSES = [
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  received: "Received",
-  approved: "Approved",
-  packaging: "Packaging",
-  ready_for_delivery: "Ready for Delivery",
-  delivered: "Delivered",
+  received: "Reçue",
+  approved: "Validée",
+  packaging: "En conditionnement",
+  ready_for_delivery: "Prête à livrer",
+  delivered: "Livrée",
 };
 
 export const ORDER_STATUS_CLASS: Record<OrderStatus, string> = {
@@ -65,6 +65,6 @@ export const PRIORITY_CLASS: Record<PriorityLevel, string> = {
 
 export const PRIORITY_LABEL: Record<PriorityLevel, string> = {
   urgent: "Urgent",
-  normal: "Normal",
-  low: "Low",
+  normal: "Normale",
+  low: "Basse",
 };

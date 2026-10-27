@@ -105,7 +105,7 @@ describe("ProductsEditor", () => {
   it("never goes below 0 stock", () => {
     render(<ProductsEditor />);
     const card = screen.getByTestId("product-p2");
-    fireEvent.click(within(card).getByLabelText("Decrease quantity"));
+    fireEvent.click(within(card).getByLabelText("Diminuer la quantité"));
     expect(within(card).getByTestId("stock-stepper")).toHaveTextContent("0");
   });
   it("refuses 0 pieces per unit with a validation error", () => {

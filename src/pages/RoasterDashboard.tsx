@@ -44,7 +44,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
         })),
       );
     } catch (err) {
-      toast({ title: "Failed to load orders", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Impossible de charger les commandes", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
         ),
       );
     } catch (err) {
-      toast({ title: "Update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Échec de la mise à jour", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -76,7 +76,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
       <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 shrink-0">
           <Flame className="w-5 h-5 text-warning" />
-          <h1 className="text-base font-medium text-foreground">Roaster View</h1>
+          <h1 className="text-base font-medium text-foreground">Torréfaction</h1>
         </div>
         <nav className="flex items-center gap-1">
           <button
@@ -88,7 +88,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Orders
+            Commandes
           </button>
           <button
             onClick={() => setSection("stock")}
@@ -111,7 +111,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
         {section === "stock" ? (
           <StockView />
         ) : loading ? (
-          <p className="text-center text-muted-foreground py-8">Loading…</p>
+          <p className="text-center text-muted-foreground py-8">Chargement…</p>
         ) : (
           <RoasterView orders={orders} onMarkRoasted={handleMarkRoasted} />
         )}

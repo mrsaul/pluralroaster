@@ -67,7 +67,7 @@ describe("CafeHome", () => {
     mocks.orders = [order({ cafeId: "c1", status: "sent", items: [item("p1", 2)] })];
     render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
     expect(screen.getByRole("button", { name: "Commande urgente" })).toBeInTheDocument();
-    for (const b of screen.getAllByLabelText("Increase quantity")) expect(b).toBeEnabled();
+    for (const b of screen.getAllByLabelText("Augmenter la quantité")) expect(b).toBeEnabled();
   });
 
   it("opens the urgent sheet from the always-visible button", () => {
@@ -105,7 +105,7 @@ describe("CafeOrders", () => {
 describe("UrgentOrderSheet", () => {
   it("disables submit with an empty reason", () => {
     render(<UrgentOrderSheet open onOpenChange={() => {}} cafeId="c1" products={products} />);
-    fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+    fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
     expect(screen.getByRole("button", { name: "Envoyer la demande" })).toBeDisabled();
     fireEvent.change(screen.getByPlaceholderText(/Pourquoi/), { target: { value: "Rupture" } });
     expect(screen.getByRole("button", { name: "Envoyer la demande" })).toBeEnabled();
@@ -113,7 +113,7 @@ describe("UrgentOrderSheet", () => {
 });
 
 describe("CafeHome saving", () => {
-  const inc = () => screen.getAllByLabelText("Increase quantity")[0];
+  const inc = () => screen.getAllByLabelText("Augmenter la quantité")[0];
 
   it("flushes a pending edit when unmounted within the debounce window", () => {
     mocks.orders = [order({ cafeId: "c1", status: "draft", items: [] })];
@@ -144,8 +144,8 @@ describe("CafeHome saving", () => {
       let resolve!: (v: string) => void;
       mocks.draft.mockReturnValue(new Promise((r) => { resolve = r; }));
       render(<CafeHome cafeId="c1" cafeName="A" />);
-      fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
-      fireEvent.click(screen.getAllByLabelText("Increase quantity")[1]);
+      fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
+      fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[1]);
       await act(async () => { await vi.advanceTimersByTimeAsync(500); });
       resolve("o1");
       await act(async () => { await vi.advanceTimersByTimeAsync(0); });
@@ -174,7 +174,7 @@ describe("declined urgent order", () => {
 describe("UrgentOrderSheet needed-by", () => {
   it("disables submit when needed-by is in the past", () => {
     render(<UrgentOrderSheet open onOpenChange={() => {}} cafeId="c1" products={products} />);
-    fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+    fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
     fireEvent.change(screen.getByPlaceholderText(/Pourquoi/), { target: { value: "x" } });
     fireEvent.change(document.querySelector('input[type="datetime-local"]')!, { target: { value: "2020-01-01T10:00" } });
     expect(screen.getByRole("button", { name: "Envoyer la demande" })).toBeDisabled();

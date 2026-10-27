@@ -88,7 +88,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
         }),
       );
     } catch (err) {
-      toast({ title: "Failed to load orders", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Impossible de charger les commandes", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -102,7 +102,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       if (error) throw error;
       setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
     } catch (err) {
-      toast({ title: "Status update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Échec du changement de statut", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -112,7 +112,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       if (error) throw error;
       setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, [field]: value } : o));
     } catch (err) {
-      toast({ title: "Update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Échec de la mise à jour", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -121,7 +121,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Package className="w-5 h-5 text-info" />
-          <h1 className="text-base font-medium text-foreground">Packaging View</h1>
+          <h1 className="text-base font-medium text-foreground">Conditionnement</h1>
         </div>
         <button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <LogOut className="w-4 h-4" /> Sign Out
@@ -129,7 +129,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       </header>
       <main className="p-4 lg:p-8 max-w-6xl mx-auto">
         {loading ? (
-          <p className="text-center text-muted-foreground py-8">Loading…</p>
+          <p className="text-center text-muted-foreground py-8">Chargement…</p>
         ) : (
           <PackagingView
             orders={orders}

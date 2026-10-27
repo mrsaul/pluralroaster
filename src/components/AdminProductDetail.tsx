@@ -214,9 +214,9 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
 
       const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
       setImageUrl(publicUrl);
-      toast({ title: "Image uploaded" });
+      toast({ title: "Image envoyée" });
     } catch (err) {
-      toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de l'envoi", description: String(err), variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -243,11 +243,11 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
         .eq("id", product.id);
       if (error) throw error;
       clearDraft();
-      toast({ title: "Product updated" });
+      toast({ title: "Produit mis à jour" });
       onSaved();
       onOpenChange(false);
     } catch (err) {
-      toast({ title: "Save failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de l'enregistrement", description: String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -256,7 +256,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   const handleDiscard = () => {
     discardDraft();
     setTagInput("");
-    toast({ title: "Changes discarded" });
+    toast({ title: "Modifications annulées" });
   };
 
   const handleClose = (openState: boolean) => {
@@ -289,18 +289,18 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               {dirty && (
                 <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-amber-400 text-amber-600 bg-amber-50">
                   <CloudOff className="h-3 w-3" />
-                  Unsaved changes
+                  Modifications non enregistrées
                 </Badge>
               )}
               {!dirty && draftSavedAt && (
                 <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-green-400 text-green-600 bg-green-50">
                   <Save className="h-3 w-3" />
-                  All saved
+                  Tout est enregistré
                 </Badge>
               )}
             </DialogTitle>
             <DialogDescription>
-              Manage product display and data source.
+              Gérer l'affichage du produit et la source des données.
             </DialogDescription>
           </DialogHeader>
 
@@ -311,7 +311,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
 
             {/* Data Source Mode */}
             <div className="rounded-xl border-2 border-border p-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">Data Source</p>
+              <p className="text-sm font-medium text-foreground">Source des données</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -325,8 +325,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                 >
                   <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
                   <div>
-                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
-                    <p className="text-[11px] text-muted-foreground">Auto-synced data</p>
+                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
+                    <p className="text-[11px] text-muted-foreground">Données synchronisées automatiquement</p>
                   </div>
                 </button>
                 <button
@@ -341,7 +341,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                 >
                   <Unlink2 className={cn("h-4 w-4 shrink-0", !isSellsyMode ? "text-accent-foreground" : "text-muted-foreground")} />
                   <div>
-                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Custom Override</p>
+                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Personnalisé dans l'app</p>
                     <p className="text-[11px] text-muted-foreground">App-only pricing</p>
                   </div>
                 </button>
@@ -350,12 +350,12 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               {isSellsyMode ? (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
                   <Link2 className="h-3.5 w-3.5 text-primary" />
-                  <p className="text-xs text-primary font-medium">Synced with Sellsy — name and price are read-only</p>
+                  <p className="text-xs text-primary font-medium">Synchronisé avec Sellsy — nom et prix en lecture seule</p>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 text-accent-foreground" />
-                  <p className="text-xs text-accent-foreground font-medium">Custom override active — invoices may differ from app pricing</p>
+                  <p className="text-xs text-accent-foreground font-medium">Mode personnalisé — les factures peuvent différer des prix de l'app</p>
                 </div>
               )}
             </div>
@@ -363,7 +363,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
             {/* Name & Price */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Product Name</p>
+                <p className="text-xs text-muted-foreground">Nom du produit</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm font-medium text-foreground">{product.name}</p>
@@ -373,7 +373,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Price per kg (€)</p>
+                <p className="text-xs text-muted-foreground">Prix au kg (€)</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm font-medium tabular-nums text-foreground">€{product.price_per_kg.toFixed(2)}</p>
@@ -395,7 +395,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
             {/* Editable info */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Origin</p>
+                <p className="text-xs text-muted-foreground">Origine</p>
                 <Input value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="e.g. Ethiopia, Yirgacheffe" />
               </div>
               <div className="space-y-1.5">
@@ -423,7 +423,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
             {/* Sellsy read-only info */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg bg-muted/40 p-3">
-                <p className="text-xs text-muted-foreground">Roast level</p>
+                <p className="text-xs text-muted-foreground">Niveau de torréfaction</p>
                 <p className="mt-1 text-sm font-medium text-foreground capitalize">{product.roast_level ?? "—"}</p>
               </div>
               <div className="rounded-lg bg-muted/40 p-3">
@@ -434,14 +434,14 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
 
             {/* Image */}
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Product image (square)</p>
+              <p className="text-sm font-medium text-foreground">Image du produit (carrée)</p>
               <div className="max-w-[200px]">
                 <AspectRatio ratio={1}>
                   {imageUrl ? (
                     <img src={imageUrl} alt={product.name} className="h-full w-full rounded-lg object-cover border border-border" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
-                      <p className="text-xs text-muted-foreground">No image</p>
+                      <p className="text-xs text-muted-foreground">Pas d'image</p>
                     </div>
                   )}
                 </AspectRatio>
@@ -449,7 +449,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
               <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()} className="gap-2">
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {uploading ? "Uploading…" : "Upload image"}
+                {uploading ? "Envoi…" : "Envoyer une image"}
               </Button>
             </div>
 
@@ -468,7 +468,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               </div>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Add a tag…"
+                  placeholder="Ajouter un tag…"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
@@ -513,8 +513,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
             {/* Active toggle */}
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
-                <p className="text-sm font-medium text-foreground">Active</p>
-                <p className="text-xs text-muted-foreground">Visible to clients in the shop</p>
+                <p className="text-sm font-medium text-foreground">Actif</p>
+                <p className="text-xs text-muted-foreground">Visible des clients dans la boutique</p>
               </div>
               <Switch checked={isActive} onCheckedChange={setIsActive} />
             </div>
@@ -524,15 +524,15 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               <div>
                 {dirty && (
                   <Button variant="ghost" size="sm" onClick={handleDiscard} className="text-muted-foreground hover:text-destructive">
-                    Discard changes
+                    Annuler les modifications
                   </Button>
                 )}
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => handleClose(false)}>Annuler</Button>
                 <Button onClick={handleSave} disabled={saving} className="gap-2">
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Save changes
+                  Enregistrer
                 </Button>
               </div>
             </div>
@@ -546,18 +546,18 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              {pendingModeSwitch === "custom" ? "Switch to Custom Override?" : "Switch to Sellsy Sync?"}
+              {pendingModeSwitch === "custom" ? "Passer en mode personnalisé ?" : "Revenir à la synchro Sellsy ?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingModeSwitch === "custom"
-                ? "You are overriding Sellsy data. Invoices may differ from app pricing. The Sellsy reference values will still be visible for comparison."
-                : "App changes to name and price will be lost and replaced by Sellsy data on the next sync."}
+                ? "Vous remplacez les données Sellsy. Les factures peuvent différer des prix de l'app. Les valeurs Sellsy restent visibles pour comparaison."
+                : "Les modifications du nom et du prix faites dans l'app seront remplacées par les données Sellsy à la prochaine synchro."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={confirmModeSwitch}>
-              {pendingModeSwitch === "custom" ? "Use Custom Override" : "Restore Sellsy Sync"}
+              {pendingModeSwitch === "custom" ? "Passer en personnalisé" : "Revenir à Sellsy"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -569,15 +569,15 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Unsaved changes
+              Modifications non enregistrées
             </AlertDialogTitle>
             <AlertDialogDescription>
-              You have unsaved changes. Your draft has been saved locally and will be restored when you reopen this product. Close anyway?
+              Vous avez des modifications non enregistrées. Votre brouillon est gardé sur cet appareil et sera restauré à la réouverture du produit. Fermer quand même ?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep editing</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmClose}>Close anyway</AlertDialogAction>
+            <AlertDialogCancel>Continuer</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmClose}>Fermer quand même</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

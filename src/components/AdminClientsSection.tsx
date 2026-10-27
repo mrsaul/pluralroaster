@@ -78,7 +78,7 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-foreground">Client fetch failed</p>
+                <p className="text-sm font-medium text-foreground">Impossible de charger les clients</p>
                 <p className="text-xs text-muted-foreground mt-1">{error}</p>
               </div>
             </div>
@@ -88,26 +88,26 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead>Company</TableHead>
+              <TableHead>Entreprise</TableHead>
               <TableHead>Contact</TableHead>
-              <TableHead>Delivery Address</TableHead>
-              <TableHead>Tier</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Adresse de livraison</TableHead>
+              <TableHead>Palier</TableHead>
+              <TableHead>Statut</TableHead>
               <TableHead className="text-right">Source</TableHead>
-              <TableHead className="text-right">Profile</TableHead>
+              <TableHead className="text-right">Profil</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                  Loading clients…
+                  Chargement des clients…
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                  {query ? `Aucun client pour « ${query} »` : "No clients found."}
+                  {query ? `Aucun client pour « ${query} »` : "Aucun client."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -138,12 +138,12 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
                         variant={client.onboarding_status === "completed" ? "default" : "secondary"}
                         className="text-[10px]"
                       >
-                        {client.onboarding_status === "completed" ? "Active" : "Pending"}
+                        {client.onboarding_status === "completed" ? "Actif" : "En attente"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {isCustom ? (
-                        <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
+                        <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Personnalisé</Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">Sellsy</span>
                       )}
@@ -161,7 +161,7 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
                           </Button>
                         )}
                         <Button variant="ghost" size="sm" className="gap-2">
-                          Open
+                          Ouvrir
                           <ChevronRight className="w-4 h-4" />
                         </Button>
                       </div>

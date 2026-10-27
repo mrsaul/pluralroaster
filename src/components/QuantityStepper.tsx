@@ -30,7 +30,7 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
         onClick={decrement}
         disabled={disabled}
         className="w-9 h-9 rounded-lg border border-border bg-secondary disabled:opacity-40 flex items-center justify-center text-foreground transition-colors duration-150 hover:bg-muted"
-        aria-label="Decrease quantity"
+        aria-label="Diminuer la quantité"
       >
         <Minus className="w-4 h-4" />
       </motion.button>
@@ -47,7 +47,7 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
             ? "bg-primary text-primary-foreground"
             : "border border-border bg-secondary text-foreground hover:bg-muted"
         )}
-        aria-label="Increase quantity"
+        aria-label="Augmenter la quantité"
       >
         <Plus className="w-4 h-4" />
       </motion.button>

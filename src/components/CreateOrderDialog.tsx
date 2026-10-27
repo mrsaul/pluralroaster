@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Plus, Minus, Trash2, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -180,9 +181,9 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   }, [clients, setForm]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedCompanyId) { toast({ title: "Select a client", variant: "destructive" }); return; }
-    if (!deliveryDate) { toast({ title: "Select a delivery date", variant: "destructive" }); return; }
-    if (lineItems.length === 0) { toast({ title: "Add at least one product", variant: "destructive" }); return; }
+    if (!selectedCompanyId) { toast({ title: "Choisissez un client", variant: "destructive" }); return; }
+    if (!deliveryDate) { toast({ title: "Choisissez une date de livraison", variant: "destructive" }); return; }
+    if (lineItems.length === 0) { toast({ title: "Ajoutez au moins un produit", variant: "destructive" }); return; }
 
     // Resolve the auth user_id for the selected company (may be null for Sellsy-only clients)
     const selectedClient = clients.find((c) => c.company_id === selectedCompanyId);
@@ -203,7 +204,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
         pricing_tier_name: clientTier?.name ?? null,
       } as any).select("id").single();
 
-      if (orderErr || !order) throw orderErr || new Error("Failed to create order");
+      if (orderErr || !order) throw orderErr || new Error("Impossible de créer la commande");
 
       // Resolve product_variant_id for items that have a size variant
       const sellsyItems = lineItems.filter((item) => item.sizeLabel);
@@ -258,12 +259,12 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
         });
       }
 
-      toast({ title: "Order created successfully" });
+      toast({ title: "Commande créée" });
       clearDraft();
       onOpenChange(false);
       onCreated();
     } catch (err) {
-      toast({ title: "Failed to create order", description: String(err), variant: "destructive" });
+      toast({ title: "Impossible de créer la commande", description: String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -285,8 +286,8 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     <Dialog open={open} onOpenChange={(v) => { if (!v) onOpenChange(false); else onOpenChange(true); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] mx-auto">
         <DialogHeader>
-          <DialogTitle>Create New Order</DialogTitle>
-          <DialogDescription>Create an order on behalf of a client.</DialogDescription>
+          <DialogTitle>Nouvelle commande</DialogTitle>
+          <DialogDescription>Créer une commande pour le compte d'un client.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -298,7 +299,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Client</label>
             <Select value={selectedCompanyId} onValueChange={handleClientChange}>
-              <SelectTrigger><SelectValue placeholder="Select a client…" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Choisir un client…" /></SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
                   <SelectItem key={c.company_id} value={c.company_id}>{getClientLabel(c)}</SelectItem>
@@ -310,7 +311,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
                 <span className="font-medium text-foreground">{clientTier.name}</span>
                 {clientTier.product_discount_percent > 0 && <span>{clientTier.product_discount_percent}% off products</span>}
                 {clientTier.delivery_discount_percent > 0 && (
-                  <span>· {clientTier.delivery_discount_percent === 100 ? "Free delivery" : `${clientTier.delivery_discount_percent}% off delivery`}</span>
+                  <span>· {clientTier.delivery_discount_percent === 100 ? "Livraison offerte" : `-${clientTier.delivery_discount_percent} % sur la livraison`}</span>
                 )}
               </div>
             )}
@@ -318,16 +319,16 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
           {/* Delivery date */}
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Delivery Date</label>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Date de livraison</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !deliveryDate && "text-muted-foreground")}>
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {deliveryDate ? format(deliveryDate, "PPP") : "Pick a date"}
+                  {deliveryDate ? format(deliveryDate, "PPP", { locale: fr }) : "Choisir une date"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
+                <Calendar locale={fr}
                   mode="single"
                   selected={deliveryDate}
                   onSelect={setDeliveryDate}
@@ -340,7 +341,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
           {/* Line items */}
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Products</label>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Produits</label>
             {lineItems.length > 0 && (
               <div className="space-y-2 mb-3">
                 {lineItems.map((item) => (
@@ -356,7 +357,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground mr-1">Qty</span>
+                        <span className="text-xs text-muted-foreground mr-1">Qté</span>
                         <button
                           className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
                           onClick={() => updateQty(item.product.id, -1)}
@@ -415,7 +416,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
                 if (p) addProduct(p);
               }}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="+ Add a product…" />
+                  <SelectValue placeholder="+ Ajouter un produit…" />
                 </SelectTrigger>
                 <SelectContent>
                   {availableProducts.map((p) => (
@@ -435,9 +436,9 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
           {/* Notes */}
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Notes (optional)</label>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Notes (facultatif)</label>
             <Textarea
-              placeholder="Special instructions…"
+              placeholder="Instructions particulières…"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
@@ -459,8 +460,8 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
               )}
               {clientTier && clientTier.delivery_discount_percent > 0 && (
                 <div className="flex items-center justify-between text-xs text-primary">
-                  <span>Delivery</span>
-                  <span>{clientTier.delivery_discount_percent === 100 ? "Free" : `${clientTier.delivery_discount_percent}% off delivery`}</span>
+                  <span>Livraison</span>
+                  <span>{clientTier.delivery_discount_percent === 100 ? "Offerte" : `-${clientTier.delivery_discount_percent} % sur la livraison`}</span>
                 </div>
               )}
               <div className="flex items-center justify-between">
@@ -473,7 +474,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" size="sm" onClick={() => { resetForm(); onOpenChange(false); }} disabled={saving}>
-              Cancel
+              Annuler
             </Button>
             <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
               {saving ? "Creating…" : (

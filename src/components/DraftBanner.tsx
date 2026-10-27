@@ -2,6 +2,7 @@ import { Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 interface DraftBannerProps {
   /** ISO 8601 string of when the draft was last saved */
@@ -20,9 +21,9 @@ interface DraftBannerProps {
 export function DraftBanner({ savedAt, onDiscard }: DraftBannerProps) {
   const formattedDate = (() => {
     try {
-      return format(new Date(savedAt), "MMM d 'at' h:mm a");
+      return format(new Date(savedAt), "d MMM 'à' HH:mm", { locale: fr });
     } catch {
-      return "recently";
+      return "récemment";
     }
   })();
 
@@ -31,7 +32,7 @@ export function DraftBanner({ savedAt, onDiscard }: DraftBannerProps) {
       <div className="flex items-center gap-2 min-w-0">
         <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
         <AlertDescription className="text-xs text-amber-800 dark:text-amber-300 leading-none">
-          You have a saved draft from {formattedDate}.
+          Brouillon enregistré le {formattedDate}.
         </AlertDescription>
       </div>
       <Button
@@ -41,7 +42,7 @@ export function DraftBanner({ savedAt, onDiscard }: DraftBannerProps) {
         onClick={onDiscard}
         className="h-auto py-1 px-2 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100 dark:text-amber-400 dark:hover:text-amber-200 dark:hover:bg-amber-900/50 shrink-0"
       >
-        Discard
+        Supprimer
       </Button>
     </Alert>
   );

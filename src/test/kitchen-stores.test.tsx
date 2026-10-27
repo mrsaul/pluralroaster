@@ -169,7 +169,7 @@ describe("StoresReview", () => {
     render(<StoresReview />);
     fireEvent.click(screen.getByRole("button", { name: "Nouvelle commande urgente" }));
     const submit = screen.getByRole("button", { name: "Envoyer la demande" });
-    fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+    fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
     fireEvent.change(screen.getByPlaceholderText(/Pourquoi/), { target: { value: "Event" } });
     expect(submit).toBeDisabled(); // no café chosen yet
     fireEvent.change(screen.getByLabelText("Café"), { target: { value: "c2" } });
@@ -194,7 +194,7 @@ describe("StoresReview", () => {
       mocks.adjust.mockRejectedValue(new Error("x"));
       openSent();
       await act(async () => {});
-      fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+      fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
       fireEvent.click(screen.getByRole("button", { name: "Approuver" }));
       await act(async () => {});
       expect(mocks.adjust).toHaveBeenCalled();
@@ -238,7 +238,7 @@ describe("StoresReview", () => {
     openSent();
     await act(async () => {});
     expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
-    for (const b of screen.getAllByLabelText("Increase quantity")) expect(b).toBeDisabled();
+    for (const b of screen.getAllByLabelText("Augmenter la quantité")) expect(b).toBeDisabled();
     expect(screen.getByText(/err/)).toBeInTheDocument();
   });
 
@@ -258,8 +258,8 @@ describe("StoresReview", () => {
       const { unmount } = render(<StoresReview />);
       fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
       await act(async () => {});
-      fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
-      fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+      fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
+      fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
       unmount();
       await act(async () => {});
       expect(mocks.adjust).toHaveBeenCalledWith({ orderId: "ord1", productId: "p1", adjustedUnits: 3 });

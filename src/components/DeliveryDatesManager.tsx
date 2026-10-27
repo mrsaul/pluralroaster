@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { format, parseISO, isAfter, startOfDay } from "date-fns";
+import { fr } from "date-fns/locale";
 import { Plus, Trash2, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ export function DeliveryDatesManager() {
       .select("id, date, is_default")
       .order("date", { ascending: true });
     if (error) {
-      toast({ title: "Failed to load delivery dates", variant: "destructive" });
+      toast({ title: "Impossible de charger les dates de livraison", variant: "destructive" });
       return;
     }
     setDates(data ?? []);
@@ -43,7 +44,7 @@ export function DeliveryDatesManager() {
       .insert({ date: newDate, is_default: false });
     setSaving(false);
     if (error) {
-      toast({ title: "Failed to add date", description: error.message, variant: "destructive" });
+      toast({ title: "Impossible d'ajouter la date", description: error.message, variant: "destructive" });
       return;
     }
     setNewDate("");
@@ -53,7 +54,7 @@ export function DeliveryDatesManager() {
   async function removeDate(id: string) {
     const { error } = await supabase.from("delivery_dates").delete().eq("id", id);
     if (error) {
-      toast({ title: "Failed to remove date", variant: "destructive" });
+      toast({ title: "Impossible de supprimer la date", variant: "destructive" });
       return;
     }
     void load();
@@ -66,7 +67,7 @@ export function DeliveryDatesManager() {
       .update({ is_default: false })
       .neq("id", "00000000-0000-0000-0000-000000000000"); // update all
     if (clearError) {
-      toast({ title: "Failed to update default", variant: "destructive" });
+      toast({ title: "Impossible de modifier la date par défaut", variant: "destructive" });
       return;
     }
     const { error } = await supabase
@@ -74,7 +75,7 @@ export function DeliveryDatesManager() {
       .update({ is_default: true })
       .eq("id", id);
     if (error) {
-      toast({ title: "Failed to set default", variant: "destructive" });
+      toast({ title: "Impossible de définir la date par défaut", variant: "destructive" });
       return;
     }
     void load();
@@ -86,7 +87,7 @@ export function DeliveryDatesManager() {
       .update({ is_default: false })
       .eq("id", id);
     if (error) {
-      toast({ title: "Failed to clear default", variant: "destructive" });
+      toast({ title: "Impossible de retirer la date par défaut", variant: "destructive" });
       return;
     }
     void load();
@@ -104,15 +105,15 @@ export function DeliveryDatesManager() {
     <div className="space-y-6 max-w-md">
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/40">
-          <h3 className="text-sm font-medium text-foreground">Upcoming delivery dates</h3>
+          <h3 className="text-sm font-medium text-foreground">Prochaines dates de livraison</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Clients will only see these dates when placing an order. The default is pre-selected.
+            Les clients ne voient que ces dates lorsqu'ils commandent. La date par défaut est présélectionnée.
           </p>
         </div>
 
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground px-4 py-6 text-center">
-            No upcoming dates — add one below.
+            Aucune date à venir — ajoutez-en une ci-dessous.
           </p>
         ) : (
           <div className="divide-y divide-border">
@@ -120,12 +121,12 @@ export function DeliveryDatesManager() {
               <div key={d.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-medium text-foreground">
-                    {format(parseISO(d.date), "EEE d MMM yyyy")}
+                    {format(parseISO(d.date), "EEE d MMM yyyy", { locale: fr })}
                   </span>
                 </div>
                 <button
                   onClick={() => d.is_default ? void clearDefault(d.id) : void setDefault(d.id)}
-                  title={d.is_default ? "Remove default" : "Set as default"}
+                  title={d.is_default ? "Retirer la date par défaut" : "Définir par défaut"}
                   className={cn(
                     "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors",
                     d.is_default
@@ -134,7 +135,7 @@ export function DeliveryDatesManager() {
                   )}
                 >
                   <Star className={cn("w-3 h-3", d.is_default && "fill-current")} />
-                  {d.is_default ? "Default" : "Set default"}
+                  {d.is_default ? "Par défaut" : "Définir par défaut"}
                 </button>
                 <button
                   onClick={() => void removeDate(d.id)}
@@ -161,7 +162,7 @@ export function DeliveryDatesManager() {
             onClick={() => void addDate()}
           >
             <Plus className="w-3.5 h-3.5 mr-1" />
-            Add
+            Ajouter
           </Button>
         </div>
       </div>
@@ -169,13 +170,13 @@ export function DeliveryDatesManager() {
       {past.length > 0 && (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/40">
-            <h3 className="text-sm font-medium text-muted-foreground">Past dates</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">Dates passées</h3>
           </div>
           <div className="divide-y divide-border">
             {past.map((d) => (
               <div key={d.id} className="flex items-center gap-3 px-4 py-3 opacity-50">
                 <span className="flex-1 text-sm text-muted-foreground line-through">
-                  {format(parseISO(d.date), "EEE d MMM yyyy")}
+                  {format(parseISO(d.date), "EEE d MMM yyyy", { locale: fr })}
                 </span>
                 <button
                   onClick={() => void removeDate(d.id)}

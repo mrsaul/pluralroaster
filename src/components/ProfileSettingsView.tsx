@@ -101,13 +101,13 @@ export function ProfileSettingsView() {
         const { error } = await supabase.auth.updateUser({ email });
         if (error) throw error;
         setOriginalEmail(email);
-        toast({ title: "Confirmation email sent", description: "Check your inbox to confirm the new email address." });
+        toast({ title: "E-mail de confirmation envoyé", description: "Vérifiez votre boîte de réception pour confirmer la nouvelle adresse." });
       } else {
-        toast({ title: "Profile updated" });
+        toast({ title: "Profil mis à jour" });
       }
       clearDraft();
     } catch (err: any) {
-      toast({ title: "Error", description: err.message ?? "Failed to save profile", variant: "destructive" });
+      toast({ title: "Erreur", description: err.message ?? "Impossible d'enregistrer le profil", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -115,22 +115,22 @@ export function ProfileSettingsView() {
 
   const handleChangePassword = async () => {
     if (newPassword.length < 6) {
-      toast({ title: "Password too short", description: "Minimum 6 characters.", variant: "destructive" });
+      toast({ title: "Mot de passe trop court", description: "6 caractères minimum.", variant: "destructive" });
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
+      toast({ title: "Les mots de passe ne correspondent pas", variant: "destructive" });
       return;
     }
     setSavingPassword(true);
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      toast({ title: "Password updated" });
+      toast({ title: "Mot de passe mis à jour" });
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
-      toast({ title: "Error", description: err.message ?? "Failed to update password", variant: "destructive" });
+      toast({ title: "Erreur", description: err.message ?? "Impossible de modifier le mot de passe", variant: "destructive" });
     } finally {
       setSavingPassword(false);
     }
@@ -147,8 +147,8 @@ export function ProfileSettingsView() {
   return (
     <div className="space-y-6 max-w-xl">
       <div>
-        <h2 className="text-xl font-semibold text-foreground">Profile Settings</h2>
-        <p className="text-sm text-muted-foreground mt-1">Manage your account information</p>
+        <h2 className="text-xl font-semibold text-foreground">Profil</h2>
+        <p className="text-sm text-muted-foreground mt-1">Gérez les informations de votre compte</p>
       </div>
 
       {showDraftBanner && draftSavedAt && (
@@ -163,23 +163,23 @@ export function ProfileSettingsView() {
         <CardHeader className="pb-4">
           <CardTitle className="text-base flex items-center gap-2">
             <User className="w-4 h-4 text-muted-foreground" />
-            Personal Information
+            Informations personnelles
           </CardTitle>
-          <CardDescription>Update your name and email address</CardDescription>
+          <CardDescription>Modifiez votre nom et votre adresse e-mail</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
+            <Label htmlFor="fullName">Nom complet</Label>
             <Input
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Your name"
+              placeholder="Votre nom"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
+            <Label htmlFor="email">Adresse e-mail</Label>
             <Input
               id="email"
               type="email"
@@ -195,7 +195,7 @@ export function ProfileSettingsView() {
             className="w-full sm:w-auto"
           >
             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-            Save Changes
+            Enregistrer
           </Button>
         </CardContent>
       </Card>
@@ -205,13 +205,13 @@ export function ProfileSettingsView() {
         <CardHeader className="pb-4">
           <CardTitle className="text-base flex items-center gap-2">
             <Lock className="w-4 h-4 text-muted-foreground" />
-            Change Password
+            Changer le mot de passe
           </CardTitle>
-          <CardDescription>Set a new password for your account</CardDescription>
+          <CardDescription>Choisissez un nouveau mot de passe</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="newPassword">New Password</Label>
+            <Label htmlFor="newPassword">Nouveau mot de passe</Label>
             <Input
               id="newPassword"
               type="password"
@@ -222,7 +222,7 @@ export function ProfileSettingsView() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm New Password</Label>
+            <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
             <Input
               id="confirmPassword"
               type="password"
@@ -231,7 +231,7 @@ export function ProfileSettingsView() {
               placeholder="••••••••"
             />
             {confirmPassword && newPassword !== confirmPassword && (
-              <p className="text-xs text-destructive">Passwords don't match</p>
+              <p className="text-xs text-destructive">Les mots de passe ne correspondent pas</p>
             )}
           </div>
 
@@ -242,7 +242,7 @@ export function ProfileSettingsView() {
             className="w-full sm:w-auto"
           >
             {savingPassword ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
-            Update Password
+            Modifier le mot de passe
           </Button>
         </CardContent>
       </Card>
@@ -252,29 +252,29 @@ export function ProfileSettingsView() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Bell className="h-4 w-4" />
-            Push Notifications
+            Notifications
           </CardTitle>
           <CardDescription>
-            Receive a notification on this device when a new order is placed.
+            Recevoir une notification sur cet appareil à chaque nouvelle commande.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!supported ? (
             <p className="text-sm text-muted-foreground">
-              {supportStatus === "no-sw" && "Push notifications require a browser that supports service workers."}
-              {supportStatus === "no-push" && "Push notifications are not supported in this browser. On iOS, add the app to your home screen first."}
-              {supportStatus === "no-vapid-key" && "Push notifications are not configured (missing VITE_VAPID_PUBLIC_KEY)."}
+              {supportStatus === "no-sw" && "Les notifications nécessitent un navigateur compatible (service workers)."}
+              {supportStatus === "no-push" && "Ce navigateur ne gère pas les notifications. Sur iPhone, ajoutez d'abord l'app à l'écran d'accueil."}
+              {supportStatus === "no-vapid-key" && "Les notifications ne sont pas configurées (VITE_VAPID_PUBLIC_KEY manquante)."}
             </p>
           ) : permission === "denied" ? (
             <p className="text-sm text-destructive">
-              Notifications are blocked by your browser. Open browser settings → Site settings → Notifications and allow this site.
+              Les notifications sont bloquées par votre navigateur. Ouvrez Réglages → Réglages du site → Notifications et autorisez ce site.
             </p>
           ) : (
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-sm">
                 {subscribed
-                  ? <><BellOff className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">Notifications active on this device</span></>
-                  : <><Bell className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">Not enabled on this device</span></>}
+                  ? <><BellOff className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">Notifications actives sur cet appareil</span></>
+                  : <><Bell className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">Non activées sur cet appareil</span></>}
               </div>
               <Button
                 variant={subscribed ? "outline" : "default"}
@@ -284,7 +284,7 @@ export function ProfileSettingsView() {
                 className="gap-2 shrink-0"
               >
                 {pushLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {subscribed ? "Disable" : "Enable notifications"}
+                {subscribed ? "Désactiver" : "Activer les notifications"}
               </Button>
             </div>
           )}

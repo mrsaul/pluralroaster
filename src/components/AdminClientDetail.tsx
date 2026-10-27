@@ -16,6 +16,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { format, parseISO } from "date-fns";
+import { ORDER_STATUS_LABEL, normalizeOrderStatus } from "@/lib/orderStatuses";
+import { fr } from "date-fns/locale";
 
 export type AppClient = {
   id: string;
@@ -296,11 +298,11 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
       }
 
       clearDraft();
-      toast({ title: "Client updated" });
+      toast({ title: "Client mis à jour" });
       onSaved();
       onOpenChange(false);
     } catch (err) {
-      toast({ title: "Save failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de l'enregistrement", description: String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -322,10 +324,10 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                 variant={client.onboarding_status === "completed" ? "default" : "secondary"}
                 className="text-[10px]"
               >
-                {client.onboarding_status === "completed" ? "Active" : "Pending"}
+                {client.onboarding_status === "completed" ? "Actif" : "En attente"}
               </Badge>
             </DialogTitle>
-            <DialogDescription>Manage client profile and data source.</DialogDescription>
+            <DialogDescription>Gérer la fiche client et la source des données.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
@@ -336,13 +338,13 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             {/* 1. Order History */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-foreground">Order History</p>
+                <p className="text-sm font-medium text-foreground">Historique des commandes</p>
                 {loadingOrders && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
               </div>
               {!loadingOrders && orders.length === 0 && (
                 <div className="flex items-center gap-2 rounded-lg bg-muted/30 border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
                   <Package className="h-4 w-4 shrink-0" />
-                  No orders yet for this client.
+                  Aucune commande pour ce client.
                 </div>
               )}
               {orders.length > 0 && (
@@ -367,13 +369,13 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                             : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                           <span className="text-xs font-mono font-semibold text-foreground">{orderRef}</span>
                           <span className="flex-1 text-xs text-muted-foreground tabular-nums">
-                            {format(parseISO(order.created_at), "d MMM yyyy")}
+                            {format(parseISO(order.created_at), "d MMM yyyy", { locale: fr })}
                             {order.delivery_date && (
-                              <span className="ml-1.5">→ {format(parseISO(order.delivery_date), "d MMM")}</span>
+                              <span className="ml-1.5">→ {format(parseISO(order.delivery_date), "d MMM", { locale: fr })}</span>
                             )}
                           </span>
                           <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", statusColor)}>
-                            {order.status}
+                            {ORDER_STATUS_LABEL[normalizeOrderStatus(order.status)]}
                           </span>
                           <span className="text-xs font-medium tabular-nums text-muted-foreground ml-2">
                             {order.total_kg} kg
@@ -408,27 +410,27 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             {/* 2. Client company information */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Company Name</p>
+                <p className="text-xs text-muted-foreground">Nom de l'entreprise</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm font-medium text-foreground">{client.company_name ?? "—"}</p>
                   </div>
                 ) : (
-                  <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Company name" />
+                  <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Nom de l'entreprise" />
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Contact Name</p>
+                <p className="text-xs text-muted-foreground">Nom du contact</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm text-foreground">{client.contact_name ?? "—"}</p>
                   </div>
                 ) : (
-                  <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Contact name" />
+                  <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Nom du contact" />
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Email</p>
+                <p className="text-xs text-muted-foreground">E-mail</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm text-foreground">{client.email ?? "—"}</p>
@@ -438,7 +440,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Phone</p>
+                <p className="text-xs text-muted-foreground">Téléphone</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm text-foreground">{client.phone ?? "—"}</p>
@@ -448,20 +450,20 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                 )}
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <p className="text-xs text-muted-foreground">Delivery Address</p>
+                <p className="text-xs text-muted-foreground">Adresse de livraison</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm text-foreground">{client.delivery_address ?? "—"}</p>
                   </div>
                 ) : (
-                  <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Full delivery address" />
+                  <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Adresse de livraison complète" />
                 )}
               </div>
             </div>
 
             {/* 4. Pricing Tier */}
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Pricing Tier</p>
+              <p className="text-xs text-muted-foreground">Palier tarifaire</p>
               {tierOptions.length > 0 ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-1.5">
@@ -475,7 +477,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                           : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                       )}
                     >
-                      No tier (standard)
+                      Aucun palier (standard)
                     </button>
                     {tierOptions.map((t) => (
                       <button
@@ -509,20 +511,20 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                         {sel.product_discount_percent > 0 && <span>{sel.product_discount_percent}% off products</span>}
                         {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
                         {sel.delivery_discount_percent > 0 && (
-                          <span>{sel.delivery_discount_percent === 100 ? "Free delivery" : `${sel.delivery_discount_percent}% off delivery`}</span>
+                          <span>{sel.delivery_discount_percent === 100 ? "Livraison offerte" : `-${sel.delivery_discount_percent} % sur la livraison`}</span>
                         )}
                       </div>
                     );
                   })()}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No pricing tiers created yet. Create tiers in the Pricing section.</p>
+                <p className="text-sm text-muted-foreground">Aucun palier tarifaire. Créez-en dans la section Tarifs.</p>
               )}
             </div>
 
             {/* 5. Client Data Source */}
             <div className="rounded-xl border-2 border-border p-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">Client Data Source</p>
+              <p className="text-sm font-medium text-foreground">Source des données client</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -536,7 +538,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                 >
                   <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
                   <div>
-                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
+                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
                     <p className="text-[11px] text-muted-foreground">Read-only data</p>
                   </div>
                 </button>
@@ -552,8 +554,8 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                 >
                   <Unlink2 className={cn("h-4 w-4 shrink-0", !isSellsyMode ? "text-accent-foreground" : "text-muted-foreground")} />
                   <div>
-                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Custom Override</p>
-                    <p className="text-[11px] text-muted-foreground">Edit in app</p>
+                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Personnalisé dans l'app</p>
+                    <p className="text-[11px] text-muted-foreground">Modifiable dans l'app</p>
                   </div>
                 </button>
               </div>
@@ -561,12 +563,12 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               {isSellsyMode ? (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
                   <Link2 className="h-3.5 w-3.5 text-primary" />
-                  <p className="text-xs text-primary font-medium">Synced with Sellsy — contact & delivery fields are read-only</p>
+                  <p className="text-xs text-primary font-medium">Synchronisé avec Sellsy — contact et livraison en lecture seule</p>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 text-accent-foreground" />
-                  <p className="text-xs text-accent-foreground font-medium">Custom override — changes apply only inside the app</p>
+                  <p className="text-xs text-accent-foreground font-medium">Personnalisé — les modifications ne s'appliquent que dans l'app</p>
                 </div>
               )}
 
@@ -575,8 +577,8 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {client.last_synced_at
-                      ? `Last synced: ${format(parseISO(client.last_synced_at), "MMM d, yyyy HH:mm")}`
-                      : "Never synced with Sellsy"}
+                      ? `Dernière synchro : ${format(parseISO(client.last_synced_at), "d MMM yyyy HH:mm", { locale: fr })}`
+                      : "Jamais synchronisé avec Sellsy"}
                   </div>
                   <Button
                     variant="outline"
@@ -590,18 +592,18 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                           body: { mode: "sync-client", sellsy_client_id: client.sellsy_client_id, client_id: client.id },
                         });
                         if (error) throw error;
-                        if (!data?.success) throw new Error(data?.error ?? "Sync failed");
-                        toast({ title: "Client synced from Sellsy" });
+                        if (!data?.success) throw new Error(data?.error ?? "Échec de la synchronisation");
+                        toast({ title: "Client synchronisé depuis Sellsy" });
                         onSaved();
                       } catch (err) {
-                        toast({ title: "Sync failed", description: String(err), variant: "destructive" });
+                        toast({ title: "Échec de la synchronisation", description: String(err), variant: "destructive" });
                       } finally {
                         setSyncing(false);
                       }
                     }}
                   >
                     {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                    Sync from Sellsy
+                    Synchroniser depuis Sellsy
                   </Button>
                 </div>
               )}
@@ -609,7 +611,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
 
             {/* 5. Sellsy Client ID */}
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Sellsy Client ID (for invoicing)</p>
+              <p className="text-xs text-muted-foreground">ID client Sellsy (pour la facturation)</p>
               <Input
                 value={sellsyClientId}
                 onChange={(e) => setSellsyClientId(e.target.value)}
@@ -619,7 +621,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               {!sellsyClientId.trim() && (
                 <p className="text-[11px] text-warning flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  Without a Sellsy ID, invoices can't be sent for this client.
+                  Sans ID Sellsy, impossible d'envoyer des factures à ce client.
                 </p>
               )}
             </div>
@@ -627,16 +629,16 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             {/* Onboarding info */}
             <div className="rounded-lg bg-muted/30 border border-dashed border-border px-3 py-2">
               <p className="text-[11px] text-muted-foreground">
-                Registered: {format(parseISO(client.created_at), "MMM d, yyyy")} · Status: <span className="capitalize font-medium">{client.onboarding_status ?? "pending"}</span>
+                Inscrit le {format(parseISO(client.created_at), "d MMM yyyy", { locale: fr })} · Statut : <span className="font-medium">{client.onboarding_status === "completed" ? "inscription terminée" : "inscription en attente"}</span>
               </p>
             </div>
 
             {/* Save */}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
               <Button onClick={handleSave} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Save changes
+                Enregistrer
               </Button>
             </div>
           </div>
@@ -649,18 +651,18 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              {pendingModeSwitch === "custom" ? "Switch to Custom Override?" : "Switch to Sellsy Sync?"}
+              {pendingModeSwitch === "custom" ? "Passer en mode personnalisé ?" : "Revenir à la synchro Sellsy ?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingModeSwitch === "custom"
-                ? "You will override Sellsy data. Changes will apply only inside the app. Sellsy invoicing data remains unchanged."
-                : "App overrides to contact info, delivery address, and pricing will be lost and replaced by Sellsy data."}
+                ? "Les données Sellsy seront remplacées dans l'app uniquement. Les données de facturation Sellsy ne changent pas."
+                : "Les modifications faites dans l'app (contact, adresse, tarifs) seront perdues et remplacées par les données Sellsy."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={confirmModeSwitch}>
-              {pendingModeSwitch === "custom" ? "Use Custom Override" : "Restore Sellsy Sync"}
+              {pendingModeSwitch === "custom" ? "Passer en personnalisé" : "Revenir à Sellsy"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -672,14 +674,14 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              Change pricing tier?
+              Changer le palier tarifaire ?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will affect all future orders for this client. Existing orders will not be recalculated.
+              Cela s'applique à toutes les prochaines commandes de ce client. Les commandes existantes ne sont pas recalculées.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
               if (pendingTierChange) {
                 const tier = tierOptions.find((t) => t.id === pendingTierChange);
@@ -691,7 +693,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               }
               setPendingTierChange(null);
             }}>
-              Change Tier
+              Changer le palier
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

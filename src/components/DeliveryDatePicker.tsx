@@ -57,7 +57,7 @@ export function DeliveryDatePicker({ selected, onSelect, onDefaultDate }: Delive
   if (dates.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-2">
-        No delivery dates are available yet. Check back soon.
+        Aucune date de livraison disponible pour le moment. Revenez bientôt.
       </p>
     );
   }
