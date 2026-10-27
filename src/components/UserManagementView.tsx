@@ -91,7 +91,7 @@ export function UserManagementView() {
   const [inviting, setInviting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: string; user: ManagedUser } | null>(null);
   const [roleChangeUser, setRoleChangeUser] = useState<ManagedUser | null>(null);
-  const [newRole, setNewRole] = useState<AppRole>("user");
+  const [newRole, setNewRole] = useState<AppRole | "none">("user");
   const [inviteKitchenRole, setInviteKitchenRole] = useState<KitchenRole | "none">("none");
   const [inviteCafeId, setInviteCafeId] = useState<string>("");
   const [cafes, setCafes] = useState<Cafe[]>([]);
@@ -206,7 +206,12 @@ export function UserManagementView() {
         body: { action: "update-role", userId: roleChangeUser.userId, role: newRole },
       });
       if (error || !data?.success) throw new Error(data?.error || error?.message);
-      toast({ title: "Rôle mis à jour", description: `${roleChangeUser.email} est maintenant ${ROLE_META[newRole].label}` });
+      toast({
+        title: "Rôle mis à jour",
+        description: newRole === "none"
+          ? `${roleChangeUser.email} n'a plus d'accès Café`
+          : `${roleChangeUser.email} est maintenant ${ROLE_META[newRole].label}`,
+      });
       await loadUsers();
     } catch (err) {
       toast({ title: "Échec de la mise à jour du rôle", description: String(err), variant: "destructive" });
@@ -368,7 +373,7 @@ export function UserManagementView() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setRoleChangeUser(user); setNewRole(user.role ?? "user"); }}>
+                            <DropdownMenuItem onClick={() => { setRoleChangeUser(user); setNewRole(user.role ?? (user.kitchenRole ? "none" : "user")); }}>
                               Changer le rôle Café
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -573,7 +578,7 @@ export function UserManagementView() {
             <DialogDescription>Rôle Café de {roleChangeUser?.email}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <Select value={newRole} onValueChange={(v) => setNewRole(v as AppRole)}>
+            <Select value={newRole} onValueChange={(v) => setNewRole(v as AppRole | "none")}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -582,6 +587,8 @@ export function UserManagementView() {
                 <SelectItem value="roaster">Torréfaction</SelectItem>
                 <SelectItem value="packaging">Conditionnement</SelectItem>
                 <SelectItem value="user">Client</SelectItem>
+                {/* Only for Kitchen members: without a coffee role they keep their Kitchen access. */}
+                {roleChangeUser?.kitchenRole && <SelectItem value="none">Pas d'accès Café</SelectItem>}
               </SelectContent>
             </Select>
             <div className="flex justify-end gap-2">

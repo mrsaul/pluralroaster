@@ -292,13 +292,32 @@ Deno.serve(async (req) => {
         });
       }
 
+      if (!["admin", "user", "roaster", "packaging", "none"].includes(role)) {
+        return new Response(JSON.stringify({ error: `Invalid role: ${role}` }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Kitchen members keep their Kitchen access, so their coffee role must still follow the Kitchen rules.
+      const { data: member } = await adminClient.from("kitchen_members").select("role, cafe_id").eq("user_id", userId).maybeSingle();
+      const kitchenError = validateKitchen(role, member ? { role: member.role, cafeId: member.cafe_id ?? undefined } : null);
+      if (kitchenError) {
+        return new Response(JSON.stringify({ error: kitchenError }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       await adminClient.from("user_roles").delete().eq("user_id", userId);
-      await adminClient.from("user_roles").insert({
-        user_id: userId,
-        role,
-        status: "active",
-        invited_by: caller.id,
-      });
+      if (role !== "none") {
+        await adminClient.from("user_roles").insert({
+          user_id: userId,
+          role,
+          status: "active",
+          invited_by: caller.id,
+        });
+      }
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
