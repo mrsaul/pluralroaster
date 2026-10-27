@@ -1,5 +1,5 @@
 begin;
-select plan(57);
+select plan(58);
 \ir support/kitchen_setup.psql
 
 set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
@@ -24,6 +24,11 @@ select lives_ok(format('select public.kitchen_adjust_item(%L, %L, 0)', :'oid', :
 select lives_ok(format('select public.kitchen_adjust_item(%L, %L, 1)', :'oid', :'bread'), 'add banana bread 1');
 select throws_ok(format('select public.kitchen_adjust_item(%L, %L, -1)', :'oid', :'bread'), 'invalid_input', 'negative adjust rejected');
 reset role;
+update public.kitchen_orders set locked_at = public.kitchen_now() - interval '5 minutes' where id = :'oid';
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
+select public.kitchen_adjust_item(:'oid', :'bread', 1);
+reset role;
+select is((select locked_at from public.kitchen_orders where id = :'oid'), public.kitchen_now(), 'lock holder adjust refreshes locked_at');
 select is((select units from public.kitchen_order_items where order_id = :'oid' and product_id = :'bread'), 0, 'added line has units 0');
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select is(public.kitchen_approve_order(:'oid'),

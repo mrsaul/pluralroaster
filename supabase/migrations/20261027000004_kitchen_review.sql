@@ -96,7 +96,11 @@ BEGIN
   VALUES (p_order_id, p_product_id, v_product.name, v_product.unit_label, v_product.pieces_per_unit, v_product.production_minutes, 0, p_adjusted_units)
   ON CONFLICT (order_id, product_id) DO UPDATE SET adjusted_units = EXCLUDED.adjusted_units;
 
-  UPDATE public.kitchen_orders SET updated_at = now() WHERE id = p_order_id;
+  -- A write by the lock holder keeps the lock fresh.
+  UPDATE public.kitchen_orders
+  SET updated_at = now(),
+      locked_at = CASE WHEN v_uid IS NOT NULL AND locked_by = v_uid THEN public.kitchen_now() ELSE locked_at END
+  WHERE id = p_order_id;
 END;
 $$;
 

@@ -119,8 +119,10 @@ END;
 $$;
 
 -- Set the units of one line (0 removes it).
+-- Returns true when this edit moved an approved order back to sent (café edit), so the
+-- caller can notify the stores manager.
 CREATE FUNCTION public.kitchen_set_item(p_order_id uuid, p_product_id uuid, p_units int)
-RETURNS void
+RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
@@ -129,6 +131,7 @@ DECLARE
   v_role public.kitchen_role := public.kitchen_role_of(auth.uid());
   v_order public.kitchen_orders%ROWTYPE;
   v_product public.kitchen_products%ROWTYPE;
+  v_locked_at timestamptz;
 BEGIN
   IF v_uid IS NOT NULL AND v_role IS NULL THEN
     RAISE EXCEPTION 'not_kitchen_member';
@@ -170,7 +173,8 @@ BEGIN
   IF p_units = 0 THEN
     DELETE FROM public.kitchen_order_items WHERE order_id = p_order_id AND product_id = p_product_id;
   ELSE
-    IF NOT v_product.is_visible THEN
+    -- Hidden products are off the café menu; the stores manager may still order them.
+    IF v_role = 'coffee_manager' AND NOT v_product.is_visible THEN
       RAISE EXCEPTION 'product_hidden';
     END IF;
     INSERT INTO public.kitchen_order_items (order_id, product_id, product_name, unit_label, pieces_per_unit, production_minutes, units)
@@ -178,13 +182,18 @@ BEGIN
     ON CONFLICT (order_id, product_id) DO UPDATE SET units = EXCLUDED.units;
   END IF;
 
+  -- A write by the lock holder keeps the lock fresh.
+  v_locked_at := CASE WHEN v_uid IS NOT NULL AND v_order.locked_by = v_uid THEN public.kitchen_now() ELSE v_order.locked_at END;
+
   IF v_order.status = 'approved' AND v_role = 'coffee_manager' THEN
-    UPDATE public.kitchen_orders SET status = 'sent', updated_at = now() WHERE id = p_order_id;
+    UPDATE public.kitchen_orders SET status = 'sent', locked_at = v_locked_at, updated_at = now() WHERE id = p_order_id;
     INSERT INTO public.kitchen_order_history (order_id, status, changed_by, note)
     VALUES (p_order_id, 'sent', v_uid, 'edited by café');
-  ELSE
-    UPDATE public.kitchen_orders SET updated_at = now() WHERE id = p_order_id;
+    RETURN true;
   END IF;
+
+  UPDATE public.kitchen_orders SET locked_at = v_locked_at, updated_at = now() WHERE id = p_order_id;
+  RETURN false;
 END;
 $$;
 

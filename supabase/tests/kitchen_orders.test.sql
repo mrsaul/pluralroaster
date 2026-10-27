@@ -1,5 +1,5 @@
 begin;
-select plan(40);
+select plan(46);
 \ir support/kitchen_setup.psql
 
 set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
@@ -19,6 +19,7 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 select throws_ok(format('select public.kitchen_send_order(%L)', :'oid'), 'empty_order', 'empty order cannot be sent');
 select throws_ok(format('select public.kitchen_set_item(%L, %L, -1)', :'oid', :'pand'), 'invalid_input', 'negative units rejected');
 select lives_ok(format('select public.kitchen_set_item(%L, %L, 2)', :'oid', :'pand'), 'cafe adds 2 pandebono');
+select is(public.kitchen_set_item(:'oid', :'pand', 2), false, 'set_item on a draft does not flip');
 reset role;
 select is((select pieces_per_unit from public.kitchen_order_items where order_id = :'oid'), 50, 'pieces_per_unit snapshot');
 select is((select production_minutes from public.kitchen_order_items where order_id = :'oid'), 90, 'production_minutes snapshot');
@@ -37,7 +38,7 @@ select is((select count(*)::int from public.kitchen_order_history where order_id
 -- Edit after approval returns to sent
 update public.kitchen_orders set status = 'approved', approved_by = '00000000-0000-0000-0000-0000000000a5', approved_at = now() where id = :'oid';
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
-select lives_ok(format('select public.kitchen_set_item(%L, %L, 3)', :'oid', :'pand'), 'cafe edits approved order');
+select is(public.kitchen_set_item(:'oid', :'pand', 3), true, 'cafe edit of approved order returns flipped = true');
 reset role;
 select is((select status from public.kitchen_orders where id = :'oid'), 'sent', 'approved edited back to sent');
 select is((select count(*)::int from public.kitchen_order_history where order_id = :'oid' and note = 'edited by café' and status = 'sent'), 1, 'history note edited by café');
@@ -104,11 +105,25 @@ reset role;
 
 -- Stores manager / kitchen manager / urgent
 update public.kitchen_orders set status = 'approved' where id = :'oid';
+update public.kitchen_orders set locked_by = '00000000-0000-0000-0000-0000000000a5', locked_at = public.kitchen_now() - interval '5 minutes' where id = :'oid';
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
-select lives_ok(format('select public.kitchen_set_item(%L, %L, 5)', :'oid', :'pand'), 'stores manager edits after cutoff');
+select is(public.kitchen_set_item(:'oid', :'pand', 5), false, 'stores manager edits after cutoff, no flip');
 select throws_ok('select public.kitchen_get_or_create_draft()', 'invalid_input', 'stores manager needs a cafe for drafts');
 reset role;
 select is((select status from public.kitchen_orders where id = :'oid'), 'approved', 'stores manager edit keeps approved');
+select is((select locked_at from public.kitchen_orders where id = :'oid'), public.kitchen_now(), 'lock holder write refreshes locked_at');
+-- Stores manager may draft hidden products (M1); coffee managers still may not.
+update public.kitchen_orders set status = 'draft', locked_by = null, locked_at = null where id = :'oid';
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
+select lives_ok(format('select public.kitchen_set_item(%L, %L, 2)', :'oid', :'cook'), 'stores manager can add a hidden product to a draft');
+reset role;
+select is((select units from public.kitchen_order_items where order_id = :'oid' and product_id = :'cook'), 2, 'hidden product line saved by stores manager');
+set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
+select throws_ok(format('select public.kitchen_set_item(%L, %L, 3)', :'oid', :'cook'), 'product_hidden', 'coffee manager still cannot raise a hidden product');
+select lives_ok(format('select public.kitchen_set_item(%L, %L, 0)', :'oid', :'cook'), 'coffee manager can remove a hidden product line');
+reset role;
+set local kitchen.now_override = '2026-11-01 20:00:30 Europe/Paris';
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a2');
 select throws_ok(format('select public.kitchen_set_item(%L, %L, 1)', :'oid', :'pand'), 'forbidden', 'kitchen manager cannot set items');
 reset role;

@@ -1582,7 +1582,7 @@ export type Database = {
       kitchen_send_order: { Args: { p_order_id: string }; Returns: undefined }
       kitchen_set_item: {
         Args: { p_order_id: string; p_product_id: string; p_units: number }
-        Returns: undefined
+        Returns: boolean
       }
       kitchen_set_ready_eta: {
         Args: { p_eta: string; p_order_id: string }
