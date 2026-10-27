@@ -205,9 +205,15 @@ Deno.serve(async (req: Request) => {
     if (vapidPublicKey && vapidPrivateKey) {
       webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
-      const { data: subscriptions } = await db
-        .from("push_subscriptions")
-        .select("endpoint, p256dh, auth");
+      // Admins only: Kitchen users can also subscribe to push now, and must not get coffee orders.
+      const { data: adminRows } = await db.from("user_roles").select("user_id").eq("role", "admin");
+      const adminIds = (adminRows ?? []).map((r: { user_id: string }) => r.user_id);
+      const { data: subscriptions } = adminIds.length
+        ? await db
+          .from("push_subscriptions")
+          .select("endpoint, p256dh, auth")
+          .in("user_id", adminIds)
+        : { data: [] };
 
       const pushPayload = JSON.stringify({
         title: `New order — ${clientName}`,

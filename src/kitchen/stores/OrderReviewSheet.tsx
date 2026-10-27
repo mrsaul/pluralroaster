@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useLang } from "@/i18n";
 import {
-  kitchenErrorMessage, useAdjustItem, useApproveOrder, useDeclineOrder, useLockOrder,
+  kitchenErrorMessage, notifyKitchen, useAdjustItem, useApproveOrder, useDeclineOrder, useLockOrder,
   useKitchenOrders, useSendOrder, useSetItem, useUnlockOrder, type KitchenChange,
 } from "../api";
 import { useKitchenT } from "../i18n";
@@ -57,6 +57,8 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
   unlockRef.current = unlock.mutate;
   const lockRef = useRef<Promise<boolean> | null>(null);
   const flushAllRef = useRef<() => Promise<boolean>>(async () => true);
+  // Set when an adjustment of an already-approved order is saved: the café is told once, on close.
+  const adjustedApproved = useRef(false);
 
   // Lock on open; on unmount wait for the lock, flush pending edits, then unlock.
   useEffect(() => {
@@ -69,7 +71,10 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
       void lockPromise
         .then(async (ok) => {
           if (!ok) return;
-          try { await flushAllRef.current(); } finally { unlockRef.current({ orderId: order.id }); }
+          try {
+            await flushAllRef.current();
+            if (adjustedApproved.current) void notifyKitchen("order_approved", order.id);
+          } finally { unlockRef.current({ orderId: order.id }); }
         })
         .catch((err) => console.warn("[OrderReviewSheet] unlock", err));
     };
@@ -92,7 +97,10 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
     delete pending.current[productId];
     try {
       if (orderRef.current.status === "draft") await setItem.mutateAsync({ orderId: order.id, productId, units });
-      else await adjust.mutateAsync({ orderId: order.id, productId, adjustedUnits: units });
+      else {
+        await adjust.mutateAsync({ orderId: order.id, productId, adjustedUnits: units });
+        if (orderRef.current.status === "approved") adjustedApproved.current = true;
+      }
       return true;
     } catch (err) {
       toast.error(kitchenErrorMessage(err, t));

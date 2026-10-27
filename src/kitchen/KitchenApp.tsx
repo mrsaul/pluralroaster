@@ -8,6 +8,7 @@ import ProductionView from "./kitchen/ProductionView";
 import KitchenOrdersList from "./kitchen/KitchenOrdersList";
 import ProductsEditor from "./kitchen/ProductsEditor";
 import KitchenSettings from "./kitchen/KitchenSettings";
+import NotificationsToggle from "./components/NotificationsToggle";
 
 // Placeholder shell — real screens per role arrive in later tasks.
 export default function KitchenApp({
@@ -29,7 +30,8 @@ export default function KitchenApp({
         <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
           <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-2">
             <h1 className="text-lg font-semibold">{t.title}</h1>
-            <div className="flex gap-3">
+            <div className="flex items-center gap-3">
+              <NotificationsToggle />
               {onSwitchToCoffee && (
                 <button type="button" onClick={onSwitchToCoffee} className="text-sm underline text-muted-foreground">{t.backToCoffee}</button>
               )}
@@ -60,7 +62,8 @@ export default function KitchenApp({
         <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
           <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-2">
             <h1 className="text-lg font-semibold">{t.title}</h1>
-            <div className="flex gap-3">
+            <div className="flex items-center gap-3">
+              <NotificationsToggle />
               {onSwitchToCoffee && (
                 <button type="button" onClick={onSwitchToCoffee} className="text-sm underline text-muted-foreground">{t.backToCoffee}</button>
               )}
@@ -80,7 +83,8 @@ export default function KitchenApp({
         <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
           <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-2">
             <h1 className="text-lg font-semibold">{t.title}</h1>
-            <div className="flex gap-3">
+            <div className="flex items-center gap-3">
+              <NotificationsToggle />
               {onSwitchToCoffee && (
                 <button type="button" onClick={onSwitchToCoffee} className="text-sm underline text-muted-foreground">{t.backToCoffee}</button>
               )}

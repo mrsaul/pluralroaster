@@ -62,7 +62,7 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-type Caller = { role: "admin" | "coffee_manager" | "stores_manager" | "kitchen_manager"; cafeId: string | null };
+type Caller = { userId: string; role: "admin" | "coffee_manager" | "stores_manager" | "kitchen_manager"; cafeId: string | null };
 
 function cronAuthorized(req: Request): boolean {
   const expected = Deno.env.get("KITCHEN_CRON_SECRET");
@@ -78,9 +78,9 @@ async function getCaller(req: Request): Promise<Caller | null> {
   const uid = data.user.id;
   const { data: admin } = await db.from("user_roles").select("user_id")
     .eq("user_id", uid).eq("role", "admin").maybeSingle();
-  if (admin) return { role: "admin", cafeId: null };
+  if (admin) return { userId: uid, role: "admin", cafeId: null };
   const { data: member } = await db.from("kitchen_members").select("role, cafe_id").eq("user_id", uid).maybeSingle();
-  if (member) return { role: member.role, cafeId: member.cafe_id };
+  if (member) return { userId: uid, role: member.role, cafeId: member.cafe_id };
   return null;
 }
 
@@ -158,7 +158,7 @@ async function sendEmail(to: string, msg: Message): Promise<void> {
 }
 
 // Returns number of recipients reached (push or email).
-async function deliver(userIds: string[], msg: Message): Promise<number> {
+async function deliverTo(userIds: string[], msg: Message): Promise<number> {
   const ids = [...new Set(userIds)];
   if (ids.length === 0) return 0;
   const pushOk = initVapid();
@@ -217,9 +217,12 @@ async function serverChanges(orderId: string): Promise<Change[]> {
     .map((r: any) => ({ product_name: r.product_name, from: r.units, to: r.adjusted_units }));
 }
 
-async function sendOrderEvent(event: KitchenEvent, order: any): Promise<number> {
+// The caller never needs to hear about their own action (e.g. a stores manager who sends
+// an order on a café's behalf does not get the "order sent" notification).
+async function sendOrderEvent(event: KitchenEvent, order: any, callerId: string): Promise<number> {
   const cafe = order.kitchen_cafes?.name ?? "Café";
   const urgent = order.kind === "urgent";
+  const deliver = (ids: string[], msg: Message) => deliverTo(ids.filter((id) => id !== callerId), msg);
 
   switch (event) {
     case "order_sent":
@@ -295,7 +298,7 @@ async function handleCutoffReminder(): Promise<{ cafes: number; notified: number
       .select("cafe_id");
     if (error || !claimed || claimed.length === 0) continue;
     cafesCount++;
-    notified += await deliver(await memberIds("coffee_manager", c.id), {
+    notified += await deliverTo(await memberIds("coffee_manager", c.id), {
       title: "Commande Cuisine à envoyer",
       body: `${c.name} : la date limite est ${fmtDateTime(week.cutoff_at)}. Pensez à envoyer votre commande.`,
     });
@@ -333,7 +336,7 @@ Deno.serve(async (req: Request) => {
     if (verdict === "forbidden") return json({ error: "forbidden" }, 403);
     if (verdict === "wrong_status") return json({ error: "wrong_status" }, 409);
 
-    const notified = await sendOrderEvent(event, order);
+    const notified = await sendOrderEvent(event, order, caller.userId);
     console.log(`[notify-kitchen] ${event} ${body.orderId.slice(0, 8)} notified: ${notified}`);
     return json({ success: true, notified });
   } catch (err) {

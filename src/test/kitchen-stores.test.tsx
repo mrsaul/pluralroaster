@@ -5,8 +5,13 @@ import type { ReactElement } from "react";
 import { products, item, order } from "./kitchen-fixtures";
 import type { KitchenOrder } from "@/kitchen/types";
 
+// Server-realistic: the current (ordering) week's cutoff is always in the future.
+// Default moment: Tue 27 Oct 2026 10:00 Paris → ordering week 2 Nov, production week 26 Oct.
 const mocks = vi.hoisted(() => ({
-  week: { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" },
+  now: new Date("2026-10-27T09:00:00Z"),
+  week: { weekStart: "2026-11-02", cutoffAt: "2026-11-01T19:00:00Z" },
+  createUrgent: vi.fn(),
+  notify: vi.fn(),
   weekly: [] as KitchenOrder[],
   urgent: [] as KitchenOrder[],
   cafes: [] as { id: string; name: string; isActive?: boolean }[],
@@ -27,8 +32,11 @@ vi.mock("@/kitchen/api", () => {
     useKitchenSettings: () => ({ data: { weeklyCapacityMinutes: 600 } }),
     useKitchenCafes: () => ({ data: mocks.cafes }),
     useKitchenOrders: (f: { kind?: string; weekStart?: string }) => ({
-      data: f.kind === "urgent" ? mocks.urgent : f.kind === "weekly" ? mocks.weekly : (mocks.byWeek[f.weekStart ?? ""] ?? []),
+      data: f.kind === "urgent" ? mocks.urgent
+        : f.kind === "weekly" ? mocks.weekly.filter((o) => !f.weekStart || o.weekStart === f.weekStart)
+        : (mocks.byWeek[f.weekStart ?? ""] ?? []),
     }),
+    useCreateUrgentOrder: () => ({ mutate: mocks.createUrgent, isPending: false }),
     useLockOrder: () => ({ mutate: mocks.lock, mutateAsync: mocks.lock }),
     useUnlockOrder: () => ({ mutate: mocks.unlock }),
     useCreateOrderForCafe: () => ({ mutate: mocks.create, isPending: false }),
@@ -37,8 +45,14 @@ vi.mock("@/kitchen/api", () => {
     useDeclineOrder: () => ({ mutate: mocks.decline, isPending: false }),
     useSetItem: mut, useSendOrder: mut,
     kitchenErrorMessage: () => "err",
+    notifyKitchen: mocks.notify,
   };
 });
+
+vi.mock("@/kitchen/cafe/useNow", async (orig) => ({
+  ...(await orig<typeof import("@/kitchen/cafe/useNow")>()),
+  useNow: () => mocks.now,
+}));
 
 import CapacityBar from "@/kitchen/stores/CapacityBar";
 import StoresReview from "@/kitchen/stores/StoresReview";
@@ -47,7 +61,9 @@ const render = (ui: ReactElement) =>
   rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 beforeEach(() => {
-  mocks.week = { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" };
+  mocks.now = new Date("2026-10-27T09:00:00Z");
+  mocks.week = { weekStart: "2026-11-02", cutoffAt: "2026-11-01T19:00:00Z" };
+  mocks.createUrgent.mockReset(); mocks.notify.mockReset();
   mocks.weekly = []; mocks.urgent = [];
   mocks.cafes = [{ id: "c1", name: "Artivistas", isActive: true }, { id: "c2", name: "Belleville", isActive: true }];
   mocks.lock.mockReset().mockResolvedValue(undefined); mocks.unlock.mockClear(); mocks.create.mockClear();
@@ -96,17 +112,73 @@ describe("StoresReview", () => {
     expect(mocks.unlock).toHaveBeenCalledWith({ orderId: "ord1" });
   });
 
-  it("flags sent-but-unapproved and unsent cafés after cutoff, and shows urgent counts", () => {
-    mocks.week = { weekStart: "2026-11-02", cutoffAt: "2020-01-01T20:00:00Z" };
-    mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", items: [item("p1", 1)] })];
+  it("flags sent-but-unapproved and unsent cafés after cutoff (Sunday 20:30), and shows urgent counts", () => {
+    mocks.now = new Date("2026-11-01T19:30:00Z"); // Sun 20:30 Paris, just after the cutoff
+    mocks.week = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
+    mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", weekStart: "2026-11-02", items: [item("p1", 1)] })];
     mocks.urgent = [
       order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "approved", weekStart: "2026-10-26", items: [item("p1", 1)] }),
       order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "declined", weekStart: "2026-10-12", items: [item("p1", 1)] }),
     ];
     render(<StoresReview />);
+    expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
     expect(screen.getByText("Non approuvée, non comptée par la cuisine")).toBeInTheDocument();
     expect(screen.getByText("Non envoyée")).toBeInTheDocument();
     expect(screen.getByText(/: 2$/)).toBeInTheDocument();
+  });
+
+  describe("default week", () => {
+    it("mid-week (Tue): the ordering week, no after-cutoff flags", () => {
+      render(<StoresReview />);
+      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+      expect(screen.queryByText("Non envoyée")).toBeNull();
+    });
+    it("mid-week (Tue): the production week while it still has sent orders", () => {
+      mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", weekStart: "2026-10-26", items: [item("p1", 1)] })];
+      render(<StoresReview />);
+      expect(screen.getByText("Semaine du 26/10")).toBeInTheDocument();
+      expect(screen.getByText("Non approuvée, non comptée par la cuisine")).toBeInTheDocument();
+    });
+    it("Sunday 20:30: the week starting tomorrow, even with nothing sent", () => {
+      mocks.now = new Date("2026-11-01T19:30:00Z");
+      mocks.week = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
+      render(<StoresReview />);
+      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+    });
+    it("Monday 00:30: the started week while it has sent orders, else the ordering week", () => {
+      mocks.now = new Date("2026-11-01T23:30:00Z");
+      mocks.week = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
+      mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", weekStart: "2026-11-02", items: [item("p1", 1)] })];
+      const { unmount } = render(<StoresReview />);
+      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+      unmount();
+      mocks.weekly = [];
+      render(<StoresReview />);
+      expect(screen.getByText("Semaine du 09/11")).toBeInTheDocument();
+    });
+    it("'this week' returns to the default week", () => {
+      render(<StoresReview />);
+      fireEvent.click(screen.getByRole("button", { name: "Semaine précédente" }));
+      expect(screen.getByText("Semaine du 26/10")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Cette semaine" }));
+      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+    });
+  });
+
+  it("creates an urgent order for a picked café", () => {
+    render(<StoresReview />);
+    fireEvent.click(screen.getByRole("button", { name: "Nouvelle commande urgente" }));
+    const submit = screen.getByRole("button", { name: "Envoyer la demande" });
+    fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+    fireEvent.change(screen.getByPlaceholderText(/Pourquoi/), { target: { value: "Event" } });
+    expect(submit).toBeDisabled(); // no café chosen yet
+    fireEvent.change(screen.getByLabelText("Café"), { target: { value: "c2" } });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+    expect(mocks.createUrgent).toHaveBeenCalledWith(
+      expect.objectContaining({ cafeId: "c2", reason: "Event", items: [{ productId: "p1", units: 1 }] }),
+      expect.anything(),
+    );
   });
 
   const openSent = (over: Partial<KitchenOrder> = {}) => {
@@ -177,5 +249,32 @@ describe("StoresReview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approuver" }));
     await act(async () => {});
     expect(screen.getByRole("button", { name: /Partager les modifications/ })).toBeInTheDocument();
+  });
+
+  it("notifies the café once when an approved order was adjusted, after the flush on close", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.weekly = [order({ id: "ord1", cafeId: "c2", cafeName: "Belleville", status: "approved", items: [item("p1", 1)] })];
+      const { unmount } = render(<StoresReview />);
+      fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
+      await act(async () => {});
+      fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+      fireEvent.click(screen.getAllByLabelText("Increase quantity")[0]);
+      unmount();
+      await act(async () => {});
+      expect(mocks.adjust).toHaveBeenCalledWith({ orderId: "ord1", productId: "p1", adjustedUnits: 3 });
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+      expect(mocks.notify).toHaveBeenCalledWith("order_approved", "ord1");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("does not notify when nothing was adjusted on an approved order", async () => {
+    mocks.weekly = [order({ id: "ord1", cafeId: "c2", cafeName: "Belleville", status: "approved", items: [item("p1", 1)] })];
+    const { unmount } = render(<StoresReview />);
+    fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
+    await act(async () => {});
+    unmount();
+    await act(async () => {});
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 });
