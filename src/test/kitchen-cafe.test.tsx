@@ -3,11 +3,11 @@ import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { products, item, order } from "./kitchen-fixtures";
-import type { KitchenOrder, KitchenProduct } from "@/kitchen/types";
+import type { KitchenOrder, KitchenProduct, RoundOccurrence } from "@/kitchen/types";
 
 const mocks = vi.hoisted(() => ({
   products: [] as KitchenProduct[],
-  week: { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" },
+  rounds: [] as RoundOccurrence[],
   orders: [] as KitchenOrder[],
   createUrgent: vi.fn(),
   setItem: vi.fn(),
@@ -18,8 +18,11 @@ vi.mock("@/kitchen/api", () => {
   const mut = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue("o1"), isPending: false });
   return {
     useKitchenProducts: () => ({ data: mocks.products, isLoading: false }),
-    useCurrentWeek: () => ({ data: mocks.week, isLoading: false }),
-    useKitchenOrders: () => ({ data: mocks.orders, isLoading: false }),
+    useNextOpenRounds: () => ({ data: mocks.rounds, isLoading: false }),
+    useKitchenOrders: (f: { productionDate?: string } = {}) => ({
+      data: mocks.orders.filter((o) => !f.productionDate || o.productionDate === f.productionDate),
+      isLoading: false,
+    }),
     useSetItem: () => ({ mutate: vi.fn(), mutateAsync: mocks.setItem, isPending: false }),
     useGetOrCreateDraft: () => ({ mutate: vi.fn(), mutateAsync: mocks.draft, isPending: false }),
     useSendOrder: mut,
@@ -41,7 +44,10 @@ const hidden = { id: "p4", name: "Secret scone", unitLabel: "Batch", piecesPerUn
 
 beforeEach(() => {
   mocks.products = [...products, hidden];
-  mocks.week = { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" };
+  mocks.rounds = [
+    { roundId: "r1", roundName: "Mardi", productionDate: "2026-11-03", cutoffAt: "2099-01-01T20:00:00Z", capacityMinutes: 600 },
+    { roundId: "r2", roundName: "Vendredi", productionDate: "2026-11-06", cutoffAt: "2099-01-04T20:00:00Z", capacityMinutes: 600 },
+  ];
   mocks.orders = [];
   mocks.createUrgent.mockClear();
   mocks.setItem.mockReset().mockResolvedValue(undefined);
@@ -62,7 +68,7 @@ describe("CafeHome", () => {
     expect(screen.getAllByText(/0 en stock, sera produit/).length).toBe(2);
   });
 
-  // The server's current week is the ordering week, so its cutoff is always in the future.
+  // Next open rounds always have a future cutoff.
   it("always offers the urgent order, even with a sent order and a future cutoff", () => {
     mocks.orders = [order({ cafeId: "c1", status: "sent", items: [item("p1", 2)] })];
     render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
@@ -88,7 +94,59 @@ describe("CafeHome", () => {
   });
 });
 
+describe("CafeHome rounds", () => {
+  it("shows the next open round in the header", () => {
+    render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
+    expect(screen.getByText("Production du mardi 3 nov.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mardi 3 nov." })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Vendredi 6 nov." })).toBeInTheDocument();
+  });
+
+  it("switches the cart to the second round and loads its order", () => {
+    mocks.orders = [
+      order({ id: "oT", cafeId: "c1", productionDate: "2026-11-03", status: "draft", items: [item("p1", 2)] }),
+      order({ id: "oF", cafeId: "c1", productionDate: "2026-11-06", roundId: "r2", status: "draft", items: [item("p1", 5)] }),
+    ];
+    render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
+    expect(screen.getByText("2 unités")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Vendredi 6 nov." }));
+    expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
+    expect(screen.getByText("5 unités")).toBeInTheDocument();
+  });
+
+  it("creates the draft for the selected round's production date", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<CafeHome cafeId="c1" cafeName="A" />);
+      fireEvent.click(screen.getByRole("button", { name: "Vendredi 6 nov." }));
+      fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
+      await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+      expect(mocks.draft).toHaveBeenCalledWith({ cafeId: "c1", productionDate: "2026-11-06" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the empty message and no cart when no round is open", () => {
+    mocks.rounds = [];
+    render(<CafeHome cafeId="c1" cafeName="A" />);
+    expect(screen.getByText("Aucune tournée de production configurée.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Augmenter la quantité")).toBeNull();
+    expect(screen.getByRole("button", { name: "Commande urgente" })).toBeInTheDocument();
+  });
+});
+
 describe("CafeOrders", () => {
+  it("groups orders by production date with round labels", () => {
+    mocks.orders = [
+      order({ cafeId: "c1", productionDate: "2026-11-03", items: [item("p1", 1)] }),
+      order({ cafeId: "c1", productionDate: "2026-11-06", roundId: "r2", items: [item("p2", 1)] }),
+    ];
+    render(<CafeOrders cafeId="c1" />);
+    expect(screen.getByText("Production du mardi 3 nov.")).toBeInTheDocument();
+    expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
+  });
+
   it("renders an adjusted line as 1 → 2", () => {
     mocks.orders = [order({ cafeId: "c1", status: "approved", items: [item("p1", 1, 2)] })];
     render(<CafeOrders cafeId="c1" />);

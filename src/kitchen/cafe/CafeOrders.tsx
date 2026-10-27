@@ -1,11 +1,11 @@
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKitchenLang } from "@/kitchen/i18n";
 import { kitchenErrorMessage, useKitchenOrders, useMarkReceived } from "../api";
 import { useKitchenT } from "../i18n";
 import { unitsToPieces } from "../lib/format";
+import { formatRoundLabel } from "../lib/rounds";
 import { effectiveUnits } from "../lib/production";
 import { buildOrderShareText } from "../lib/share";
 import type { KitchenOrder } from "../types";
@@ -56,7 +56,7 @@ function OrderCard({ order }: { order: KitchenOrder }) {
     }
   };
 
-  const title = order.kind === "urgent" ? c.urgentOrder : c.orderWeek(format(parseISO(order.weekStart), "dd/MM"));
+  const title = order.kind === "urgent" ? c.urgentOrder : c.weeklyOrder;
 
   return (
     <li className="rounded-xl border border-border bg-card p-4">
@@ -110,15 +110,25 @@ function OrderCard({ order }: { order: KitchenOrder }) {
 
 export default function CafeOrders({ cafeId }: { cafeId: string }) {
   const c = useKitchenT().cafeApp;
+  const lang = useKitchenLang();
   const { data = [], isLoading } = useKitchenOrders({ cafeId });
   if (isLoading) return <p className="p-4 text-sm text-muted-foreground">{c.loading}</p>;
   const list = [...data].reverse(); // api returns oldest first
+  // Group by production date, most recent round first.
+  const groups = new Map<string, KitchenOrder[]>();
+  for (const o of list) groups.set(o.productionDate, [...(groups.get(o.productionDate) ?? []), o]);
+  const dates = [...groups.keys()].sort().reverse();
   return (
     <div className="mx-auto max-w-xl px-4 pb-8 pt-4">
       {list.length === 0 && <p className="text-sm text-muted-foreground">{c.noOrders}</p>}
-      <ul className="flex flex-col gap-3">
-        {list.map((o) => <OrderCard key={o.id} order={o} />)}
-      </ul>
+      {dates.map((d) => (
+        <section key={d} className="mb-5">
+          <h2 className="mb-2 text-sm font-semibold text-muted-foreground">{formatRoundLabel({ productionDate: d }, lang)}</h2>
+          <ul className="flex flex-col gap-3">
+            {groups.get(d)!.map((o) => <OrderCard key={o.id} order={o} />)}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

@@ -10,27 +10,90 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useKitchenLang } from "@/kitchen/i18n";
 import {
-  kitchenErrorMessage, useCurrentWeek, useGetOrCreateDraft, useKitchenOrders,
-  useKitchenProducts, useSendOrder, useSetItem,
+  kitchenErrorMessage, useGetOrCreateDraft, useKitchenOrders,
+  useKitchenProducts, useNextOpenRounds, useSendOrder, useSetItem,
 } from "../api";
 import { useKitchenT } from "../i18n";
 import { formatCountdown, unitsToPieces } from "../lib/format";
+import { formatRoundLabel } from "../lib/rounds";
+import type { RoundOccurrence } from "../types";
 import CafeCartBar from "./CafeCartBar";
 import UrgentOrderSheet from "./UrgentOrderSheet";
 import { formatWhen, useNow } from "./useNow";
 
 const DEBOUNCE_MS = 400;
 
+/** "Production du mardi 3 nov." -> "Mardi 3 nov." (toggle label). */
+function shortRoundLabel(occ: RoundOccurrence, lang: "fr" | "en"): string {
+  const s = formatRoundLabel(occ, lang).replace(/^Production (du )?/, "");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeName: string | null }) {
+  const c = useKitchenT().cafeApp;
+  const lang = useKitchenLang();
+  const now = useNow();
+  const { data: rounds = [], isLoading } = useNextOpenRounds(2);
+  const [picked, setPicked] = useState(0);
+  const [urgentOpen, setUrgentOpen] = useState(false);
+  const { data: products = [] } = useKitchenProducts();
+  const visible = useMemo(() => products.filter((p) => p.isVisible), [products]);
+
+  if (isLoading) return <p className="p-4 text-sm text-muted-foreground">{c.loading}</p>;
+
+  const round = rounds[Math.min(picked, rounds.length - 1)];
+
+  return (
+    <div className="mx-auto max-w-xl px-4 pb-32 pt-4">
+      {cafeName && <p className="mb-3 text-sm text-muted-foreground">{cafeName}</p>}
+
+      <Button variant="outline" className="mb-4 h-12 w-full" onClick={() => setUrgentOpen(true)}>{c.urgentButton}</Button>
+
+      {!round ? (
+        <p className="text-sm text-muted-foreground">{c.noRound}</p>
+      ) : (
+        <>
+          <div className="mb-4">
+            <p className="font-medium">{formatRoundLabel(round, lang)}</p>
+            <p className="text-sm text-muted-foreground">
+              {c.cutoffIn(formatCountdown(new Date(round.cutoffAt), now, lang))}
+            </p>
+            {rounds.length > 1 && (
+              <div role="group" className="mt-3 grid grid-cols-2 gap-2">
+                {rounds.map((r, i) => (
+                  <Button
+                    key={r.productionDate}
+                    variant={r === round ? "default" : "outline"}
+                    className="h-11"
+                    aria-pressed={r === round}
+                    onClick={() => setPicked(i)}
+                  >
+                    {shortRoundLabel(r, lang)}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Keyed by round so each round has its own cart state; unmount flushes pending edits. */}
+          <RoundCart key={round.productionDate} cafeId={cafeId} round={round} />
+        </>
+      )}
+
+      <UrgentOrderSheet open={urgentOpen} onOpenChange={setUrgentOpen} cafeId={cafeId} products={visible} />
+    </div>
+  );
+}
+
+function RoundCart({ cafeId, round }: { cafeId: string; round: RoundOccurrence }) {
   const t = useKitchenT();
   const c = t.cafeApp;
   const lang = useKitchenLang();
   const qc = useQueryClient();
   const now = useNow();
+  const productionDate = round.productionDate;
 
-  const { data: products = [], isLoading } = useKitchenProducts();
-  const { data: week } = useCurrentWeek();
-  const { data: orders = [] } = useKitchenOrders({ weekStart: week?.weekStart, cafeId, kind: "weekly" });
+  const { data: products = [] } = useKitchenProducts();
+  const { data: orders = [] } = useKitchenOrders({ cafeId, productionDate, kind: "weekly" });
   const draft = useGetOrCreateDraft();
   const setItem = useSetItem();
   const send = useSendOrder();
@@ -42,8 +105,8 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
     const ids = new Set(visible.map((p) => p.id));
     return (order?.items ?? []).filter((i) => !ids.has(i.productId) && i.units > 0);
   }, [order, visible]);
-  const cutoff = week ? new Date(week.cutoffAt) : null;
-  const beforeCutoff = !!cutoff && now < cutoff;
+  const cutoff = new Date(round.cutoffAt);
+  const beforeCutoff = now < cutoff;
   const editableStatus = !order || order.status === "draft" || order.status === "sent" || order.status === "approved";
   const canEdit = beforeCutoff && editableStatus;
 
@@ -56,7 +119,6 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
   const pending = useRef<Record<string, number>>({});
   const draftPromise = useRef<Promise<string> | null>(null);
   const flushRef = useRef<(id: string, v: number) => Promise<void>>(async () => {});
-  const [urgentOpen, setUrgentOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [pendingEdit, setPendingEdit] = useState<{ id: string; v: number } | null>(null);
 
@@ -91,7 +153,7 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
         let orderId = orderIdRef.current;
         if (!orderId) {
           // Share one in-flight get-or-create so quick changes create the draft once.
-          draftPromise.current ??= draft.mutateAsync({ cafeId }).then((id) => id as string);
+          draftPromise.current ??= draft.mutateAsync({ cafeId, productionDate }).then((id) => id as string);
           try { orderId = await draftPromise.current; } finally { draftPromise.current = null; }
         }
         await setItem.mutateAsync({ orderId, productId, units });
@@ -104,7 +166,7 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cafeId, t],
+    [cafeId, productionDate, t],
   );
   flushRef.current = flush;
 
@@ -137,17 +199,11 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
     });
   };
 
-  if (isLoading || !week) return <p className="p-4 text-sm text-muted-foreground">{c.loading}</p>;
-
   const status = !order ? "none" : (order.status as "draft" | "sent" | "approved") ;
   const missed = !order || order.status === "draft";
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-32 pt-4">
-      {cafeName && <p className="mb-3 text-sm text-muted-foreground">{cafeName}</p>}
-
-      <Button variant="outline" className="mb-4 h-12 w-full" onClick={() => setUrgentOpen(true)}>{c.urgentButton}</Button>
-
+    <>
       {!beforeCutoff && (
         <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
           <p className="flex items-start gap-2 text-sm">
@@ -217,8 +273,8 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
         <CafeCartBar
           totalUnits={total}
           status={status}
-          countdown={formatCountdown(cutoff!, now, lang)}
-          cutoffLabel={formatWhen(cutoff!, lang)}
+          countdown={formatCountdown(cutoff, now, lang)}
+          cutoffLabel={formatWhen(cutoff, lang)}
           sending={send.isPending}
           onSend={handleSend}
         />
@@ -244,7 +300,6 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
         </AlertDialogContent>
       </AlertDialog>
 
-      <UrgentOrderSheet open={urgentOpen} onOpenChange={setUrgentOpen} cafeId={cafeId} products={visible} />
-    </div>
+    </>
   );
 }
