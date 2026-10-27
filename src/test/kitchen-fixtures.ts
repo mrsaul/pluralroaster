@@ -14,7 +14,7 @@ export function item(productId: string, units: number, adjustedUnits: number | n
 let seq = 0;
 export function order(over: Partial<KitchenOrder> & { items: KitchenOrderItem[] }): KitchenOrder {
   return {
-    id: `o${++seq}`, cafeId: over.cafeName ?? "c", cafeName: "Café", weekStart: "2026-11-02", kind: "weekly", status: "approved",
+    id: `o${++seq}`, cafeId: over.cafeName ?? "c", cafeName: "Café", productionDate: "2026-11-03", roundId: "r1", kind: "weekly", status: "approved",
     urgentReason: null, neededBy: null, readyEta: null, declineNote: null, ...over,
   };
 }

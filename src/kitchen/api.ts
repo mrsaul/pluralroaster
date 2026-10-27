@@ -1,12 +1,10 @@
 // Kitchen data layer: TanStack Query hooks over the kitchen_* tables and RPCs,
 // plus the best-effort notification helper.
-import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import type { KitchenStrings } from "./i18n";
-import { productionWeekStart } from "./lib/weeks";
-import type { KitchenOrder, KitchenOrderItem, KitchenProduct } from "./types";
+import type { KitchenOrder, KitchenOrderItem, KitchenProduct, KitchenRound, RoundOccurrence } from "./types";
 
 export type KitchenEvent =
   | "order_sent"
@@ -36,6 +34,8 @@ export function kitchenErrorMessage(err: unknown, t: KitchenStrings): string {
     case "invalid_status": return t.errors.invalidStatus;
     case "invalid_input": return t.errors.invalidInput;
     case "not_kitchen_member": return t.errors.notKitchenMember;
+    case "no_round": return t.errors.noRound;
+    case "round_in_use": return t.errors.roundInUse;
     default: return t.errors.generic;
   }
 }
@@ -68,7 +68,7 @@ type ItemRow = {
   units: number; adjusted_units: number | null; served_from_stock_units: number;
 };
 type OrderRow = {
-  id: string; cafe_id: string; week_start: string; kind: string; status: string;
+  id: string; cafe_id: string; production_date: string; round_id: string | null; kind: string; status: string;
   urgent_reason: string | null; needed_by: string | null; ready_eta: string | null; decline_note?: string | null;
   kitchen_cafes?: { name: string } | null;
   kitchen_order_items?: ItemRow[] | null;
@@ -103,7 +103,8 @@ export function mapOrder(r: OrderRow): KitchenOrder {
     id: r.id,
     cafeId: r.cafe_id,
     cafeName: r.kitchen_cafes?.name ?? "",
-    weekStart: r.week_start,
+    productionDate: r.production_date,
+    roundId: r.round_id ?? null,
     kind: r.kind as KitchenOrder["kind"],
     status: r.status as KitchenOrder["status"],
     urgentReason: r.urgent_reason,
@@ -132,10 +133,7 @@ export function useKitchenProducts() {
 }
 
 export type KitchenSettings = {
-  cutoffWeekday: number;
-  cutoffTime: string;
   reminderHoursBefore: number;
-  weeklyCapacityMinutes: number;
 };
 
 export function useKitchenSettings() {
@@ -148,54 +146,138 @@ export function useKitchenSettings() {
         .eq("id", 1)
         .single();
       if (error) throw error;
-      return {
-        cutoffWeekday: data.cutoff_weekday,
-        cutoffTime: data.cutoff_time,
-        reminderHoursBefore: data.reminder_hours_before,
-        weeklyCapacityMinutes: data.weekly_capacity_minutes,
-      };
+      return { reminderHoursBefore: data.reminder_hours_before };
     },
   });
 }
 
-export function useCurrentWeek() {
+// ── Production rounds ────────────────────────────────────────────────────────
+
+type RoundRow = {
+  id: string; name: string; production_weekday: number; cutoff_weekday: number;
+  cutoff_time: string; capacity_minutes: number; is_active: boolean;
+};
+type OccurrenceRow = {
+  round_id: string; round_name: string; production_date: string; cutoff_at: string; capacity_minutes: number;
+};
+
+export function mapRound(r: RoundRow): KitchenRound {
+  return {
+    id: r.id,
+    name: r.name,
+    productionWeekday: r.production_weekday,
+    cutoffWeekday: r.cutoff_weekday,
+    cutoffTime: r.cutoff_time.slice(0, 5), // "HH:MM:SS" -> "HH:MM"
+    capacityMinutes: r.capacity_minutes,
+    isActive: r.is_active,
+  };
+}
+
+export function mapOccurrence(r: OccurrenceRow): RoundOccurrence {
+  return {
+    roundId: r.round_id,
+    roundName: r.round_name,
+    productionDate: r.production_date,
+    cutoffAt: r.cutoff_at,
+    capacityMinutes: r.capacity_minutes,
+  };
+}
+
+/** Monday-first sort key for a 0=Sunday weekday. */
+const mondayFirst = (weekday: number) => (weekday + 6) % 7;
+
+/** All rounds, inactive included, ordered by production weekday (Monday first). */
+export function useKitchenRounds() {
   return useQuery({
-    queryKey: ["kitchen", "currentWeek"],
-    queryFn: async (): Promise<{ weekStart: string; cutoffAt: string }> => {
-      const { data, error } = await supabase.rpc("kitchen_current_week");
+    queryKey: ["kitchen", "rounds"],
+    queryFn: async (): Promise<KitchenRound[]> => {
+      const { data, error } = await supabase.from("kitchen_rounds").select("*");
       if (error) throw error;
-      const row = data?.[0];
-      if (!row) throw new Error("kitchen_current_week returned no row");
-      return { weekStart: row.week_start, cutoffAt: row.cutoff_at };
+      return (data ?? [])
+        .map((r) => mapRound(r as RoundRow))
+        .sort((a, b) => mondayFirst(a.productionWeekday) - mondayFirst(b.productionWeekday) || a.name.localeCompare(b.name));
     },
   });
 }
 
-/** The production week: the one before the ordering week (its cutoff passed most recently). */
-export function useProductionWeek() {
-  const q = useCurrentWeek();
-  const data = useMemo(
-    () => (q.data ? { weekStart: productionWeekStart(q.data.weekStart) } : undefined),
-    [q.data],
-  );
-  return { data, isLoading: q.isLoading, error: q.error };
+/** Round occurrences with a production date in [from, to] (YYYY-MM-DD). */
+export function useRoundOccurrences(from: string, to: string) {
+  return useQuery({
+    queryKey: ["kitchen", "occurrences", from, to],
+    queryFn: async (): Promise<RoundOccurrence[]> => {
+      const { data, error } = await supabase.rpc("kitchen_round_occurrences", { p_from: from, p_to: to });
+      if (error) throw error;
+      return (data ?? []).map((r) => mapOccurrence(r as OccurrenceRow));
+    },
+  });
+}
+
+/** The next `count` rounds whose cutoff is still ahead. */
+export function useNextOpenRounds(count = 2) {
+  return useQuery({
+    queryKey: ["kitchen", "nextOpenRounds", count],
+    queryFn: async (): Promise<RoundOccurrence[]> => {
+      const { data, error } = await supabase.rpc("kitchen_next_open_rounds", { p_count: count });
+      if (error) throw error;
+      return (data ?? []).map((r) => mapOccurrence(r as OccurrenceRow));
+    },
+  });
+}
+
+export type RoundInput = Omit<KitchenRound, "id"> & { id?: string };
+
+export function useUpsertRound() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: RoundInput) => {
+      const row = {
+        name: v.name,
+        production_weekday: v.productionWeekday,
+        cutoff_weekday: v.cutoffWeekday,
+        cutoff_time: v.cutoffTime,
+        capacity_minutes: v.capacityMinutes,
+        is_active: v.isActive,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = v.id
+        ? await supabase.from("kitchen_rounds").update(row).eq("id", v.id)
+        : await supabase.from("kitchen_rounds").insert(row);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["kitchen"] }),
+  });
+}
+
+export function useDeleteRound() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { id: string }) => {
+      const { error } = await supabase.from("kitchen_rounds").delete().eq("id", v.id);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["kitchen"] }),
+  });
 }
 
 export type KitchenOrderFilter = {
-  weekStart?: string;
+  productionDate?: string;
+  from?: string;
+  to?: string;
   cafeId?: string;
   kind?: "weekly" | "urgent";
 };
 
 export function useKitchenOrders(filter: KitchenOrderFilter = {}) {
   return useQuery({
-    queryKey: ["kitchen", "orders", filter.weekStart ?? null, filter.cafeId ?? null, filter.kind ?? null],
+    queryKey: ["kitchen", "orders", filter.productionDate ?? null, filter.from ?? null, filter.to ?? null, filter.cafeId ?? null, filter.kind ?? null],
     queryFn: async (): Promise<KitchenOrder[]> => {
       let q = supabase
         .from("kitchen_orders")
         .select("*, kitchen_cafes(name), kitchen_order_items(*)")
         .order("created_at", { ascending: true });
-      if (filter.weekStart) q = q.eq("week_start", filter.weekStart);
+      if (filter.productionDate) q = q.eq("production_date", filter.productionDate);
+      if (filter.from) q = q.gte("production_date", filter.from);
+      if (filter.to) q = q.lte("production_date", filter.to);
       if (filter.cafeId) q = q.eq("cafe_id", filter.cafeId);
       if (filter.kind) q = q.eq("kind", filter.kind);
       const { data, error } = await q;
@@ -252,8 +334,12 @@ export const useSetItem = () =>
   });
 
 export const useGetOrCreateDraft = () =>
-  useRpcMutation<{ cafeId?: string | null }, string>({
-    call: (v) => supabase.rpc("kitchen_get_or_create_draft", v.cafeId ? { p_cafe_id: v.cafeId } : {}),
+  useRpcMutation<{ cafeId?: string | null; productionDate?: string }, string>({
+    call: (v) =>
+      supabase.rpc("kitchen_get_or_create_draft", {
+        ...(v.cafeId ? { p_cafe_id: v.cafeId } : {}),
+        ...(v.productionDate ? { p_production_date: v.productionDate } : {}),
+      }),
   });
 
 export const useSendOrder = () =>
@@ -331,9 +417,9 @@ export const useMarkReady = () =>
   });
 
 export const useCreateOrderForCafe = () =>
-  useRpcMutation<{ cafeId: string; weekStart?: string }, string>({
+  useRpcMutation<{ cafeId: string; productionDate?: string }, string>({
     call: (v) =>
-      supabase.rpc("kitchen_create_order_for_cafe", { p_cafe_id: v.cafeId, p_week_start: v.weekStart }),
+      supabase.rpc("kitchen_create_order_for_cafe", { p_cafe_id: v.cafeId, p_production_date: v.productionDate }),
   });
 
 export function useUpdateProduct() {
@@ -383,10 +469,7 @@ export function useUpdateSettings() {
   return useMutation({
     mutationFn: async (v: Partial<KitchenSettings>) => {
       const row: TablesUpdate<"kitchen_settings"> = { updated_at: new Date().toISOString() };
-      if (v.cutoffWeekday !== undefined) row.cutoff_weekday = v.cutoffWeekday;
-      if (v.cutoffTime !== undefined) row.cutoff_time = v.cutoffTime;
       if (v.reminderHoursBefore !== undefined) row.reminder_hours_before = v.reminderHoursBefore;
-      if (v.weeklyCapacityMinutes !== undefined) row.weekly_capacity_minutes = v.weeklyCapacityMinutes;
       const { error } = await supabase.from("kitchen_settings").update(row).eq("id", 1);
       if (error) throw error;
     },

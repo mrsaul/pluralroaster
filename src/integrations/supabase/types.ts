@@ -630,14 +630,15 @@ export type Database = {
           locked_at: string | null
           locked_by: string | null
           needed_by: string | null
+          production_date: string
           ready_at: string | null
           ready_eta: string | null
           received_at: string | null
+          round_id: string
           sent_at: string | null
           status: string
           updated_at: string
           urgent_reason: string | null
-          week_start: string
         }
         Insert: {
           approved_at?: string | null
@@ -651,14 +652,15 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           needed_by?: string | null
+          production_date: string
           ready_at?: string | null
           ready_eta?: string | null
           received_at?: string | null
+          round_id: string
           sent_at?: string | null
           status?: string
           updated_at?: string
           urgent_reason?: string | null
-          week_start: string
         }
         Update: {
           approved_at?: string | null
@@ -672,14 +674,15 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           needed_by?: string | null
+          production_date?: string
           ready_at?: string | null
           ready_eta?: string | null
           received_at?: string | null
+          round_id?: string
           sent_at?: string | null
           status?: string
           updated_at?: string
           urgent_reason?: string | null
-          week_start?: string
         }
         Relationships: [
           {
@@ -687,6 +690,13 @@ export type Database = {
             columns: ["cafe_id"]
             isOneToOne: false
             referencedRelation: "kitchen_cafes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kitchen_orders_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_rounds"
             referencedColumns: ["id"]
           },
         ]
@@ -733,30 +743,57 @@ export type Database = {
         }
         Relationships: []
       }
-      kitchen_settings: {
+      kitchen_rounds: {
         Row: {
+          capacity_minutes: number
+          created_at: string
           cutoff_time: string
           cutoff_weekday: number
+          id: string
+          is_active: boolean
+          name: string
+          production_weekday: number
+          updated_at: string
+        }
+        Insert: {
+          capacity_minutes: number
+          created_at?: string
+          cutoff_time: string
+          cutoff_weekday: number
+          id?: string
+          is_active?: boolean
+          name: string
+          production_weekday: number
+          updated_at?: string
+        }
+        Update: {
+          capacity_minutes?: number
+          created_at?: string
+          cutoff_time?: string
+          cutoff_weekday?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          production_weekday?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kitchen_settings: {
+        Row: {
           id: number
           reminder_hours_before: number
           updated_at: string
-          weekly_capacity_minutes: number
         }
         Insert: {
-          cutoff_time?: string
-          cutoff_weekday?: number
           id: number
           reminder_hours_before?: number
           updated_at?: string
-          weekly_capacity_minutes?: number
         }
         Update: {
-          cutoff_time?: string
-          cutoff_weekday?: number
           id?: number
           reminder_hours_before?: number
           updated_at?: string
-          weekly_capacity_minutes?: number
         }
         Relationships: []
       }
@@ -1533,7 +1570,7 @@ export type Database = {
       kitchen_approve_order: { Args: { p_order_id: string }; Returns: Json }
       kitchen_cafe_of: { Args: { uid: string }; Returns: string }
       kitchen_create_order_for_cafe: {
-        Args: { p_cafe_id: string; p_week_start?: string }
+        Args: { p_cafe_id: string; p_production_date?: string }
         Returns: string
       }
       kitchen_create_urgent_order: {
@@ -1545,23 +1582,12 @@ export type Database = {
         }
         Returns: string
       }
-      kitchen_current_week: {
-        Args: { p_now?: string }
-        Returns: {
-          cutoff_at: string
-          week_start: string
-        }[]
-      }
-      kitchen_cutoff_for_week: {
-        Args: { p_week_start: string }
-        Returns: string
-      }
       kitchen_decline_order: {
         Args: { p_note: string; p_order_id: string }
         Returns: undefined
       }
       kitchen_get_or_create_draft: {
-        Args: { p_cafe_id?: string }
+        Args: { p_cafe_id?: string; p_production_date?: string }
         Returns: string
       }
       kitchen_lock_order: { Args: { p_order_id: string }; Returns: undefined }
@@ -1578,6 +1604,38 @@ export type Database = {
       kitchen_role_of: {
         Args: { uid: string }
         Returns: Database["public"]["Enums"]["kitchen_role"]
+      }
+      kitchen_next_open_rounds: {
+        Args: { p_count?: number; p_now?: string }
+        Returns: {
+          capacity_minutes: number
+          cutoff_at: string
+          production_date: string
+          round_id: string
+          round_name: string
+        }[]
+      }
+      kitchen_round_occurrences: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          capacity_minutes: number
+          cutoff_at: string
+          production_date: string
+          round_id: string
+          round_name: string
+        }[]
+      }
+      kitchen_order_cutoff: { Args: { p_order_id: string }; Returns: string }
+      kitchen_round_cutoff: {
+        Args: { p_production_date: string; p_round_id: string }
+        Returns: string
+      }
+      kitchen_active_round_on_or_after: {
+        Args: { p_date: string }
+        Returns: {
+          production_date: string
+          round_id: string
+        }[]
       }
       kitchen_send_order: { Args: { p_order_id: string }; Returns: undefined }
       kitchen_set_item: {

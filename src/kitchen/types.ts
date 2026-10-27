@@ -22,7 +22,8 @@ export type KitchenOrder = {
   id: string;
   cafeId: string;
   cafeName: string;
-  weekStart: string;
+  productionDate: string;
+  roundId: string | null;
   kind: "weekly" | "urgent";
   status: "draft" | "sent" | "approved" | "ready" | "received" | "declined";
   urgentReason: string | null;
@@ -30,4 +31,22 @@ export type KitchenOrder = {
   readyEta: string | null;
   declineNote: string | null;
   items: KitchenOrderItem[];
+};
+
+export type KitchenRound = {
+  id: string;
+  name: string;
+  productionWeekday: number; // 0 = dimanche … 6 = samedi
+  cutoffWeekday: number;
+  cutoffTime: string; // "HH:MM"
+  capacityMinutes: number;
+  isActive: boolean;
+};
+
+export type RoundOccurrence = {
+  roundId: string;
+  roundName: string;
+  productionDate: string; // YYYY-MM-DD
+  cutoffAt: string; // ISO
+  capacityMinutes: number;
 };

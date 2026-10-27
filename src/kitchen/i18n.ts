@@ -174,6 +174,8 @@ const fr = {
     invalidStatus: "Cette commande a changé de statut. Actualisez la page.",
     invalidInput: "Données invalides.",
     notKitchenMember: "Vous n'avez pas accès à l'espace Cuisine.",
+    noRound: "Aucune tournée de production configurée.",
+    roundInUse: "Cette tournée a des commandes : désactivez-la plutôt que de la supprimer.",
     generic: "Une erreur est survenue. Réessayez.",
   },
 };
@@ -352,6 +354,8 @@ const en: KitchenStrings = {
     invalidStatus: "This order changed status. Please refresh.",
     invalidInput: "Invalid input.",
     notKitchenMember: "You do not have access to the Kitchen space.",
+    noRound: "No production round is configured.",
+    roundInUse: "This round has orders: deactivate it instead of deleting it.",
     generic: "Something went wrong. Please try again.",
   },
 };

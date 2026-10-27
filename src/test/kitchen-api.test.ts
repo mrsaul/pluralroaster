@@ -25,7 +25,7 @@ const fr = {
   generic: "Une erreur est survenue",
 };
 // Minimal strings object; kitchenErrorMessage only reads t.errors.*
-const t = { errors: { ...fr, orderLocked: "l", forbidden: "f", emptyOrder: "e", productHidden: "p", invalidStatus: "s", invalidInput: "i", notKitchenMember: "n" } } as unknown as Parameters<typeof kitchenErrorMessage>[1];
+const t = { errors: { ...fr, orderLocked: "l", forbidden: "f", emptyOrder: "e", productHidden: "p", invalidStatus: "s", invalidInput: "i", notKitchenMember: "n", noRound: "Aucune tournée de production configurée.", roundInUse: "Cette tournée a des commandes : désactivez-la plutôt que de la supprimer." } } as unknown as Parameters<typeof kitchenErrorMessage>[1];
 
 function wrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -37,6 +37,10 @@ describe("kitchenErrorMessage", () => {
     expect(kitchenErrorMessage({ message: "cutoff_passed" }, t)).toBe(fr.cutoffPassed);
     expect(kitchenErrorMessage({ message: "boom" }, t)).toBe(fr.generic);
     expect(kitchenErrorMessage(null, t)).toBe(fr.generic);
+    expect(kitchenErrorMessage({ message: "no_round" }, t)).toBe("Aucune tournée de production configurée.");
+    expect(kitchenErrorMessage({ message: "round_in_use" }, t)).toBe(
+      "Cette tournée a des commandes : désactivez-la plutôt que de la supprimer.",
+    );
   });
 });
 
@@ -74,7 +78,7 @@ describe("useApproveOrder", () => {
 describe("mapOrder", () => {
   it("maps a joined row to a KitchenOrder", () => {
     const o = mapOrder({
-      id: "o1", cafe_id: "c1", week_start: "2026-11-02", kind: "weekly", status: "sent",
+      id: "o1", cafe_id: "c1", production_date: "2026-11-03", round_id: "r1", kind: "weekly", status: "sent",
       urgent_reason: null, needed_by: null, ready_eta: null, decline_note: "Pas de stock",
       kitchen_cafes: { name: "Artivistas" },
       kitchen_order_items: [
@@ -83,6 +87,8 @@ describe("mapOrder", () => {
     } as unknown as Parameters<typeof mapOrder>[0]);
     expect(o.cafeName).toBe("Artivistas");
     expect(o.declineNote).toBe("Pas de stock");
+    expect(o.productionDate).toBe("2026-11-03");
+    expect(o.roundId).toBe("r1");
     expect(o.items[0]).toEqual({
       productId: "p1", productName: "Pandebono", unitLabel: "Batch", piecesPerUnit: 50,
       units: 2, adjustedUnits: 1, servedFromStockUnits: 0,
@@ -101,6 +107,14 @@ describe("useGetOrCreateDraft", () => {
     });
     expect(id).toBe("o9");
     expect(supabase.rpc).toHaveBeenCalledWith("kitchen_get_or_create_draft", { p_cafe_id: "c1" });
+  });
+  it("passes p_production_date when given", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: "o9", error: null } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
+    const { result } = renderHook(() => useGetOrCreateDraft(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ productionDate: "2026-11-06" });
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith("kitchen_get_or_create_draft", { p_production_date: "2026-11-06" });
   });
 });
 
