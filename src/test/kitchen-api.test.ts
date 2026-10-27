@@ -24,7 +24,7 @@ const fr = {
   generic: "Une erreur est survenue",
 };
 // Minimal strings object; kitchenErrorMessage only reads t.errors.*
-const t = { errors: { ...fr, orderLocked: "l", forbidden: "f", emptyOrder: "e", productHidden: "p", invalidStatus: "s", invalidInput: "i", notKitchenMember: "n" } } as any;
+const t = { errors: { ...fr, orderLocked: "l", forbidden: "f", emptyOrder: "e", productHidden: "p", invalidStatus: "s", invalidInput: "i", notKitchenMember: "n" } } as unknown as Parameters<typeof kitchenErrorMessage>[1];
 
 function wrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -42,11 +42,11 @@ describe("kitchenErrorMessage", () => {
 describe("notifyKitchen", () => {
   beforeEach(() => vi.clearAllMocks());
   it("resolves when invoke rejects", async () => {
-    (supabase.functions.invoke as any).mockRejectedValue(new Error("network"));
+    vi.mocked(supabase.functions.invoke).mockRejectedValue(new Error("network"));
     await expect(notifyKitchen("order_sent", "o1")).resolves.toBeUndefined();
   });
   it("resolves when invoke returns an error", async () => {
-    (supabase.functions.invoke as any).mockResolvedValue({ data: null, error: new Error("x") });
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: null, error: new Error("x") });
     await expect(notifyKitchen("order_sent", "o1")).resolves.toBeUndefined();
   });
 });
@@ -55,8 +55,8 @@ describe("useApproveOrder", () => {
   beforeEach(() => vi.clearAllMocks());
   it("notifies with the changes on success", async () => {
     const changes = [{ product_name: "Pandebono", from: 2, to: 1 }];
-    (supabase.rpc as any).mockResolvedValue({ data: { changes }, error: null });
-    (supabase.functions.invoke as any).mockResolvedValue({ data: {}, error: null });
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: { changes }, error: null } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: {}, error: null });
     const { result } = renderHook(() => useApproveOrder(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ orderId: "o1" });
@@ -79,7 +79,7 @@ describe("mapOrder", () => {
       kitchen_order_items: [
         { product_id: "p1", product_name: "Pandebono", unit_label: "Batch", pieces_per_unit: 50, units: 2, adjusted_units: 1, served_from_stock_units: 0 },
       ],
-    } as any);
+    } as unknown as Parameters<typeof mapOrder>[0]);
     expect(o.cafeName).toBe("Artivistas");
     expect(o.declineNote).toBe("Pas de stock");
     expect(o.items[0]).toEqual({
@@ -92,7 +92,7 @@ describe("mapOrder", () => {
 describe("useGetOrCreateDraft", () => {
   beforeEach(() => vi.clearAllMocks());
   it("calls the RPC with p_cafe_id and returns the order id", async () => {
-    (supabase.rpc as any).mockResolvedValue({ data: "o9", error: null });
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: "o9", error: null } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
     const { result } = renderHook(() => useGetOrCreateDraft(), { wrapper: wrapper() });
     let id: unknown;
     await act(async () => {

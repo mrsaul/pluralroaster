@@ -3,19 +3,20 @@ import { render as rtlRender, screen, fireEvent, act } from "@testing-library/re
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { products, item, order } from "./kitchen-fixtures";
+import type { KitchenOrder } from "@/kitchen/types";
 
 const mocks = vi.hoisted(() => ({
   week: { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" },
-  weekly: [] as any[],
-  urgent: [] as any[],
-  cafes: [] as any[],
+  weekly: [] as KitchenOrder[],
+  urgent: [] as KitchenOrder[],
+  cafes: [] as { id: string; name: string; isActive?: boolean }[],
   lock: vi.fn(),
   unlock: vi.fn(),
   create: vi.fn(),
   adjust: vi.fn(),
   approve: vi.fn(),
   decline: vi.fn(),
-  byWeek: {} as Record<string, any[]>,
+  byWeek: {} as Record<string, KitchenOrder[]>,
 }));
 
 vi.mock("@/kitchen/api", () => {
@@ -108,7 +109,7 @@ describe("StoresReview", () => {
     expect(screen.getByText(/: 2$/)).toBeInTheDocument();
   });
 
-  const openSent = (over: any = {}) => {
+  const openSent = (over: Partial<KitchenOrder> = {}) => {
     mocks.weekly = [order({ id: "ord1", cafeId: "c2", cafeName: "Belleville", status: "sent", items: [item("p1", 1)], ...over })];
     const r = render(<StoresReview />);
     fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
@@ -170,7 +171,7 @@ describe("StoresReview", () => {
   });
 
   it("offers the WhatsApp share after approving with changes", async () => {
-    mocks.approve.mockImplementation((_v: any, o: any) => o.onSuccess({ changes: [{ product_name: "Pandebono", from: 1, to: 2 }] }));
+    mocks.approve.mockImplementation((_v: unknown, o: { onSuccess: (r: unknown) => void }) => o.onSuccess({ changes: [{ product_name: "Pandebono", from: 1, to: 2 }] }));
     openSent();
     await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: "Approuver" }));

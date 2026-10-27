@@ -9,7 +9,7 @@ Branch `feat/kitchen-orders-design`, run 2026-10-26 against the local Supabase s
 | `npm test` | pass | 14 files, 90 tests |
 | `supabase test db` | pass | 5 files, 133 tests (access, catalog, orders, review, reminders) |
 | `npx tsc --noEmit -p tsconfig.app.json` | pass (no new errors) | 131 errors, same as the main baseline (stale generated types) |
-| `npm run lint` on files added/changed by the branch | pass with notes | 25 errors in total. 7 in `src/pages/Index.tsx` are pre-existing (same 7 `no-explicit-any` on main). 18 are `no-explicit-any` in mocks of the new test files (`kitchen-api`, `kitchen-cafe`, `kitchen-kitchen`, `kitchen-stores`). No lint errors in product code under `src/kitchen/`. 5 warnings (react-refresh, exhaustive-deps) |
+| `npm run lint` on files added/changed by the branch | pass | 0 errors in the Kitchen files and the touched components (`src/kitchen`, `src/test/kitchen-*`, `landing.ts`, `SpaceSwitch.tsx`, `kitchenAccessForm.ts`, `UserManagementView.tsx`). The `no-explicit-any` errors in the new test mocks were fixed with typed mocks. The 7 `no-explicit-any` errors in `src/pages/Index.tsx` are pre-existing (same on main). 5 `react-refresh` / `exhaustive-deps` warnings |
 | Bundle check (`npm run build`) | pass | Kitchen UI is in its own `KitchenApp-*.js` chunk (60.8 kB), lazy-loaded from `Index`. The only Kitchen reference in the main/Index chunks is the `get_my_kitchen_access` RPC call; no `kitchen_orders` or other table strings outside the Kitchen chunk |
 
 ## Manual UAT

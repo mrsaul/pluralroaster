@@ -3,9 +3,10 @@ import { render as rtlRender, screen, fireEvent, within } from "@testing-library
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { products, item, order } from "./kitchen-fixtures";
+import type { KitchenOrder } from "@/kitchen/types";
 
 const mocks = vi.hoisted(() => ({
-  orders: [] as any[],
+  orders: [] as KitchenOrder[],
   updateProduct: vi.fn(),
   createProduct: vi.fn(),
   updateSettings: vi.fn(),
@@ -37,7 +38,7 @@ const render = (ui: ReactElement) =>
   rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 beforeEach(() => {
-  Object.values(mocks).forEach((m) => typeof m === "function" && (m as any).mockReset());
+  Object.values(mocks).forEach((m) => typeof m === "function" && (m as ReturnType<typeof vi.fn>).mockReset());
   mocks.orders = [
     order({ cafeId: "c1", cafeName: "Artivistas", items: [item("p1", 1)] }),
     order({ cafeId: "c2", cafeName: "Nouveau café", items: [item("p1", 2)] }),

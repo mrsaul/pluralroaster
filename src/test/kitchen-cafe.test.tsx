@@ -3,11 +3,12 @@ import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { products, item, order } from "./kitchen-fixtures";
+import type { KitchenOrder, KitchenProduct } from "@/kitchen/types";
 
 const mocks = vi.hoisted(() => ({
-  products: [] as any[],
+  products: [] as KitchenProduct[],
   week: { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" },
-  orders: [] as any[],
+  orders: [] as KitchenOrder[],
   createUrgent: vi.fn(),
   setItem: vi.fn(),
   draft: vi.fn(),
