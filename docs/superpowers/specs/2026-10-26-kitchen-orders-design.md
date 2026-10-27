@@ -198,3 +198,42 @@ No WhatsApp Business. Two channels:
 - Screen layouts within the existing UI patterns.
 - How the Coffee/Kitchen switch is placed in navigation.
 - Test strategy, matching the repo's existing Vitest/Playwright setup.
+
+---
+
+## Amendment A — Production rounds (2026-10-27, owner request)
+
+Replaces the "one weekly cutoff" model in §6–§9. Everything else in this design stays.
+
+### Why
+Plural Kitchen produces on **two days a week with two different teams**: **mardi** and **vendredi**. Cafés can order for each production day until the evening before: **lundi 20:00** for mardi, **jeudi 20:00** for vendredi.
+
+### Rounds (kitchen manager, Réglages)
+- A **round** = a production weekday + a cutoff weekday and time + the **hours available for that team** that day.
+  Starting rounds: **Mardi** (cutoff lundi 20:00, 6 h) and **Vendredi** (cutoff jeudi 20:00, 6 h). The hours are placeholders the kitchen edits. [Claude's call on 6 h]
+- The kitchen manager can add, edit, deactivate or delete rounds. A round's cutoff must be before its production day (same week or the day before). [Claude's call]
+- The single weekly cutoff and weekly-hours settings are replaced by rounds. The reminder lead time (default 2 h) stays a global setting.
+
+### Orders per round
+- Each café has **one order per production date** (for example, ARTIVISTAS → mardi 3 nov., and a separate order for vendredi 6 nov.). It replaces "one order per café per week".
+- The café screen shows the **next open round** (the earliest production date whose cutoff is still ahead), with its countdown. A small switch lets the café also prepare the following round in advance. [Claude's call]
+- Draft cart, send, edit-until-cutoff, stores-manager adjust and approve, lock, and the "50 → 40" display all work exactly as before, per round.
+- After a round's cutoff, the café can only add through an **urgent order**. The stores manager can still edit, approve or create orders for that round (same rule as before, per round).
+- **Urgent orders** are attached to the round whose production date is the needed-by date. If no round matches that day, they're attached to the next round after the needed-by date. They show in that round's production. [Claude's call, confirming the guess in chat]
+
+### Production and capacity
+- The kitchen's **Production** and **Commandes** screens show **one round at a time** ("Production du mardi 3 nov."), with previous/next round navigation, defaulting to the **next round not yet produced**. That's the earliest production date that is today or later. [Claude's call]
+- **Capacity is per round**: production hours needed for that round vs. that round's team hours, "over by X" when it doesn't fit.
+- The stores manager's review screen works per round too: it defaults to the round being decided (cutoff passed, production not yet done), otherwise the next open round.
+
+### Reminders and notifications
+- The cutoff reminder runs before **every** round's cutoff, once per café per round, for cafés that haven't sent that round's order.
+- Notifications say which round they concern ("commande du mardi 3 nov.").
+
+### Data change (live database)
+- New table for rounds. Orders get a **production date** instead of a week start. The once-per-week rule becomes once per café per production date.
+- Applied as a **new migration** on top of the 5 already live (no rewriting of those).
+- Existing data: the live database only holds test orders. The one ARTIVISTAS test order (week of 2 nov.) is moved to the **mardi 3 nov.** round. [Claude's call]
+
+### Not changing
+Catalog, stock, access/roles, French UI, WhatsApp share texts (apart from naming the round), urgent-order approval by the stores manager.
