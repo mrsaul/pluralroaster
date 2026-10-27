@@ -40,6 +40,7 @@ const KITCHEN_ROLE_LABELS: Record<KitchenRole, string> = {
 const KITCHEN_ERRORS: Record<string, string> = {
   coffee_manager_needs_cafe: "Choose a café for a Coffee manager.",
   needs_some_access: "Pick a coffee role or Kitchen access.",
+  kitchen_not_for_role: "Roaster and packaging accounts can't have Kitchen access.",
 };
 
 interface Cafe {

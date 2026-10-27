@@ -4,6 +4,7 @@ import {
   canSwitchSpaces,
   loadLastSpace,
   saveLastSpace,
+  showsSpaceSwitch,
   type KitchenAccess,
 } from "@/lib/landing";
 
@@ -64,5 +65,19 @@ describe("last space persistence", () => {
   it("ignores garbage values", () => {
     localStorage.setItem("pr_space", "bogus");
     expect(loadLastSpace()).toBeNull();
+  });
+});
+
+describe("showsSpaceSwitch", () => {
+  it("shows the pill on onboarding so a coffee+kitchen user can reach the Kitchen", () => {
+    expect(showsSpaceSwitch("onboarding", "user")).toBe(true);
+  });
+  it("shows it on the client views and the kitchen view", () => {
+    for (const v of ["home", "shop", "orders", "account", "checkout", "kitchen"]) expect(showsSpaceSwitch(v, "user")).toBe(true);
+  });
+  it("shows it on admin only for admins, never on reset-password or staff dashboards", () => {
+    expect(showsSpaceSwitch("admin", "admin")).toBe(true);
+    expect(showsSpaceSwitch("admin", "user")).toBe(false);
+    for (const v of ["reset-password", "roaster_dashboard", "packaging_dashboard"]) expect(showsSpaceSwitch(v, "admin")).toBe(false);
   });
 });

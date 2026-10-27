@@ -35,6 +35,15 @@ export function canSwitchSpaces(coffeeRole: AppRole | null, kitchen: KitchenAcce
   return coffeeRole === "user" || coffeeRole === "admin";
 }
 
+// Views on which a user allowed to switch spaces sees the Coffee/Kitchen pill. Onboarding is
+// included so a client with Kitchen access is not stuck there before finishing coffee onboarding.
+const SPACE_SWITCH_VIEWS = ["home", "shop", "orders", "account", "checkout", "kitchen", "onboarding"];
+
+/** Whether the pill is shown on this view (who may switch is decided by canSwitchSpaces). */
+export function showsSpaceSwitch(view: string, coffeeRole: AppRole | null): boolean {
+  return SPACE_SWITCH_VIEWS.includes(view) || (view === "admin" && coffeeRole === "admin");
+}
+
 /**
  * - No coffee role and no Kitchen access → login.
  * - Kitchen-only → kitchen.

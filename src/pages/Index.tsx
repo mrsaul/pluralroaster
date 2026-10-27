@@ -3,7 +3,7 @@ import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { useT } from "@/i18n";
 import {
-  resolveLanding, canSwitchSpaces, loadLastSpace, saveLastSpace, toKitchenAccess,
+  resolveLanding, canSwitchSpaces, loadLastSpace, saveLastSpace, toKitchenAccess, showsSpaceSwitch,
   type AppRole, type KitchenAccess, type Space,
 } from "@/lib/landing";
 import { renderSpaceSwitchIfAllowed } from "@/components/SpaceSwitch";
@@ -51,10 +51,6 @@ function ReorderDialog({ order, onConfirm, onCancel }: { order: Order | null; on
 }
 
 type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding" | "reset-password" | "kitchen";
-
-// Views on which a user allowed to switch spaces sees the Coffee/Kitchen pill.
-// ("admin" is added for admins in the render below.)
-const SPACE_SWITCH_VIEWS: View[] = ["home", "shop", "orders", "account", "checkout", "kitchen"];
 
 // ── View + draft persistence (localStorage) ───────────────────────────────────
 // localStorage survives Android tab discards; sessionStorage does not.
@@ -597,7 +593,7 @@ const Index = () => {
   }
 
   // Coffee/Kitchen pill — null (renders nothing) for anyone not allowed to switch.
-  const showSwitch = SPACE_SWITCH_VIEWS.includes(view) || (view === "admin" && role === "admin");
+  const showSwitch = showsSpaceSwitch(view, role);
   const spaceSwitch = showSwitch
     ? renderSpaceSwitchIfAllowed(role, kitchenAccess, view === "kitchen" ? "kitchen" : "coffee", (s: Space) => {
         if (s === "kitchen") switchToKitchen(); else switchToCoffee();
@@ -636,7 +632,7 @@ const Index = () => {
         </Suspense>
       );
     case "onboarding":
-      return (
+      return withSpaceSwitch(
         <Suspense fallback={fallback}>
           <OnboardingPage
             existingData={onboardingData as any}

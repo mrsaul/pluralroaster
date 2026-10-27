@@ -20,4 +20,18 @@ describe("validateKitchenAccess", () => {
   it("accepts coffee user plus stores_manager", () => {
     expect(validateKitchenAccess({ coffeeRole: "user", kitchenRole: "stores_manager", cafeId: null })).toEqual({ ok: true });
   });
+  it("refuses Kitchen access for roaster and packaging coffee roles", () => {
+    for (const coffeeRole of ["roaster", "packaging"]) {
+      expect(validateKitchenAccess({ coffeeRole, kitchenRole: "stores_manager", cafeId: null })).toEqual({
+        ok: false,
+        error: "kitchen_not_for_role",
+      });
+    }
+  });
+  it("still lets roaster and packaging users exist without Kitchen access", () => {
+    expect(validateKitchenAccess({ coffeeRole: "roaster", kitchenRole: null, cafeId: null })).toEqual({ ok: true });
+  });
+  it("accepts admin plus kitchen access", () => {
+    expect(validateKitchenAccess({ coffeeRole: "admin", kitchenRole: "kitchen_manager", cafeId: null })).toEqual({ ok: true });
+  });
 });

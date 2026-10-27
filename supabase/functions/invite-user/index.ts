@@ -15,6 +15,7 @@ function validateKitchen(
 ): string | null {
   if (kitchen && !KITCHEN_ROLES.includes(kitchen.role ?? "")) return "invalid_kitchen_role";
   if (coffeeRole === "none" && !kitchen) return "needs_some_access";
+  if (kitchen && ["roaster", "packaging"].includes(coffeeRole)) return "kitchen_not_for_role";
   if (kitchen?.role === "coffee_manager" && !kitchen.cafeId) return "coffee_manager_needs_cafe";
   return null;
 }
@@ -209,8 +210,9 @@ Deno.serve(async (req) => {
       if (kitchen === null || kitchen === undefined) {
         await adminClient.from("kitchen_members").delete().eq("user_id", userId);
       } else {
-        // Coffee role is not changed here, so only the kitchen rules are checked.
-        const kitchenError = validateKitchen("user", kitchen);
+        // Coffee role is not changed here; check the kitchen rules against the current one.
+        const { data: roleRow } = await adminClient.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+        const kitchenError = validateKitchen(roleRow?.role ?? "none", kitchen);
         if (kitchenError) {
           return new Response(JSON.stringify({ error: kitchenError }), {
             status: 400,
