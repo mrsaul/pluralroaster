@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useLang } from "@/i18n";
 import {
-  kitchenErrorMessage, useCurrentWeek, useKitchenOrders, useKitchenProducts, useMarkReady, useSetReadyEta,
+  kitchenErrorMessage, useProductionWeek, useKitchenOrders, useKitchenProducts, useMarkReady, useSetReadyEta,
 } from "../api";
 import { useKitchenT } from "../i18n";
 import { parisLocalToIso, unitsToPieces } from "../lib/format";
@@ -92,10 +92,11 @@ function OrderCard({ order, onMarkReady }: { order: KitchenOrder; onMarkReady: (
 export default function KitchenOrdersList() {
   const t = useKitchenT();
   const k = t.kitchen;
-  const { data: current } = useCurrentWeek();
+  // Kitchen works on the production week (the one whose cutoff passed most recently).
+  const { data: production } = useProductionWeek();
   const { data: products = [] } = useKitchenProducts();
   const [picked, setPicked] = useState<string | null>(null);
-  const weekStart = picked ?? current?.weekStart;
+  const weekStart = picked ?? production?.weekStart;
   const { data: orders = [] } = useKitchenOrders({ weekStart });
   const markReady = useMarkReady();
   const [pending, setPending] = useState<KitchenOrder | null>(null);
@@ -107,13 +108,13 @@ export default function KitchenOrdersList() {
     return [...urgent, ...weekly];
   }, [orders]);
 
-  if (!current || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{k.loading}</p>;
+  if (!production || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{k.loading}</p>;
 
   const stockOf = (id: string) => products.find((p) => p.id === id)?.stockUnits ?? 0;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <WeekPicker weekStart={weekStart} currentWeekStart={current.weekStart} onChange={setPicked} />
+      <WeekPicker weekStart={weekStart} currentWeekStart={production.weekStart} onChange={setPicked} />
       {list.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{k.noOrders}</p>}
       <ul className="flex flex-col gap-2">
         {list.map((o) => <OrderCard key={o.id} order={o} onMarkReady={setPending} />)}

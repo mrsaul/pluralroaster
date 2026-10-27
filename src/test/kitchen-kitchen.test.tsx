@@ -12,22 +12,29 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   markReady: vi.fn(),
   setEta: vi.fn(),
+  weeks: [] as (string | undefined)[],
 }));
 
-vi.mock("@/kitchen/api", () => ({
+// Server-realistic: ordering week 9 Nov (cutoff ahead), so the production week is 2 Nov.
+vi.mock("@/kitchen/api", async () => {
+  const { productionWeekStart } = await import("@/kitchen/lib/weeks");
+  const current = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
+  return {
   useKitchenProducts: () => ({ data: products }),
-  useCurrentWeek: () => ({ data: { weekStart: "2026-11-02", cutoffAt: "2099-01-01T20:00:00Z" } }),
+  useCurrentWeek: () => ({ data: current }),
+  useProductionWeek: () => ({ data: { weekStart: productionWeekStart(current.weekStart) } }),
   useKitchenSettings: () => ({
     data: { cutoffWeekday: 0, cutoffTime: "20:00:00", reminderHoursBefore: 24, weeklyCapacityMinutes: 600 },
   }),
-  useKitchenOrders: () => ({ data: mocks.orders }),
+  useKitchenOrders: (f: { weekStart?: string }) => { mocks.weeks.push(f.weekStart); return { data: mocks.orders }; },
   useUpdateProduct: () => ({ mutate: mocks.updateProduct, isPending: false }),
   useCreateProduct: () => ({ mutate: mocks.createProduct, isPending: false }),
   useUpdateSettings: () => ({ mutate: mocks.updateSettings, isPending: false }),
   useMarkReady: () => ({ mutate: mocks.markReady, isPending: false }),
   useSetReadyEta: () => ({ mutate: mocks.setEta, isPending: false }),
   kitchenErrorMessage: () => "err",
-}));
+  };
+});
 
 import ProductionView from "@/kitchen/kitchen/ProductionView";
 import KitchenOrdersList from "@/kitchen/kitchen/KitchenOrdersList";
@@ -39,10 +46,26 @@ const render = (ui: ReactElement) =>
 
 beforeEach(() => {
   Object.values(mocks).forEach((m) => typeof m === "function" && (m as ReturnType<typeof vi.fn>).mockReset());
+  mocks.weeks = [];
   mocks.orders = [
     order({ cafeId: "c1", cafeName: "Artivistas", items: [item("p1", 1)] }),
     order({ cafeId: "c2", cafeName: "Nouveau café", items: [item("p1", 2)] }),
   ];
+});
+
+describe("kitchen default week", () => {
+  for (const [name, View] of [["ProductionView", ProductionView], ["KitchenOrdersList", KitchenOrdersList]] as const) {
+    it(`${name} defaults to the production week and 'this week' returns to it`, () => {
+      render(<View />);
+      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+      expect(mocks.weeks.at(-1)).toBe("2026-11-02");
+      fireEvent.click(screen.getByRole("button", { name: "Semaine suivante" }));
+      expect(screen.getByText("Semaine du 09/11")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Cette semaine" }));
+      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+      expect(mocks.weeks.at(-1)).toBe("2026-11-02");
+    });
+  }
 });
 
 describe("ProductionView", () => {

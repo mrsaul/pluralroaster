@@ -62,12 +62,29 @@ describe("CafeHome", () => {
     expect(screen.getAllByText(/0 en stock, sera produit/).length).toBe(2);
   });
 
-  it("is read-only after the cutoff and offers the urgent order", () => {
-    mocks.week = { weekStart: "2026-11-02", cutoffAt: "2020-01-01T20:00:00Z" };
+  // The server's current week is the ordering week, so its cutoff is always in the future.
+  it("always offers the urgent order, even with a sent order and a future cutoff", () => {
     mocks.orders = [order({ cafeId: "c1", status: "sent", items: [item("p1", 2)] })];
     render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
-    for (const b of screen.getAllByLabelText("Increase quantity")) expect(b).toBeDisabled();
     expect(screen.getByRole("button", { name: "Commande urgente" })).toBeInTheDocument();
+    for (const b of screen.getAllByLabelText("Increase quantity")) expect(b).toBeEnabled();
+  });
+
+  it("opens the urgent sheet from the always-visible button", () => {
+    render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
+    fireEvent.click(screen.getByRole("button", { name: "Commande urgente" }));
+    expect(screen.getByRole("button", { name: "Envoyer la demande" })).toBeInTheDocument();
+  });
+
+  it("shows an existing line of a hidden product so it can be removed, and counts it", () => {
+    const hiddenLine = { ...item("p1", 1), productId: "p4", productName: "Secret scone", piecesPerUnit: 10, units: 3 };
+    mocks.orders = [order({ id: "oh", cafeId: "c1", status: "draft", items: [item("p1", 2), hiddenLine] })];
+    render(<CafeHome cafeId="c1" cafeName="Artivistas" />);
+    expect(screen.getByText("Secret scone")).toBeInTheDocument();
+    expect(screen.getByText("Plus disponible")).toBeInTheDocument();
+    expect(screen.getByText("5 unités")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retirer Secret scone" }));
+    expect(screen.getByText("2 unités")).toBeInTheDocument();
   });
 });
 

@@ -9,7 +9,9 @@ import {
 } from "../api";
 import { useKitchenT } from "../i18n";
 import { computeCapacity, computeProduction } from "../lib/production";
+import { isAfterCutoff, productionWeekStart, storesDefaultWeek } from "../lib/weeks";
 import { formatWhen, useNow } from "../cafe/useNow";
+import UrgentOrderSheet from "../cafe/UrgentOrderSheet";
 import type { KitchenOrder } from "../types";
 import WeekPicker from "../components/WeekPicker";
 import CapacityBar from "./CapacityBar";
@@ -59,15 +61,29 @@ export default function StoresReview() {
   const { data: cafes = [] } = useKitchenCafes();
   const [picked, setPicked] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const weekStart = picked ?? current?.weekStart;
-  const { data: weekly = [] } = useKitchenOrders({ weekStart, kind: "weekly" });
+  const [urgentOpen, setUrgentOpen] = useState(false);
+  const productionWeek = current ? productionWeekStart(current.weekStart) : undefined;
+  const { data: productionWeekly = [] } = useKitchenOrders({ weekStart: productionWeek, kind: "weekly" });
   const { data: urgentAll = [] } = useKitchenOrders({ kind: "urgent" });
-  const create = useCreateOrderForCafe();
-
-  // Cutoff: the current week uses the server cutoff; past weeks are after it, future weeks before.
-  const afterCutoff = !!current && !!weekStart && (
-    weekStart === current.weekStart ? now >= new Date(current.cutoffAt) : weekStart < current.weekStart
+  // Default: the production week until it starts or while it has orders to review, else the ordering week.
+  const productionHasSent = !!productionWeek && (
+    productionWeekly.some((o) => o.status === "sent") ||
+    urgentAll.some((o) => o.weekStart === productionWeek && o.status === "sent")
   );
+  const defaultWeek = current ? storesDefaultWeek(current.weekStart, now, productionHasSent) : undefined;
+  const weekStart = picked ?? defaultWeek;
+  const { data: weekly = [] } = useKitchenOrders({ weekStart, kind: "weekly" });
+  const create = useCreateOrderForCafe();
+  const activeCafes = useMemo(() => cafes.filter((c) => c.isActive), [cafes]);
+
+  const afterCutoff = !!current && !!weekStart && isAfterCutoff(weekStart, current, now);
+
+  // Opening an order pins the viewed week, so approving the last sent order does not
+  // switch the default week (and close the sheet) underneath the stores manager.
+  const openOrderSheet = (id: string) => {
+    setPicked((p) => p ?? weekStart ?? null);
+    setOpenId(id);
+  };
 
   const urgentWaiting = useMemo(
     () => urgentAll.filter((o) => o.status === "sent").sort((a, b) => (a.neededBy ?? "").localeCompare(b.neededBy ?? "")),
@@ -92,26 +108,27 @@ export default function StoresReview() {
   const available = settings?.weeklyCapacityMinutes ?? 0;
   const capacity = useMemo(() => computeCapacity(computeProduction(counted, products), products, available), [counted, products, available]);
 
-  if (!current || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{s.loading}</p>;
+  if (!current || !weekStart || !defaultWeek) return <p className="p-4 text-sm text-muted-foreground">{s.loading}</p>;
 
   const openOrder = [...weekly, ...urgentAll].find((o) => o.id === openId) ?? null;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <WeekPicker weekStart={weekStart} currentWeekStart={current.weekStart} onChange={setPicked} />
+      <WeekPicker weekStart={weekStart} currentWeekStart={defaultWeek} onChange={setPicked} />
       <CapacityBar neededMinutes={capacity.neededMinutes} availableMinutes={available} />
+      <Button variant="outline" className="mt-4 h-12 w-full" onClick={() => setUrgentOpen(true)}>{s.newUrgent}</Button>
 
       <Section title={s.sectionUrgent}>
         {urgentWaiting.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
-        {urgentWaiting.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={setOpenId} />)}
+        {urgentWaiting.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={openOrderSheet} />)}
       </Section>
       <Section title={s.sectionReview}>
         {toReview.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
-        {toReview.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={setOpenId} flag={afterCutoff ? s.flagNotApproved : undefined} />)}
+        {toReview.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={openOrderSheet} flag={afterCutoff ? s.flagNotApproved : undefined} />)}
       </Section>
       <Section title={s.sectionApproved}>
         {approved.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
-        {approved.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={setOpenId} />)}
+        {approved.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={openOrderSheet} />)}
       </Section>
       <Section title={s.sectionNotSent}>
         {notSent.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
@@ -129,9 +146,9 @@ export default function StoresReview() {
                 className="h-11"
                 disabled={create.isPending}
                 onClick={() => {
-                  if (draft) { setOpenId(draft.id); return; }
+                  if (draft) { openOrderSheet(draft.id); return; }
                   create.mutate({ cafeId: c.id, weekStart }, {
-                    onSuccess: (id) => setOpenId(id as string),
+                    onSuccess: (id) => openOrderSheet(id as string),
                     onError: (err) => toast.error(kitchenErrorMessage(err, t)),
                   });
                 }}
@@ -152,6 +169,7 @@ export default function StoresReview() {
           onClose={() => setOpenId(null)}
         />
       )}
+      <UrgentOrderSheet open={urgentOpen} onOpenChange={setUrgentOpen} cafes={activeCafes} products={products} />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/i18n";
-import { useCurrentWeek, useKitchenOrders, useKitchenProducts, useKitchenSettings } from "../api";
+import { useProductionWeek, useKitchenOrders, useKitchenProducts, useKitchenSettings } from "../api";
 import { useKitchenT } from "../i18n";
 import { unitsToPieces } from "../lib/format";
 import { computeCapacity, computeProduction } from "../lib/production";
@@ -15,11 +15,12 @@ export default function ProductionView() {
   const k = useKitchenT().kitchen;
   const { lang } = useLang();
   const share = useShareText();
-  const { data: current } = useCurrentWeek();
+  // Kitchen works on the production week (the one whose cutoff passed most recently).
+  const { data: production } = useProductionWeek();
   const { data: settings } = useKitchenSettings();
   const { data: products = [] } = useKitchenProducts();
   const [picked, setPicked] = useState<string | null>(null);
-  const weekStart = picked ?? current?.weekStart;
+  const weekStart = picked ?? production?.weekStart;
   const { data: orders = [] } = useKitchenOrders({ weekStart });
   const available = settings?.weeklyCapacityMinutes ?? 0;
 
@@ -27,11 +28,11 @@ export default function ProductionView() {
   const capacity = useMemo(() => computeCapacity(rows, products, available), [rows, products, available]);
   const piecesPer = useMemo(() => new Map(products.map((p) => [p.id, p.piecesPerUnit])), [products]);
 
-  if (!current || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{k.loading}</p>;
+  if (!production || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{k.loading}</p>;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <WeekPicker weekStart={weekStart} currentWeekStart={current.weekStart} onChange={setPicked} />
+      <WeekPicker weekStart={weekStart} currentWeekStart={production.weekStart} onChange={setPicked} />
       <CapacityBar neededMinutes={capacity.neededMinutes} availableMinutes={available} />
       {rows.length === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">{k.noApproved}</p>

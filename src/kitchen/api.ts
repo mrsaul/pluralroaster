@@ -1,9 +1,11 @@
 // Kitchen data layer: TanStack Query hooks over the kitchen_* tables and RPCs,
 // plus the best-effort notification helper.
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import type { KitchenStrings } from "./i18n";
+import { productionWeekStart } from "./lib/weeks";
 import type { KitchenOrder, KitchenOrderItem, KitchenProduct } from "./types";
 
 export type KitchenEvent =
@@ -169,6 +171,16 @@ export function useCurrentWeek() {
   });
 }
 
+/** The production week: the one before the ordering week (its cutoff passed most recently). */
+export function useProductionWeek() {
+  const q = useCurrentWeek();
+  const data = useMemo(
+    () => (q.data ? { weekStart: productionWeekStart(q.data.weekStart) } : undefined),
+    [q.data],
+  );
+  return { data, isLoading: q.isLoading, error: q.error };
+}
+
 export type KitchenOrderFilter = {
   weekStart?: string;
   cafeId?: string;
@@ -232,9 +244,11 @@ function useRpcMutation<V, R = unknown>(opts: {
 
 type OrderArg = { orderId: string };
 
+// A café edit of an approved order sends it back for review (flipped = true): tell the stores manager.
 export const useSetItem = () =>
-  useRpcMutation<{ orderId: string; productId: string; units: number }>({
+  useRpcMutation<{ orderId: string; productId: string; units: number }, boolean>({
     call: (v) => supabase.rpc("kitchen_set_item", { p_order_id: v.orderId, p_product_id: v.productId, p_units: v.units }),
+    notify: (v, flipped) => (flipped ? { event: "order_sent", orderId: v.orderId } : null),
   });
 
 export const useGetOrCreateDraft = () =>

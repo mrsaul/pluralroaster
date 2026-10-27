@@ -37,6 +37,11 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
 
   const order = orders[0];
   const visible = useMemo(() => products.filter((p) => p.isVisible), [products]);
+  // Lines of products hidden since they were ordered: shown so the café can remove them.
+  const hiddenLines = useMemo(() => {
+    const ids = new Set(visible.map((p) => p.id));
+    return (order?.items ?? []).filter((i) => !ids.has(i.productId) && i.units > 0);
+  }, [order, visible]);
   const cutoff = week ? new Date(week.cutoffAt) : null;
   const beforeCutoff = !!cutoff && now < cutoff;
   const editableStatus = !order || order.status === "draft" || order.status === "sent" || order.status === "approved";
@@ -60,13 +65,13 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
     if (!order) return;
     setQty((prev) => {
       const next = { ...prev };
-      for (const p of visible) {
-        if (timers.current[p.id]) continue;
-        next[p.id] = order.items.find((i) => i.productId === p.id)?.units ?? 0;
+      for (const id of [...visible.map((p) => p.id), ...hiddenLines.map((i) => i.productId)]) {
+        if (timers.current[id]) continue;
+        next[id] = order.items.find((i) => i.productId === id)?.units ?? 0;
       }
       return next;
     });
-  }, [order, visible]);
+  }, [order, visible, hiddenLines]);
 
   // On unmount, flush every pending edit instead of dropping it.
   useEffect(() => () => {
@@ -119,7 +124,10 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
     apply(id, v);
   };
 
-  const total = visible.reduce((s, p) => s + (qty[p.id] ?? 0), 0);
+  const shownHidden = hiddenLines.filter((i) => (qty[i.productId] ?? i.units) > 0);
+  const total =
+    visible.reduce((s, p) => s + (qty[p.id] ?? 0), 0) +
+    shownHidden.reduce((s, i) => s + (qty[i.productId] ?? i.units), 0);
 
   const handleSend = () => {
     if (!order) return;
@@ -138,13 +146,14 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
     <div className="mx-auto max-w-xl px-4 pb-32 pt-4">
       {cafeName && <p className="mb-3 text-sm text-muted-foreground">{cafeName}</p>}
 
+      <Button variant="outline" className="mb-4 h-12 w-full" onClick={() => setUrgentOpen(true)}>{c.urgentButton}</Button>
+
       {!beforeCutoff && (
-        <div role="status" className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+        <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
           <p className="flex items-start gap-2 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {missed ? c.missedBanner : c.closedBanner}
           </p>
-          <Button className="h-12" onClick={() => setUrgentOpen(true)}>{c.urgentButton}</Button>
         </div>
       )}
 
@@ -175,6 +184,31 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
                 = {unitsToPieces(qty[p.id], p.piecesPerUnit)} {c.pcs}
               </p>
             )}
+          </li>
+        ))}
+        {shownHidden.map((i) => (
+          <li key={i.productId} className="rounded-xl border border-dashed border-border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">{i.productName}</p>
+                <p className="text-sm text-muted-foreground">
+                  {i.unitLabel} · {i.piecesPerUnit} {c.pcs}
+                </p>
+                <p className="text-xs font-medium text-amber-700">{c.noLongerAvailable}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="tabular-nums">{qty[i.productId] ?? i.units}</span>
+                <Button
+                  variant="outline"
+                  className="h-11"
+                  disabled={!canEdit}
+                  aria-label={`${c.remove} ${i.productName}`}
+                  onClick={() => change(i.productId, 0)}
+                >
+                  {c.remove}
+                </Button>
+              </div>
+            </div>
           </li>
         ))}
       </ul>

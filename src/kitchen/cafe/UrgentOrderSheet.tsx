@@ -9,15 +9,24 @@ import { useKitchenT } from "../i18n";
 import { defaultParisNeededBy, parisLocalToIso } from "../lib/format";
 import type { KitchenProduct } from "../types";
 
-type Props = { open: boolean; onOpenChange: (o: boolean) => void; cafeId: string; products: KitchenProduct[] };
+// A coffee manager passes their own cafeId; the stores manager passes `cafes` and picks one.
+type Props = {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  products: KitchenProduct[];
+  cafeId?: string;
+  cafes?: { id: string; name: string }[];
+};
 
-export default function UrgentOrderSheet({ open, onOpenChange, cafeId, products }: Props) {
+export default function UrgentOrderSheet({ open, onOpenChange, cafeId: fixedCafeId, cafes, products }: Props) {
   const t = useKitchenT();
   const c = t.cafeApp;
   const create = useCreateUrgentOrder();
   const [qty, setQty] = useState<Record<string, number>>({});
   const [reason, setReason] = useState("");
   const [neededBy, setNeededBy] = useState(defaultParisNeededBy);
+  const [pickedCafe, setPickedCafe] = useState("");
+  const cafeId = fixedCafeId ?? pickedCafe;
 
   const items = products
     .filter((p) => p.isVisible && (qty[p.id] ?? 0) > 0)
@@ -25,7 +34,7 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId, products 
   const neededIso = neededBy ? parisLocalToIso(neededBy) : "";
   const neededDate = neededIso ? new Date(neededIso) : null;
   const valid =
-    items.length > 0 && reason.trim().length > 0 && !!neededDate && !isNaN(neededDate.getTime()) && neededDate.getTime() > Date.now();
+    !!cafeId && items.length > 0 && reason.trim().length > 0 && !!neededDate && !isNaN(neededDate.getTime()) && neededDate.getTime() > Date.now();
 
   const submit = () => {
     if (!valid || !neededDate) return;
@@ -34,7 +43,7 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId, products 
       {
         onSuccess: () => {
           toast.success(c.urgentSent);
-          setQty({}); setReason(""); setNeededBy(defaultParisNeededBy());
+          setQty({}); setReason(""); setNeededBy(defaultParisNeededBy()); setPickedCafe("");
           onOpenChange(false);
         },
         onError: (err) => toast.error(kitchenErrorMessage(err, t)),
@@ -49,6 +58,20 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId, products 
           <SheetTitle>{c.urgentTitle}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 flex flex-col gap-4">
+          {!fixedCafeId && cafes && (
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              {c.urgentCafe}
+              <select
+                aria-label={c.urgentCafe}
+                value={pickedCafe}
+                onChange={(e) => setPickedCafe(e.target.value)}
+                className="h-12 rounded-md border border-input bg-background px-3 text-base"
+              >
+                <option value="">{c.urgentPickCafe}</option>
+                {cafes.map((cafe) => <option key={cafe.id} value={cafe.id}>{cafe.name}</option>)}
+              </select>
+            </label>
+          )}
           <ul className="flex flex-col gap-2">
             {products.filter((p) => p.isVisible).map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3">

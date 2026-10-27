@@ -8,6 +8,7 @@ import {
   notifyKitchen,
   useApproveOrder,
   useGetOrCreateDraft,
+  useSetItem,
   mapOrder,
 } from "@/kitchen/api";
 
@@ -100,5 +101,30 @@ describe("useGetOrCreateDraft", () => {
     });
     expect(id).toBe("o9");
     expect(supabase.rpc).toHaveBeenCalledWith("kitchen_get_or_create_draft", { p_cafe_id: "c1" });
+  });
+});
+
+describe("useSetItem", () => {
+  beforeEach(() => vi.clearAllMocks());
+  const run = async (flipped: boolean) => {
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: flipped, error: null } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: {}, error: null });
+    const { result } = renderHook(() => useSetItem(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ orderId: "o1", productId: "p1", units: 2 });
+    });
+  };
+  it("notifies order_sent when the edit flipped an approved order back to sent", async () => {
+    await run(true);
+    await waitFor(() =>
+      expect(supabase.functions.invoke).toHaveBeenCalledWith("notify-kitchen", {
+        body: { event: "order_sent", orderId: "o1", extra: undefined },
+      }),
+    );
+  });
+  it("does not notify on an ordinary edit", async () => {
+    await run(false);
+    await act(async () => {});
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
   });
 });
