@@ -58,12 +58,12 @@ describe("kitchen default week", () => {
     it(`${name} defaults to the production week and 'this week' returns to it`, () => {
       render(<View />);
       expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
-      expect(mocks.weeks.at(-1)).toBe("2026-11-02");
+      expect(mocks.weeks[mocks.weeks.length - 1]).toBe("2026-11-02");
       fireEvent.click(screen.getByRole("button", { name: "Semaine suivante" }));
       expect(screen.getByText("Semaine du 09/11")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Cette semaine" }));
       expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
-      expect(mocks.weeks.at(-1)).toBe("2026-11-02");
+      expect(mocks.weeks[mocks.weeks.length - 1]).toBe("2026-11-02");
     });
   }
 });

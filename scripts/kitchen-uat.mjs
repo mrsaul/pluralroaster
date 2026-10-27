@@ -43,7 +43,7 @@ async function login(key) {
 }
 const rpc = async (c, fn, args) => { const r = await c.rpc(fn, args); return r; };
 const errOf = (r) => r.error ? (r.error.message || "").trim() : null;
-let cafeA, cafeB;
+let cafeA, cafeB, origSettings = null, P = {};
 try {
   for (const k of ["coffeeonly", "cafeA", "cafeB", "stores", "kitchen", "admin", "roaster", "packaging"]) await mk(k);
   const roles = { coffeeonly: "user", cafeA: "user", cafeB: "user", stores: "user", admin: "admin", roaster: "roaster", packaging: "packaging" };
@@ -58,8 +58,8 @@ try {
     { user_id: users.kitchen.id, role: "kitchen_manager" },
   ]);
   const { data: prods } = await svc.from("kitchen_products").select("*");
-  const P = Object.fromEntries(prods.map(p => [p.name, p.id]));
-  const origSettings = (await svc.from("kitchen_settings").select("*").eq("id", 1).single()).data;
+  P = Object.fromEntries(prods.map(p => [p.name, p.id]));
+  origSettings = (await svc.from("kitchen_settings").select("*").eq("id", 1).single()).data;
 
   // ---- UAT 1 (DB side) coffee-only client
   console.log("== UAT 1/2: access separation and roles");
@@ -96,7 +96,8 @@ try {
   const d1 = await rpc(cA1, "kitchen_get_or_create_draft");
   const orderA = d1.data;
   ok("3a cafe A creates draft", !d1.error && !!orderA, errOf(d1));
-  await rpc(cA1, "kitchen_set_item", { p_order_id: orderA, p_product_id: P["Banana bread"], p_units: 1 });
+  const plain = await rpc(cA1, "kitchen_set_item", { p_order_id: orderA, p_product_id: P["Banana bread"], p_units: 1 });
+  ok("3a' set_item on a draft returns flipped = false", !plain.error && plain.data === false, String(plain.data));
   await rpc(cA1, "kitchen_set_item", { p_order_id: orderA, p_product_id: P["Pandebono"], p_units: 2 });
   const cA2 = await login("cafeA"); // second session
   const d2 = await rpc(cA2, "kitchen_get_or_create_draft");
@@ -126,6 +127,7 @@ try {
   const e = await rpc(cA2, "kitchen_set_item", { p_order_id: orderA, p_product_id: P["Pandebono"], p_units: 3 });
   const o4 = await cA2.from("kitchen_orders").select("status").eq("id", orderA).single();
   ok("4 edit after approval -> status sent", !e.error && o4.data.status === "sent", o4.data?.status);
+  ok("4a set_item reports flipped = true (app then notifies order_sent)", e.data === true, String(e.data));
   const h4 = await cA2.from("kitchen_order_history").select("status,note").eq("order_id", orderA).order("created_at");
   ok("4b history records 'edited by café'", h4.data.some(h => h.note === "edited by café"));
   const kvis = await kc.from("kitchen_orders").select("id,status").eq("id", orderA);
@@ -208,6 +210,31 @@ try {
   const rdyA = await rpc(kc, "kitchen_mark_ready", { p_order_id: orderA });
   ok("7e second weekly order marked ready, stock stays >= 0", !rdyA.error);
 
+  // ---- Final-review fixes (DB side)
+  console.log("== Fixes: stores hidden-product draft, lock refresh, Kitchen push subscription");
+  await svc.from("kitchen_products").update({ is_visible: false }).eq("id", P["Cookies"]);
+  // The week after the current one: café B has no order there yet (its current-week order is ready).
+  const cw = (await svc.rpc("kitchen_current_week")).data[0];
+  const nextWeek = new Date(Date.parse(cw.week_start + "T00:00:00Z") + 7 * 864e5).toISOString().slice(0, 10);
+  const mkH = await rpc(sc, "kitchen_create_order_for_cafe", { p_cafe_id: cafeB, p_week_start: nextWeek });
+  ok("F1 stores creates a fresh draft for cafe B (next week)", !mkH.error && !!mkH.data, errOf(mkH));
+  const hS = await rpc(sc, "kitchen_set_item", { p_order_id: mkH.data, p_product_id: P["Cookies"], p_units: 2 });
+  ok("F2 stores manager drafts a hidden product", !hS.error && hS.data === false, errOf(hS));
+  const hC = await rpc(await login("cafeB"), "kitchen_set_item", { p_order_id: mkH.data, p_product_id: P["Cookies"], p_units: 3 });
+  ok("F3 cafe manager still cannot raise a hidden product (product_hidden)", /product_hidden/.test(errOf(hC) || ""), errOf(hC));
+  await svc.from("kitchen_products").update({ is_visible: true }).eq("id", P["Cookies"]);
+  await rpc(sc, "kitchen_lock_order", { p_order_id: mkH.data });
+  await svc.from("kitchen_orders").update({ locked_at: new Date(Date.now() - 5 * 60e3).toISOString() }).eq("id", mkH.data);
+  await rpc(sc, "kitchen_adjust_item", { p_order_id: mkH.data, p_product_id: P["Pandebono"], p_adjusted_units: 1 });
+  const lkAt = (await svc.from("kitchen_orders").select("locked_at").eq("id", mkH.data).single()).data.locked_at;
+  ok("F4 lock holder's write refreshes locked_at", Date.now() - new Date(lkAt).getTime() < 60e3, lkAt);
+  await rpc(sc, "kitchen_unlock_order", { p_order_id: mkH.data });
+  const subUp = await kc.from("push_subscriptions").upsert(
+    { user_id: users.kitchen.id, endpoint: `https://push.example.test/uat-${tag}`, p256dh: "uat", auth: "uat" },
+    { onConflict: "endpoint" },
+  );
+  ok("F5 Kitchen-only user can save a push subscription (same upsert as the hook)", !subUp.error, errOf(subUp));
+
   // ---- UAT 9 (DB side)
   console.log("== UAT 9 (data side): stores manager has both spaces");
   const sa = await rpc(sc, "get_my_kitchen_access");
@@ -223,6 +250,10 @@ try {
 } finally {
   console.log("== cleanup");
   try {
+    if (origSettings) {
+      await svc.from("kitchen_settings").update({ cutoff_weekday: origSettings.cutoff_weekday, cutoff_time: origSettings.cutoff_time }).eq("id", 1);
+    }
+    if (P["Cookies"]) await svc.from("kitchen_products").update({ is_visible: true }).eq("id", P["Cookies"]);
     await svc.from("kitchen_order_history").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     await svc.from("kitchen_orders").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     await svc.from("kitchen_members").delete().neq("user_id", "00000000-0000-0000-0000-000000000000");
@@ -231,4 +262,5 @@ try {
     await svc.from("kitchen_products").update({ stock_units: 0 }).neq("id", "00000000-0000-0000-0000-000000000000");
   } catch (e) { console.log("cleanup error", e.message); }
   console.log(`SUMMARY pass=${pass} fail=${fail}`);
+  if (fail > 0) process.exitCode = 1;
 }
