@@ -104,6 +104,33 @@ CREATE TRIGGER kitchen_rounds_guard_delete
   BEFORE DELETE ON public.kitchen_rounds
   FOR EACH ROW EXECUTE FUNCTION public.kitchen_rounds_guard_delete();
 
+-- A round's production weekday cannot move while upcoming orders (today or later, Paris) use it.
+-- Cutoff, hours, name and is_active stay editable.
+CREATE FUNCTION public.kitchen_rounds_guard_weekday()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.kitchen_orders
+    WHERE round_id = OLD.id
+      AND production_date >= (public.kitchen_now() AT TIME ZONE 'Europe/Paris')::date
+  ) THEN
+    RAISE EXCEPTION 'round_in_use';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.kitchen_rounds_guard_weekday() FROM PUBLIC, anon, authenticated;
+
+CREATE TRIGGER kitchen_rounds_guard_weekday
+  BEFORE UPDATE OF production_weekday ON public.kitchen_rounds
+  FOR EACH ROW
+  WHEN (OLD.production_weekday IS DISTINCT FROM NEW.production_weekday)
+  EXECUTE FUNCTION public.kitchen_rounds_guard_weekday();
+
 -- ---------------------------------------------------------------------------
 -- Cutoff of an order: its round's cutoff for its production date; NULL for urgent orders.
 -- Computed from the round even when the round is inactive.
@@ -129,8 +156,9 @@ GRANT EXECUTE ON FUNCTION public.kitchen_order_cutoff(uuid) TO service_role;
 
 -- ---------------------------------------------------------------------------
 -- Draft for a round. Coffee managers always get their own café.
--- Default date: the next open round. A given date must be an active round's production day;
--- coffee managers only while its cutoff is ahead.
+-- Default date: the next open round. A given date with an existing order for the café opens it
+-- (even if its round was deactivated since); otherwise it must be an active round's production day.
+-- Coffee managers only while the cutoff is ahead.
 -- ---------------------------------------------------------------------------
 DROP FUNCTION public.kitchen_get_or_create_draft(uuid);
 
@@ -160,6 +188,17 @@ BEGIN
     END IF;
   ELSE
     RAISE EXCEPTION 'forbidden';
+  END IF;
+
+  IF p_production_date IS NOT NULL THEN
+    SELECT id INTO v_id FROM public.kitchen_orders
+    WHERE cafe_id = v_cafe AND production_date = p_production_date AND kind = 'weekly';
+    IF v_id IS NOT NULL THEN
+      IF v_role = 'coffee_manager' AND public.kitchen_now() >= public.kitchen_order_cutoff(v_id) THEN
+        RAISE EXCEPTION 'cutoff_passed';
+      END IF;
+      RETURN v_id;
+    END IF;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM public.kitchen_rounds WHERE is_active) THEN

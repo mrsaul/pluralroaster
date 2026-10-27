@@ -1,5 +1,5 @@
 begin;
-select plan(69);
+select plan(75);
 \ir support/kitchen_setup.psql
 
 set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
@@ -164,6 +164,7 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 select throws_ok(format('select public.kitchen_set_item(%L, %L, 1)', :'uid2', :'pand'), 'forbidden', 'cafe manager cannot edit urgent order');
 reset role;
 select is(public.kitchen_order_cutoff(:'uid2'), null, 'urgent orders have no cutoff');
+
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select lives_ok(format('select public.kitchen_set_item(%L, %L, 1)', :'uid2', :'pand'), 'stores manager edits an urgent order (no cutoff)');
 reset role;
@@ -176,6 +177,8 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select lives_ok(format('select public.kitchen_set_item(%L, %L, 2)', :'oid', :'pand'), 'stores manager edits an order of a deactivated round');
 select lives_ok(format('select public.kitchen_approve_order(%L)', :'oid'), 'order of a deactivated round stays approvable');
 select throws_ok($q$select public.kitchen_get_or_create_draft('00000000-0000-0000-0000-0000000000c2', '2026-11-10')$q$, 'invalid_input', 'no new orders for a deactivated round');
+select is(public.kitchen_get_or_create_draft('00000000-0000-0000-0000-0000000000c1', '2026-11-03'), :'oid'::uuid, 'existing order of a deactivated round still opens');
+select throws_ok($q$select public.kitchen_get_or_create_draft('00000000-0000-0000-0000-0000000000c2', '2026-11-03')$q$, 'invalid_input', 'café without an order on the deactivated round: invalid_input');
 reset role;
 select is(public.kitchen_order_cutoff(:'oid'), '2026-11-02 20:00 Europe/Paris'::timestamptz, 'cutoff still computed from the inactive round');
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
@@ -188,6 +191,14 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 select throws_ok('select public.kitchen_get_or_create_draft()', 'no_round', 'no active rounds: no_round');
 reset role;
 update public.kitchen_rounds set is_active = true;
+
+-- Production weekday cannot move while upcoming orders use the round
+select throws_ok(format('update public.kitchen_rounds set production_weekday = 3 where id = %L', :'mardi'), 'round_in_use', 'weekday change with an upcoming order is refused');
+select lives_ok(format('update public.kitchen_rounds set cutoff_time = %L, capacity_minutes = 300, name = %L where id = %L', '19:00', 'Mardi matin', :'mardi'), 'cutoff/hours/name stay editable with upcoming orders');
+set local kitchen.now_override = '2026-11-20 12:00 Europe/Paris';
+select lives_ok(format('update public.kitchen_rounds set production_weekday = 6 where id = %L', :'vendredi'), 'weekday change with only past orders succeeds');
+insert into public.kitchen_rounds (name, production_weekday, cutoff_weekday, cutoff_time, capacity_minutes) values ('Dimanche', 0, 6, '20:00', 100);
+select lives_ok($q$update public.kitchen_rounds set production_weekday = 3 where name = 'Dimanche'$q$, 'weekday change on a round without orders succeeds');
 
 select * from finish();
 rollback;
