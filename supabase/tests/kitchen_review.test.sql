@@ -1,11 +1,13 @@
 begin;
-select plan(58);
+select plan(63);
 \ir support/kitchen_setup.psql
 
 set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
 select id as pand from public.kitchen_products where name = 'Pandebono' \gset
 select id as cook from public.kitchen_products where name = 'Cookies' \gset
 select id as bread from public.kitchen_products where name = 'Banana bread' \gset
+select id as mardi from public.kitchen_rounds where name = 'Mardi' \gset
+select id as vendredi from public.kitchen_rounds where name = 'Vendredi' \gset
 
 -- Weekly order sent by café A: cookies 1
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
@@ -50,7 +52,7 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select lives_ok(format('select public.kitchen_lock_order(%L)', :'oid'), 'stale lock can be taken');
 select lives_ok(format('select public.kitchen_unlock_order(%L)', :'oid'), 'unlock');
 -- approve after cutoff + 1h
-set local kitchen.now_override = '2026-11-01 21:00 Europe/Paris';
+set local kitchen.now_override = '2026-11-02 21:00 Europe/Paris';
 select lives_ok(format('select public.kitchen_approve_order(%L)', :'oid'), 'approve after cutoff');
 reset role;
 
@@ -60,7 +62,8 @@ select throws_ok(format($q$select public.kitchen_create_urgent_order(null, '  ',
 select throws_ok(format($q$select public.kitchen_create_urgent_order(null, 'x', '2026-11-04 10:00 Europe/Paris', '[{"product_id":"%s","units":0}]')$q$, :'pand'), 'empty_order', 'urgent needs a line');
 select public.kitchen_create_urgent_order(null, 'Event', '2026-11-04 10:00 Europe/Paris', format('[{"product_id":"%s","units":2}]', :'pand')::jsonb) as urg \gset
 reset role;
-select is((select week_start from public.kitchen_orders where id = :'urg'), '2026-11-02'::date, 'urgent week_start is Monday');
+select is((select production_date from public.kitchen_orders where id = :'urg'), '2026-11-06'::date, 'urgent needed mercredi goes to the next round (vendredi)');
+select is((select round_id from public.kitchen_orders where id = :'urg'), :'vendredi'::uuid, 'urgent attached to Vendredi');
 select is((select status || kind from public.kitchen_orders where id = :'urg'), 'senturgent', 'urgent is sent');
 select is((select cafe_id from public.kitchen_orders where id = :'urg'), '00000000-0000-0000-0000-0000000000c1'::uuid, 'urgent for own café');
 select is((select count(*)::int from public.kitchen_order_history where order_id = :'urg' and status = 'sent'), 1, 'urgent history row');
@@ -70,7 +73,14 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select throws_ok(format('select public.kitchen_decline_order(%L, %L)', :'oid', 'no'), 'invalid_status', 'cannot decline weekly');
 select public.kitchen_create_urgent_order('00000000-0000-0000-0000-0000000000c2', 'Oops', '2026-11-05 10:00 Europe/Paris', format('[{"product_id":"%s","units":1}]', :'cook')::jsonb) as urg2 \gset
 select lives_ok(format('select public.kitchen_decline_order(%L, %L)', :'urg2', 'no capacity'), 'decline urgent');
+select public.kitchen_create_urgent_order('00000000-0000-0000-0000-0000000000c2', 'Same day', '2026-11-06 09:00 Europe/Paris', format('[{"product_id":"%s","units":1}]', :'cook')::jsonb) as urg3 \gset
 reset role;
+select is((select production_date from public.kitchen_orders where id = :'urg3'), '2026-11-06'::date, 'urgent needed on a production day stays on that day');
+update public.kitchen_rounds set is_active = false;
+select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
+select throws_ok(format($q$select public.kitchen_create_urgent_order('00000000-0000-0000-0000-0000000000c2', 'x', '2026-11-06 09:00 Europe/Paris', '[{"product_id":"%s","units":1}]')$q$, :'cook'), 'no_round', 'urgent with no active rounds: no_round');
+reset role;
+update public.kitchen_rounds set is_active = true;
 select is((select status || decline_note from public.kitchen_orders where id = :'urg2'), 'declinedno capacity', 'declined with note');
 
 -- Ready + stock
@@ -88,7 +98,7 @@ select is((select stock_units from public.kitchen_products where id = :'pand'), 
 select is((select served_from_stock_units from public.kitchen_order_items where order_id = :'urg'), 1, 'served 1 from stock');
 select is((select status from public.kitchen_orders where id = :'urg'), 'ready', 'status ready');
 
-insert into public.kitchen_orders (cafe_id, week_start, kind, status, urgent_reason, needed_by) values ('00000000-0000-0000-0000-0000000000c2', '2026-11-02', 'urgent', 'approved', 'r', now()) returning id as o2 \gset
+insert into public.kitchen_orders (cafe_id, production_date, round_id, kind, status, urgent_reason, needed_by) values ('00000000-0000-0000-0000-0000000000c2', '2026-11-03', :'mardi', 'urgent', 'approved', 'r', now()) returning id as o2 \gset
 insert into public.kitchen_order_items (order_id, product_id, product_name, unit_label, pieces_per_unit, production_minutes, units) values (:'o2', :'pand', 'Pandebono', 'Batch', 50, 90, 2);
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a2');
 select public.kitchen_mark_ready(:'o2');
@@ -108,14 +118,19 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 select lives_ok(format('select public.kitchen_mark_received(%L)', :'urg'), 'café receives ready order');
 reset role;
 
--- create order for cafe (after cutoff 2026-11-01 21:00)
+-- create order for cafe (after Mardi cutoff 2026-11-02 21:00)
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select is(public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2'), public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2'), 'create order for cafe is idempotent');
-select is((select week_start from public.kitchen_orders where id = public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2')), '2026-11-02'::date, 'default targets the locked week after cutoff');
-select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-11-09') as onext \gset
-select is((select week_start from public.kitchen_orders where id = :'onext'), '2026-11-09'::date, 'explicit next week');
-select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-11-10')$q$, 'invalid_input', 'non-Monday rejected');
-select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-10-19')$q$, 'invalid_input', 'past week rejected');
+select is((select production_date from public.kitchen_orders where id = public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2')), '2026-11-03'::date, 'default targets the round being decided (Mardi, cutoff passed)');
+select is((select round_id from public.kitchen_orders where id = public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2')), :'mardi'::uuid, 'round being decided is Mardi');
+select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-11-10') as onext \gset
+select is((select production_date from public.kitchen_orders where id = :'onext'), '2026-11-10'::date, 'explicit later round');
+select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-11-11')$q$, 'invalid_input', 'date with no active round rejected');
+select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2', '2026-10-30')$q$, 'invalid_input', 'past round rejected');
+set local kitchen.now_override = '2026-11-04 10:00 Europe/Paris';
+select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2') as owed \gset
+select is((select production_date from public.kitchen_orders where id = :'owed'), '2026-11-06'::date, 'mercredi: Mardi produced, Vendredi still open -> next open round');
+set local kitchen.now_override = '2026-11-02 21:00 Europe/Paris';
 select throws_ok($q$select public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000ff')$q$, 'invalid_input', 'unknown café');
 reset role;
 
@@ -124,7 +139,7 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select lives_ok(format('select public.kitchen_adjust_item(%L, %L, 1)', public.kitchen_create_order_for_cafe('00000000-0000-0000-0000-0000000000c2'), :'bread'), 'stores manager adjusts after cutoff');
 reset role;
 update public.kitchen_products set stock_units = 5 where id = :'cook';
-insert into public.kitchen_orders (cafe_id, week_start, kind, status, urgent_reason, needed_by) values ('00000000-0000-0000-0000-0000000000c2', '2026-11-02', 'urgent', 'approved', 'r', now()) returning id as o3 \gset
+insert into public.kitchen_orders (cafe_id, production_date, round_id, kind, status, urgent_reason, needed_by) values ('00000000-0000-0000-0000-0000000000c2', '2026-11-03', :'mardi', 'urgent', 'approved', 'r', now()) returning id as o3 \gset
 insert into public.kitchen_order_items (order_id, product_id, product_name, unit_label, pieces_per_unit, production_minutes, units, adjusted_units) values (:'o3', :'cook', 'Cookies', 'Batch', 50, 60, 3, 1);
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a2');
 select lives_ok(format('select public.kitchen_mark_ready(%L)', :'o3'), 'mark ready with adjusted units');
