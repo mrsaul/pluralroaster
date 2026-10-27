@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useLang } from "@/i18n";
+import { useKitchenLang } from "@/kitchen/i18n";
 import { kitchenErrorMessage, useKitchenOrders, useMarkReceived } from "../api";
 import { useKitchenT } from "../i18n";
 import { unitsToPieces } from "../lib/format";
@@ -39,7 +39,7 @@ function StatusSteps({ order }: { order: KitchenOrder }) {
 function OrderCard({ order }: { order: KitchenOrder }) {
   const t = useKitchenT();
   const c = t.cafeApp;
-  const { lang } = useLang();
+  const lang = useKitchenLang();
   const received = useMarkReceived();
 
   const share = async () => {

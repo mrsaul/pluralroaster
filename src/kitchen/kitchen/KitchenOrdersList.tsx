@@ -6,7 +6,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useLang } from "@/i18n";
+import { useKitchenLang } from "@/kitchen/i18n";
 import {
   kitchenErrorMessage, useProductionWeek, useKitchenOrders, useKitchenProducts, useMarkReady, useSetReadyEta,
 } from "../api";
@@ -50,7 +50,7 @@ function ReadyTime({ order }: { order: KitchenOrder }) {
 
 function OrderCard({ order, onMarkReady }: { order: KitchenOrder; onMarkReady: (o: KitchenOrder) => void }) {
   const k = useKitchenT().kitchen;
-  const { lang } = useLang();
+  const lang = useKitchenLang();
   const share = useShareText();
   return (
     <li className="rounded-xl border border-border bg-card p-3">

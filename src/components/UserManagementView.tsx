@@ -26,21 +26,22 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
+import { fr } from "date-fns/locale";
 import { validateKitchenAccess } from "@/components/kitchenAccessForm";
 
 type AppRole = "admin" | "user" | "roaster" | "packaging";
 type KitchenRole = "coffee_manager" | "stores_manager" | "kitchen_manager";
 
 const KITCHEN_ROLE_LABELS: Record<KitchenRole, string> = {
-  coffee_manager: "Coffee manager",
-  stores_manager: "Stores manager",
-  kitchen_manager: "Kitchen manager",
+  coffee_manager: "Responsable café",
+  stores_manager: "Responsable des boutiques",
+  kitchen_manager: "Responsable cuisine",
 };
 
 const KITCHEN_ERRORS: Record<string, string> = {
-  coffee_manager_needs_cafe: "Choose a café for a Coffee manager.",
-  needs_some_access: "Pick a coffee role or Kitchen access.",
-  kitchen_not_for_role: "Roaster and packaging accounts can't have Kitchen access.",
+  coffee_manager_needs_cafe: "Choisissez un café pour un responsable café.",
+  needs_some_access: "Choisissez un accès Café ou un accès Cuisine.",
+  kitchen_not_for_role: "Les comptes torréfaction et conditionnement ne peuvent pas avoir d'accès Cuisine.",
 };
 
 interface Cafe {
@@ -65,8 +66,14 @@ interface ManagedUser {
 const ROLE_META: Record<AppRole, { label: string; icon: typeof Shield; color: string }> = {
   admin: { label: "Admin", icon: ShieldCheck, color: "bg-primary/10 text-primary border-primary/20" },
   user: { label: "Client", icon: Users, color: "bg-muted text-muted-foreground border-border" },
-  roaster: { label: "Roaster", icon: Flame, color: "bg-warning/10 text-warning border-warning/20" },
-  packaging: { label: "Packaging", icon: Package, color: "bg-info/10 text-info border-info/20" },
+  roaster: { label: "Torréfaction", icon: Flame, color: "bg-warning/10 text-warning border-warning/20" },
+  packaging: { label: "Conditionnement", icon: Package, color: "bg-info/10 text-info border-info/20" },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  active: "actif",
+  invited: "invité",
+  disabled: "désactivé",
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -100,10 +107,10 @@ export function UserManagementView() {
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { action: "list-cafes" },
       });
-      if (error || !data?.success) throw new Error(data?.error || error?.message || "Failed to load cafés");
+      if (error || !data?.success) throw new Error(data?.error || error?.message || "Impossible de charger les cafés");
       setCafes(data.cafes ?? []);
     } catch (err) {
-      toast({ title: "Failed to load cafés", description: String(err), variant: "destructive" });
+      toast({ title: "Impossible de charger les cafés", description: String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -112,10 +119,10 @@ export function UserManagementView() {
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { action: "upsert-cafe", ...cafe },
       });
-      if (error || !data?.success) throw new Error(data?.error || error?.message || "Save failed");
+      if (error || !data?.success) throw new Error(data?.error || error?.message || "Échec de l'enregistrement");
       await loadCafes();
     } catch (err) {
-      toast({ title: "Café update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de la mise à jour du café", description: String(err), variant: "destructive" });
     }
   };
 
@@ -125,10 +132,10 @@ export function UserManagementView() {
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { action: "list" },
       });
-      if (error || !data?.success) throw new Error(data?.error || error?.message || "Failed to load users");
+      if (error || !data?.success) throw new Error(data?.error || error?.message || "Impossible de charger les utilisateurs");
       setUsers(data.users ?? []);
     } catch (err) {
-      toast({ title: "Failed to load users", description: String(err), variant: "destructive" });
+      toast({ title: "Impossible de charger les utilisateurs", description: String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -144,7 +151,7 @@ export function UserManagementView() {
       cafeId: inviteCafeId || null,
     });
     if (check.ok === false) {
-      toast({ title: "Invite failed", description: KITCHEN_ERRORS[check.error], variant: "destructive" });
+      toast({ title: "Échec de l'invitation", description: KITCHEN_ERRORS[check.error], variant: "destructive" });
       return;
     }
     setInviting(true);
@@ -155,16 +162,16 @@ export function UserManagementView() {
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { action: "invite", email: inviteEmail.trim().toLowerCase(), role: inviteRole, kitchen },
       });
-      if (error || !data?.success) throw new Error(data?.error || error?.message || "Invite failed");
-      const label = inviteRole === "none" ? "Kitchen access only" : ROLE_META[inviteRole].label;
-      toast({ title: "Invitation sent", description: `${inviteEmail} invited: ${label}` });
+      if (error || !data?.success) throw new Error(data?.error || error?.message || "Échec de l'invitation");
+      const label = inviteRole === "none" ? "Accès Cuisine uniquement" : ROLE_META[inviteRole].label;
+      toast({ title: "Invitation envoyée", description: `${inviteEmail} invité·e : ${label}` });
       setInviteEmail("");
       setInviteKitchenRole("none");
       setInviteCafeId("");
       setInviteOpen(false);
       await loadUsers();
     } catch (err) {
-      toast({ title: "Invite failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de l'invitation", description: String(err), variant: "destructive" });
     } finally {
       setInviting(false);
     }
@@ -177,17 +184,17 @@ export function UserManagementView() {
           body: { action, userId: user.userId },
         });
         if (error || !data?.success) throw new Error(data?.error || error?.message);
-        toast({ title: action === "remove" ? "User removed" : `User ${action}d` });
+        toast({ title: action === "remove" ? "Utilisateur supprimé" : action === "disable" ? "Accès désactivé" : action === "enable" ? "Accès réactivé" : "Action effectuée" });
       } else if (action === "resend-invite") {
         const { data, error } = await supabase.functions.invoke("invite-user", {
           body: { action: "resend-invite", email: user.email },
         });
         if (error || !data?.success) throw new Error(data?.error || error?.message);
-        toast({ title: "Invitation resent", description: `Email sent to ${user.email}` });
+        toast({ title: "Invitation renvoyée", description: `E-mail envoyé à ${user.email}` });
       }
       await loadUsers();
     } catch (err) {
-      toast({ title: "Action failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de l'action", description: String(err), variant: "destructive" });
     }
     setConfirmAction(null);
   };
@@ -199,10 +206,10 @@ export function UserManagementView() {
         body: { action: "update-role", userId: roleChangeUser.userId, role: newRole },
       });
       if (error || !data?.success) throw new Error(data?.error || error?.message);
-      toast({ title: "Role updated", description: `${roleChangeUser.email} is now ${ROLE_META[newRole].label}` });
+      toast({ title: "Rôle mis à jour", description: `${roleChangeUser.email} est maintenant ${ROLE_META[newRole].label}` });
       await loadUsers();
     } catch (err) {
-      toast({ title: "Role update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de la mise à jour du rôle", description: String(err), variant: "destructive" });
     }
     setRoleChangeUser(null);
   };
@@ -215,9 +222,9 @@ export function UserManagementView() {
       cafeId: editCafeId || null,
     });
     // A kitchen-only user must keep some Kitchen access (otherwise they would have no access at all);
-    // to revoke everything, use "Remove user".
+    // to revoke everything, use « Supprimer l’utilisateur ».
     if (check.ok === false) {
-      toast({ title: "Kitchen access not saved", description: KITCHEN_ERRORS[check.error], variant: "destructive" });
+      toast({ title: "Accès Cuisine non enregistré", description: KITCHEN_ERRORS[check.error], variant: "destructive" });
       return;
     }
     try {
@@ -228,11 +235,11 @@ export function UserManagementView() {
         body: { action: "set-kitchen-access", userId: kitchenEditUser.userId, kitchen },
       });
       if (error || !data?.success) throw new Error(data?.error || error?.message);
-      toast({ title: "Kitchen access updated", description: kitchenEditUser.email });
+      toast({ title: "Accès Cuisine mis à jour", description: kitchenEditUser.email });
       setKitchenEditUser(null);
       await loadUsers();
     } catch (err) {
-      toast({ title: "Kitchen access update failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de la mise à jour de l'accès Cuisine", description: String(err), variant: "destructive" });
     }
   };
 
@@ -247,19 +254,19 @@ export function UserManagementView() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Total users</p>
+          <p className="text-xs text-muted-foreground mb-2">Utilisateurs</p>
           <p className="text-2xl font-medium tabular-nums text-foreground">{stats.total}</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Active</p>
+          <p className="text-xs text-muted-foreground mb-2">Actifs</p>
           <p className="text-2xl font-medium tabular-nums text-success">{stats.active}</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Pending invites</p>
+          <p className="text-xs text-muted-foreground mb-2">Invitations en attente</p>
           <p className="text-2xl font-medium tabular-nums text-warning">{stats.invited}</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Roles</p>
+          <p className="text-xs text-muted-foreground mb-2">Rôles</p>
           <div className="flex gap-1 flex-wrap mt-1">
             {(["admin", "roaster", "packaging"] as AppRole[]).map((r) => {
               const count = users.filter((u) => u.role === r).length;
@@ -275,13 +282,13 @@ export function UserManagementView() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <h2 className="text-lg font-medium text-foreground">Team Members</h2>
+        <h2 className="text-lg font-medium text-foreground">Équipe</h2>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void loadUsers()} className="gap-2">
-            <RefreshCw className="w-4 h-4" /> Refresh
+            <RefreshCw className="w-4 h-4" /> Actualiser
           </Button>
           <Button size="sm" className="gap-2" onClick={() => setInviteOpen(true)}>
-            <UserPlus className="w-4 h-4" /> Invite User
+            <UserPlus className="w-4 h-4" /> Inviter
           </Button>
         </div>
       </div>
@@ -292,22 +299,22 @@ export function UserManagementView() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Kitchen</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last sign in</TableHead>
+                <TableHead>Utilisateur</TableHead>
+                <TableHead>Rôle Café</TableHead>
+                <TableHead>Cuisine</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Dernière connexion</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading users…</TableCell>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Chargement des utilisateurs…</TableCell>
                 </TableRow>
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No users found.</TableCell>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Aucun utilisateur.</TableCell>
                 </TableRow>
               ) : (
                 users.map((user) => {
@@ -343,14 +350,14 @@ export function UserManagementView() {
                       </TableCell>
                       <TableCell>
                         <span className={cn("inline-flex px-2 py-0.5 rounded text-xs font-medium capitalize", STATUS_STYLES[user.status] ?? "bg-muted text-muted-foreground")}>
-                          {user.status}
+                          {STATUS_LABELS[user.status] ?? user.status}
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {user.lastSignIn
-                          ? formatDistanceToNow(parseISO(user.lastSignIn), { addSuffix: true })
+                          ? formatDistanceToNow(parseISO(user.lastSignIn), { addSuffix: true, locale: fr })
                           : user.invitedAt
-                            ? `Invited ${formatDistanceToNow(parseISO(user.invitedAt), { addSuffix: true })}`
+                            ? `Invité·e ${formatDistanceToNow(parseISO(user.invitedAt), { addSuffix: true, locale: fr })}`
                             : "—"}
                       </TableCell>
                       <TableCell className="text-right">
@@ -362,7 +369,7 @@ export function UserManagementView() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => { setRoleChangeUser(user); setNewRole(user.role ?? "user"); }}>
-                              Change role
+                              Changer le rôle Café
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
@@ -371,31 +378,31 @@ export function UserManagementView() {
                                 setEditCafeId(user.cafeId ?? "");
                               }}
                             >
-                              Edit Kitchen access
+                              Modifier l'accès Cuisine
                             </DropdownMenuItem>
                             {user.status === "invited" && (
                               <DropdownMenuItem onClick={() => void handleAction("resend-invite", user)}>
-                                Resend invitation
+                                Renvoyer l'invitation
                               </DropdownMenuItem>
                             )}
                             {user.role === null ? (
                               <p className="px-2 py-1.5 text-xs text-muted-foreground max-w-[200px]">
-                                Kitchen-only users are removed with "Remove user".
+                                Les utilisateurs Cuisine uniquement se retirent avec « Supprimer l'utilisateur ».
                               </p>
                             ) : user.status === "active" ? (
                               <DropdownMenuItem onClick={() => setConfirmAction({ type: "disable", user })}>
-                                Disable access
+                                Désactiver l'accès
                               </DropdownMenuItem>
                             ) : user.status === "disabled" ? (
                               <DropdownMenuItem onClick={() => void handleAction("enable", user)}>
-                                Enable access
+                                Réactiver l'accès
                               </DropdownMenuItem>
                             ) : null}
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={() => setConfirmAction({ type: "remove", user })}
                             >
-                              Remove user
+                              Supprimer l'utilisateur
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -413,7 +420,7 @@ export function UserManagementView() {
       <div className="bg-card border border-border rounded-lg p-4 space-y-3">
         <h2 className="text-lg font-medium text-foreground">Cafés</h2>
         <div className="space-y-2">
-          {cafes.length === 0 && <p className="text-sm text-muted-foreground">No cafés yet.</p>}
+          {cafes.length === 0 && <p className="text-sm text-muted-foreground">Aucun café pour l'instant.</p>}
           {cafes.map((cafe) => (
             <div key={cafe.id} className={cn("flex items-center gap-2", !cafe.isActive && "opacity-60")}>
               {editingCafe?.id === cafe.id ? (
@@ -431,23 +438,23 @@ export function UserManagementView() {
                       setEditingCafe(null);
                     }}
                   >
-                    Save
+                    Enregistrer
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditingCafe(null)}>Cancel</Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditingCafe(null)}>Annuler</Button>
                 </>
               ) : (
                 <>
                   <span className="text-sm text-foreground">{cafe.name}</span>
-                  {!cafe.isActive && <Badge variant="outline" className="text-[10px]">Inactive</Badge>}
+                  {!cafe.isActive && <Badge variant="outline" className="text-[10px]">Inactif</Badge>}
                   <Button size="sm" variant="ghost" onClick={() => setEditingCafe({ id: cafe.id, name: cafe.name })}>
-                    Rename
+                    Renommer
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => void saveCafe({ id: cafe.id, name: cafe.name, isActive: !cafe.isActive })}
                   >
-                    {cafe.isActive ? "Deactivate" : "Activate"}
+                    {cafe.isActive ? "Désactiver" : "Activer"}
                   </Button>
                 </>
               )}
@@ -457,7 +464,7 @@ export function UserManagementView() {
         <div className="flex gap-2 pt-1">
           <Input
             className="h-8 max-w-xs"
-            placeholder="New café name"
+            placeholder="Nom du nouveau café"
             value={newCafeName}
             onChange={(e) => setNewCafeName(e.target.value)}
           />
@@ -469,7 +476,7 @@ export function UserManagementView() {
               setNewCafeName("");
             }}
           >
-            Add café
+            Ajouter un café
           </Button>
         </div>
       </div>
@@ -478,57 +485,57 @@ export function UserManagementView() {
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Invite Team Member</DialogTitle>
-            <DialogDescription>Send an email invitation with a specific role assignment.</DialogDescription>
+            <DialogTitle>Inviter un membre</DialogTitle>
+            <DialogDescription>Envoyer une invitation par e-mail avec ses accès.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Email</label>
+              <label className="text-sm font-medium text-foreground">E-mail</label>
               <Input
                 type="email"
-                placeholder="colleague@example.com"
+                placeholder="collegue@exemple.fr"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Coffee access</label>
+              <label className="text-sm font-medium text-foreground">Accès Café (torréfaction B2B)</label>
               <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as AppRole | "none")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No coffee access</SelectItem>
-                  <SelectItem value="user">Client — Orders coffee</SelectItem>
+                  <SelectItem value="none">Pas d'accès Café</SelectItem>
+                  <SelectItem value="user">Client — commande du café</SelectItem>
                   <SelectItem value="admin">
-                    <span className="flex items-center gap-2"><ShieldCheck className="w-3.5 h-3.5" /> Admin — Full access</span>
+                    <span className="flex items-center gap-2"><ShieldCheck className="w-3.5 h-3.5" /> Admin — accès complet</span>
                   </SelectItem>
                   <SelectItem value="roaster">
-                    <span className="flex items-center gap-2"><Flame className="w-3.5 h-3.5" /> Roaster — Production view only</span>
+                    <span className="flex items-center gap-2"><Flame className="w-3.5 h-3.5" /> Torréfaction — vue production uniquement</span>
                   </SelectItem>
                   <SelectItem value="packaging">
-                    <span className="flex items-center gap-2"><Package className="w-3.5 h-3.5" /> Packaging — Packaging view only</span>
+                    <span className="flex items-center gap-2"><Package className="w-3.5 h-3.5" /> Conditionnement — vue conditionnement uniquement</span>
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Kitchen access</label>
+              <label className="text-sm font-medium text-foreground">Accès Cuisine</label>
               <Select value={inviteKitchenRole} onValueChange={(v) => setInviteKitchenRole(v as KitchenRole | "none")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="coffee_manager">Coffee manager</SelectItem>
-                  <SelectItem value="stores_manager">Stores manager</SelectItem>
-                  <SelectItem value="kitchen_manager">Kitchen manager</SelectItem>
+                  <SelectItem value="none">Aucun</SelectItem>
+                  <SelectItem value="coffee_manager">Responsable café</SelectItem>
+                  <SelectItem value="stores_manager">Responsable des boutiques</SelectItem>
+                  <SelectItem value="kitchen_manager">Responsable cuisine</SelectItem>
                 </SelectContent>
               </Select>
               {inviteKitchenRole === "coffee_manager" && (
                 <Select value={inviteCafeId} onValueChange={setInviteCafeId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a café" />
+                    <SelectValue placeholder="Choisir un café" />
                   </SelectTrigger>
                   <SelectContent>
                     {cafes.filter((c) => c.isActive).map((c) => (
@@ -540,18 +547,18 @@ export function UserManagementView() {
             </div>
             <div className="rounded-lg bg-muted/50 p-3">
               <p className="text-xs text-muted-foreground">
-                {inviteRole === "none" && "No access to coffee ordering."}
-                {inviteRole === "user" && "Can order coffee as a client."}
-                {inviteRole === "admin" && "Full access to all sections: orders, roaster, packaging, invoicing, clients, products, and settings."}
-                {inviteRole === "roaster" && "Can only see the Roaster section. Can view roasting quantities and update roasting progress. No access to pricing, clients, or invoicing."}
-                {inviteRole === "packaging" && "Can only see the Packaging section. Can view and update packaging workflow. No access to pricing details, clients, or invoicing."}
+                {inviteRole === "none" && "Pas d'accès aux commandes de café."}
+                {inviteRole === "user" && "Peut commander du café comme client."}
+                {inviteRole === "admin" && "Accès complet à toutes les sections : commandes, torréfaction, conditionnement, facturation, clients, produits et réglages."}
+                {inviteRole === "roaster" && "Voit uniquement la section Torréfaction : quantités à torréfier et avancement. Pas d'accès aux prix, clients ni à la facturation."}
+                {inviteRole === "packaging" && "Voit uniquement la section Conditionnement et peut suivre le conditionnement. Pas d'accès aux prix, clients ni à la facturation."}
               </p>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setInviteOpen(false)}>Annuler</Button>
               <Button onClick={() => void handleInvite()} disabled={inviting || !inviteEmail.trim()} className="gap-2">
                 {inviting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                Send Invitation
+                Envoyer l'invitation
               </Button>
             </div>
           </div>
@@ -562,8 +569,8 @@ export function UserManagementView() {
       <Dialog open={Boolean(roleChangeUser)} onOpenChange={(open) => !open && setRoleChangeUser(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Change Role</DialogTitle>
-            <DialogDescription>Update role for {roleChangeUser?.email}</DialogDescription>
+            <DialogTitle>Changer le rôle Café</DialogTitle>
+            <DialogDescription>Rôle Café de {roleChangeUser?.email}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Select value={newRole} onValueChange={(v) => setNewRole(v as AppRole)}>
@@ -572,14 +579,14 @@ export function UserManagementView() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="roaster">Roaster</SelectItem>
-                <SelectItem value="packaging">Packaging</SelectItem>
+                <SelectItem value="roaster">Torréfaction</SelectItem>
+                <SelectItem value="packaging">Conditionnement</SelectItem>
                 <SelectItem value="user">Client</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setRoleChangeUser(null)}>Cancel</Button>
-              <Button onClick={() => void handleRoleChange()}>Save</Button>
+              <Button variant="outline" onClick={() => setRoleChangeUser(null)}>Annuler</Button>
+              <Button onClick={() => void handleRoleChange()}>Enregistrer</Button>
             </div>
           </div>
         </DialogContent>
@@ -589,8 +596,8 @@ export function UserManagementView() {
       <Dialog open={Boolean(kitchenEditUser)} onOpenChange={(open) => !open && setKitchenEditUser(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Kitchen access</DialogTitle>
-            <DialogDescription>Update Kitchen access for {kitchenEditUser?.email}</DialogDescription>
+            <DialogTitle>Accès Cuisine</DialogTitle>
+            <DialogDescription>Accès Cuisine de {kitchenEditUser?.email}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Select value={editKitchenRole} onValueChange={(v) => setEditKitchenRole(v as KitchenRole | "none")}>
@@ -598,16 +605,16 @@ export function UserManagementView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="coffee_manager">Coffee manager</SelectItem>
-                <SelectItem value="stores_manager">Stores manager</SelectItem>
-                <SelectItem value="kitchen_manager">Kitchen manager</SelectItem>
+                <SelectItem value="none">Aucun</SelectItem>
+                <SelectItem value="coffee_manager">Responsable café</SelectItem>
+                <SelectItem value="stores_manager">Responsable des boutiques</SelectItem>
+                <SelectItem value="kitchen_manager">Responsable cuisine</SelectItem>
               </SelectContent>
             </Select>
             {editKitchenRole === "coffee_manager" && (
               <Select value={editCafeId} onValueChange={setEditCafeId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a café" />
+                  <SelectValue placeholder="Choisir un café" />
                 </SelectTrigger>
                 <SelectContent>
                   {cafes.filter((c) => c.isActive || c.id === editCafeId).map((c) => (
@@ -617,8 +624,8 @@ export function UserManagementView() {
               </Select>
             )}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setKitchenEditUser(null)}>Cancel</Button>
-              <Button onClick={() => void handleKitchenEdit()}>Save</Button>
+              <Button variant="outline" onClick={() => setKitchenEditUser(null)}>Annuler</Button>
+              <Button onClick={() => void handleKitchenEdit()}>Enregistrer</Button>
             </div>
           </div>
         </DialogContent>
@@ -629,18 +636,18 @@ export function UserManagementView() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmAction?.type === "remove" ? "Remove User" : "Disable User"}
+              {confirmAction?.type === "remove" ? "Supprimer l'utilisateur" : "Désactiver l'accès"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction?.type === "remove"
-                ? `Are you sure you want to remove ${confirmAction.user.email}? This will revoke their access.`
-                : `Are you sure you want to disable access for ${confirmAction?.user.email}?`}
+                ? `Supprimer ${confirmAction.user.email} ? Cette personne perdra tous ses accès.`
+                : `Désactiver l'accès de ${confirmAction?.user.email} ?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={() => confirmAction && void handleAction(confirmAction.type, confirmAction.user)}>
-              Confirm
+              Confirmer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

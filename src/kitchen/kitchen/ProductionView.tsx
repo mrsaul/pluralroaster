@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useLang } from "@/i18n";
+import { useKitchenLang } from "@/kitchen/i18n";
 import { useProductionWeek, useKitchenOrders, useKitchenProducts, useKitchenSettings } from "../api";
 import { useKitchenT } from "../i18n";
 import { unitsToPieces } from "../lib/format";
@@ -13,7 +13,7 @@ import { useShareText } from "../components/useShareText";
 
 export default function ProductionView() {
   const k = useKitchenT().kitchen;
-  const { lang } = useLang();
+  const lang = useKitchenLang();
   const share = useShareText();
   // Kitchen works on the production week (the one whose cutoff passed most recently).
   const { data: production } = useProductionWeek();

@@ -1,12 +1,12 @@
 // Kitchen-only strings. Lives in the lazy Kitchen chunk, never in the main bundle.
 import { useMemo } from "react";
-import { useLang } from "@/i18n";
+import type { Lang } from "@/i18n";
 
 const fr = {
   title: "Cuisine",
   roles: {
     coffee_manager: "Responsable café",
-    stores_manager: "Responsable des stocks",
+    stores_manager: "Responsable des boutiques",
     kitchen_manager: "Responsable cuisine",
   },
   cafe: "Café",
@@ -41,6 +41,7 @@ const fr = {
     urgentReason: "Raison",
     urgentReasonPlaceholder: "Pourquoi cette commande est-elle urgente ?",
     urgentNeededBy: "Nécessaire pour le",
+    urgentNeededByField: "Nécessaire pour le (heure de Paris)",
     urgentSubmit: "Envoyer la demande",
     urgentSent: "Demande envoyée",
     urgentCafe: "Café",
@@ -125,7 +126,7 @@ const fr = {
     neededBy: (when: string) => `Pour : ${when}`,
     readyAt: (when: string) => `Prête vers : ${when}`,
     setReadyTime: "Définir l'heure de préparation",
-    readyTimeLabel: "Heure de préparation (Paris)",
+    readyTimeLabel: "Heure de préparation (heure de Paris)",
     saveReadyTime: "Enregistrer l'heure",
     readyTimeSaved: "Heure enregistrée",
     markReady: "Marquer prête",
@@ -218,6 +219,7 @@ const en: KitchenStrings = {
     urgentReason: "Reason",
     urgentReasonPlaceholder: "Why is this order urgent?",
     urgentNeededBy: "Needed by",
+    urgentNeededByField: "Needed by (Paris time)",
     urgentSubmit: "Send request",
     urgentSent: "Request sent",
     urgentCafe: "Café",
@@ -356,7 +358,14 @@ const en: KitchenStrings = {
 
 const dictionaries = { fr, en } as const;
 
+// The Kitchen is French-only for now (most of the team speaks French), whatever
+// language the coffee app is set to. The English strings are kept for later.
+export const KITCHEN_LANG: Lang = "fr";
+
+export function useKitchenLang(): Lang {
+  return KITCHEN_LANG;
+}
+
 export function useKitchenT(): KitchenStrings {
-  const { lang } = useLang();
-  return useMemo(() => dictionaries[lang], [lang]);
+  return useMemo(() => dictionaries[KITCHEN_LANG], []);
 }

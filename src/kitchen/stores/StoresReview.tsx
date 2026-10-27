@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { addDays, format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { useLang, type Lang } from "@/i18n";
+import type { Lang } from "@/i18n";
+import { useKitchenLang } from "@/kitchen/i18n";
 import {
   kitchenErrorMessage, useCreateOrderForCafe, useCurrentWeek, useKitchenCafes, useKitchenOrders,
   useKitchenProducts, useKitchenSettings,
@@ -53,7 +54,7 @@ function Row({ o, flag, n, lang, onOpen }: { o: KitchenOrder; flag?: string; n: 
 export default function StoresReview() {
   const t = useKitchenT();
   const s = t.stores;
-  const { lang } = useLang();
+  const lang = useKitchenLang();
   const now = useNow();
   const { data: current } = useCurrentWeek();
   const { data: settings } = useKitchenSettings();

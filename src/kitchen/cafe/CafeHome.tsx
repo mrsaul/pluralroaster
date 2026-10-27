@@ -8,7 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useLang } from "@/i18n";
+import { useKitchenLang } from "@/kitchen/i18n";
 import {
   kitchenErrorMessage, useCurrentWeek, useGetOrCreateDraft, useKitchenOrders,
   useKitchenProducts, useSendOrder, useSetItem,
@@ -24,7 +24,7 @@ const DEBOUNCE_MS = 400;
 export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeName: string | null }) {
   const t = useKitchenT();
   const c = t.cafeApp;
-  const { lang } = useLang();
+  const lang = useKitchenLang();
   const qc = useQueryClient();
   const now = useNow();
 

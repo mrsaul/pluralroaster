@@ -52,7 +52,7 @@ export function usePushNotifications() {
       const result = await Notification.requestPermission();
       setPermission(result);
       if (result !== "granted") {
-        toast({ title: "Notifications blocked", description: "Allow notifications in your browser settings.", variant: "destructive" });
+        toast({ title: "Notifications bloquées", description: "Autorisez les notifications dans les réglages de votre navigateur.", variant: "destructive" });
         return;
       }
 
@@ -80,9 +80,9 @@ export function usePushNotifications() {
       if (error) throw error;
 
       setSubscribed(true);
-      toast({ title: "Notifications enabled", description: "You'll receive a notification for every new order." });
+      toast({ title: "Notifications activées", description: "Vous recevrez les notifications sur cet appareil." });
     } catch (err) {
-      toast({ title: "Failed to enable notifications", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: "Impossible d'activer les notifications", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -100,9 +100,9 @@ export function usePushNotifications() {
         if (deleteError) throw deleteError;
       }
       setSubscribed(false);
-      toast({ title: "Notifications disabled" });
+      toast({ title: "Notifications désactivées" });
     } catch (err) {
-      toast({ title: "Failed to disable notifications", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: "Impossible de désactiver les notifications", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }

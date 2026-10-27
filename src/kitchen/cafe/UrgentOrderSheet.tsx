@@ -97,7 +97,7 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId: fixedCafe
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium">
-            {c.urgentNeededBy} (Paris)
+            {c.urgentNeededByField}
             <input
               type="datetime-local"
               value={neededBy}

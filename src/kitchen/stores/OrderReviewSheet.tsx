@@ -5,7 +5,7 @@ import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useLang } from "@/i18n";
+import { useKitchenLang } from "@/kitchen/i18n";
 import {
   kitchenErrorMessage, notifyKitchen, useAdjustItem, useApproveOrder, useDeclineOrder, useLockOrder,
   useKitchenOrders, useSendOrder, useSetItem, useUnlockOrder, type KitchenChange,
@@ -29,7 +29,7 @@ type Props = {
 export default function OrderReviewSheet({ order, products, availableMinutes, onClose }: Props) {
   const t = useKitchenT();
   const s = t.stores;
-  const { lang } = useLang();
+  const lang = useKitchenLang();
   const { data: weekOrders = [] } = useKitchenOrders({ weekStart: order.weekStart });
   const orders = useMemo(() => weekOrders.filter((o) => o.status === "approved"), [weekOrders]);
   const lock = useLockOrder();
