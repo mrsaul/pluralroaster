@@ -34,14 +34,21 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
   const lang = useKitchenLang();
   const now = useNow();
   const { data: rounds = [], isLoading } = useNextOpenRounds(2);
-  const [picked, setPicked] = useState(0);
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const qc = useQueryClient();
   const [urgentOpen, setUrgentOpen] = useState(false);
   const { data: products = [] } = useKitchenProducts();
   const visible = useMemo(() => products.filter((p) => p.isVisible), [products]);
 
-  if (isLoading) return <p className="p-4 text-sm text-muted-foreground">{c.loading}</p>;
+  // Selection is by production date so a refetch that shifts the list never swaps the cart.
+  const round = rounds.find((r) => r.productionDate === pickedDate) ?? rounds[0];
+  const closed = !!round && now >= new Date(round.cutoffAt);
+  // The shown round just closed: refetch so it drops out of the open rounds.
+  useEffect(() => {
+    if (closed) void qc.invalidateQueries({ queryKey: ["kitchen", "nextOpenRounds"] });
+  }, [closed, qc]);
 
-  const round = rounds[Math.min(picked, rounds.length - 1)];
+  if (isLoading) return <p className="p-4 text-sm text-muted-foreground">{c.loading}</p>;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-32 pt-4">
@@ -60,13 +67,13 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
             </p>
             {rounds.length > 1 && (
               <div role="group" className="mt-3 grid grid-cols-2 gap-2">
-                {rounds.map((r, i) => (
+                {rounds.map((r) => (
                   <Button
                     key={r.productionDate}
                     variant={r === round ? "default" : "outline"}
                     className="h-11"
                     aria-pressed={r === round}
-                    onClick={() => setPicked(i)}
+                    onClick={() => setPickedDate(r.productionDate)}
                   >
                     {shortRoundLabel(r, lang)}
                   </Button>

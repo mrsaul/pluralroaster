@@ -127,6 +127,39 @@ describe("CafeHome rounds", () => {
     }
   });
 
+  it("keeps the picked round when the open-rounds list shifts", () => {
+    const { rerender } = render(<CafeHome cafeId="c1" cafeName="A" />);
+    fireEvent.click(screen.getByRole("button", { name: "Vendredi 6 nov." }));
+    expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
+    mocks.rounds = [
+      mocks.rounds[1],
+      { roundId: "r1", roundName: "Mardi", productionDate: "2026-11-10", cutoffAt: "2099-01-08T20:00:00Z", capacityMinutes: 600 },
+    ];
+    rerender(<QueryClientProvider client={new QueryClient()}><CafeHome cafeId="c1" cafeName="A" /></QueryClientProvider>);
+    expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
+  });
+
+  it("flushes a pending Mardi edit to the Mardi order when switching to Vendredi", () => {
+    mocks.orders = [
+      order({ id: "oT", cafeId: "c1", productionDate: "2026-11-03", status: "draft", items: [] }),
+      order({ id: "oF", cafeId: "c1", productionDate: "2026-11-06", roundId: "r2", status: "draft", items: [] }),
+    ];
+    render(<CafeHome cafeId="c1" cafeName="A" />);
+    fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Vendredi 6 nov." }));
+    expect(mocks.setItem).toHaveBeenCalledTimes(1);
+    expect(mocks.setItem).toHaveBeenCalledWith({ orderId: "oT", productId: "p1", units: 1 });
+  });
+
+  it("creates the Mardi draft for a pending Mardi edit when switching before any order exists", async () => {
+    render(<CafeHome cafeId="c1" cafeName="A" />);
+    fireEvent.click(screen.getAllByLabelText("Augmenter la quantité")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Vendredi 6 nov." }));
+    await act(async () => {});
+    expect(mocks.draft).toHaveBeenCalledTimes(1);
+    expect(mocks.draft).toHaveBeenCalledWith({ cafeId: "c1", productionDate: "2026-11-03" });
+  });
+
   it("shows the empty message and no cart when no round is open", () => {
     mocks.rounds = [];
     render(<CafeHome cafeId="c1" cafeName="A" />);
@@ -137,6 +170,13 @@ describe("CafeHome rounds", () => {
 });
 
 describe("CafeOrders", () => {
+  it("titles an urgent order as urgent, not as a weekly order", () => {
+    mocks.orders = [order({ cafeId: "c1", kind: "urgent", status: "sent", items: [item("p1", 1)] })];
+    render(<CafeOrders cafeId="c1" />);
+    expect(screen.getByText("Commande urgente")).toBeInTheDocument();
+    expect(screen.queryByText("Commande")).toBeNull();
+  });
+
   it("groups orders by production date with round labels", () => {
     mocks.orders = [
       order({ cafeId: "c1", productionDate: "2026-11-03", items: [item("p1", 1)] }),
