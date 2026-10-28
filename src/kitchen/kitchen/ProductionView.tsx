@@ -68,8 +68,11 @@ export default function ProductionView() {
                       </div>
                     </dl>
                   </div>
-                  <div data-testid={`to-produce-${r.productId}`} className="shrink-0 text-right">
-                    <p className="text-[26px] font-bold leading-none tabular-nums text-brand-ink">{r.toProduceUnits} × {r.unitLabel}</p>
+                  <div data-testid={`to-produce-${r.productId}`} className="max-w-[40%] shrink-0 text-right">
+                    <p className="break-words text-brand-ink">
+                      <span className="text-[26px] font-bold leading-none tabular-nums">{r.toProduceUnits}</span>
+                      <span className="block text-xs font-semibold">× {r.unitLabel}</span>
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">{unitsToPieces(r.toProduceUnits, ppu)} {k.pcs}</p>
                   </div>
                 </li>

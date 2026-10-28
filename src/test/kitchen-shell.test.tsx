@@ -167,6 +167,11 @@ describe("CuisineShell", () => {
     expect(screen.getByTestId("cuisine-content").className).toMatch(/pb-\[calc\(env\(safe-area-inset-bottom\)\+7rem\)\]/);
   });
 
+  it("does not add a second side gutter around screen content", () => {
+    renderShell();
+    expect(screen.getByTestId("cuisine-content").className).not.toMatch(/(^|\s)px-4(\s|$)/);
+  });
+
   it("shows the compact title after scrolling", () => {
     renderShell();
     expect(screen.getByTestId("compact-title")).toHaveAttribute("data-compact", "false");

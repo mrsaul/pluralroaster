@@ -234,7 +234,7 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
                         className="w-full break-words rounded-full bg-secondary px-4 py-3 text-left text-sm text-secondary-foreground"
                         onClick={() => { setExtra((e) => [...e, p.id]); change(p.id, 1); setAdding(false); }}
                       >
-                        {p.name}{!p.isVisible && <span className="ml-1 text-xs text-muted-foreground">({s.hidden})</span>}
+                        {p.name}{!p.isVisible && <span className="ml-1 text-xs font-normal italic text-brand-ink">({s.hidden})</span>}
                       </button>
                     </li>
                   ))}

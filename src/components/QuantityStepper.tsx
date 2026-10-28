@@ -29,7 +29,7 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
         whileTap={{ scale: 0.92 }}
         onClick={decrement}
         disabled={disabled}
-        className="w-9 h-9 rounded-lg cuisine:h-10 cuisine:w-10 cuisine:rounded-full border border-border bg-secondary disabled:opacity-40 flex items-center justify-center text-foreground transition-colors duration-150 hover:bg-muted"
+        className="w-9 h-9 rounded-lg cuisine:h-10 cuisine:w-10 cuisine:rounded-full border border-border bg-secondary disabled:opacity-40 flex items-center justify-center text-foreground transition-colors duration-150 hover:bg-muted cuisine:hover:bg-card"
         aria-label="Diminuer la quantité"
       >
         <Minus className="w-4 h-4" />
@@ -45,7 +45,7 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
           "w-9 h-9 rounded-lg cuisine:h-10 cuisine:w-10 cuisine:rounded-full flex items-center justify-center transition-colors duration-150 disabled:opacity-40",
           value > 0
             ? "bg-primary text-primary-foreground"
-            : "border border-border bg-secondary text-foreground hover:bg-muted"
+            : "border border-border bg-secondary text-foreground hover:bg-muted cuisine:hover:bg-card"
         )}
         aria-label="Augmenter la quantité"
       >

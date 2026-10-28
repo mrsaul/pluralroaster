@@ -1,3 +1,4 @@
+import reviewSheetSource from "@/kitchen/stores/OrderReviewSheet.tsx?raw";
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QuantityStepper } from "@/components/QuantityStepper";
@@ -91,5 +92,21 @@ describe("QuantityStepper", () => {
       expect(cls).toContain("cuisine:rounded-full");
       expect(cls).toContain("rounded-lg");
     }
+  });
+
+  it("keeps both buttons visible against the pill on sticky hover", () => {
+    render(<QuantityStepper value={0} step={1} onChange={() => {}} />);
+    for (const name of ["Diminuer la quantité", "Augmenter la quantité"]) {
+      expect(screen.getByRole("button", { name }).className).toContain("cuisine:hover:bg-card");
+    }
+  });
+});
+
+describe("OrderReviewSheet add-product list", () => {
+  it("renders the hidden suffix in ink, not muted grey (contrast on bg-secondary)", () => {
+    const line = reviewSheetSource.split("\n").find((l) => l.includes("{p.name}{!p.isVisible"));
+    expect(line).toBeDefined();
+    expect(line).toContain("text-brand-ink");
+    expect(line).not.toContain("text-muted-foreground");
   });
 });

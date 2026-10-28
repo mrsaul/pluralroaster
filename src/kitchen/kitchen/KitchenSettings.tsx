@@ -33,7 +33,7 @@ export default function KitchenSettings() {
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 pb-16 pt-4">
-            <RoundsEditor />
+      <RoundsEditor />
       <section className="flex flex-col gap-3 rounded-[26px] border border-brand-line bg-card p-4">
         <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">{k.reminderHours}
           <input className={inputCls} type="number" inputMode="numeric" min={0} max={48} value={reminder} onChange={(e) => setReminder(e.target.value)} />

@@ -41,9 +41,11 @@ export function LargeTitle({ title, actions }: LargeTitleProps) {
           compact ? "" : "pointer-events-none"
         }`}
       >
-        <p className="truncate px-16 py-3 text-center text-[16px] font-bold">{title}</p>
+        <div className="mx-auto max-w-xl px-4">
+          <p className="truncate px-12 py-3 text-center text-[16px] font-bold">{title}</p>
+        </div>
       </motion.div>
-      <header className="flex items-end justify-between gap-3 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)]">
+      <header className="mx-auto flex max-w-xl items-end justify-between gap-3 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)]">
         <h1 className="min-w-0 text-[30px] font-extrabold leading-tight tracking-[-0.025em]">{title}</h1>
         {actions ? (
           <div className="flex shrink-0 items-center gap-1 rounded-full border border-brand-line bg-white/80 p-1 shadow-sm backdrop-blur-[18px] backdrop-saturate-150">

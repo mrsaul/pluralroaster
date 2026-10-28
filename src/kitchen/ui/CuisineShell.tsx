@@ -77,7 +77,7 @@ export default function CuisineShell({
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: reduceMotion ? 0 : 0.15 }}
-            className="px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)]"
+            className="pb-[calc(env(safe-area-inset-bottom)+7rem)]"
           >
             {children}
           </motion.div>

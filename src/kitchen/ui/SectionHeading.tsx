@@ -1,9 +1,8 @@
-/* eslint-disable react-refresh/only-export-components -- constants are part of the agreed module interface */
 import type { ReactNode } from "react";
 import { BrandShape, type BrandColor, type ShapeKind } from "./BrandShape";
 
 /** Fixed shape and colour per meaning (spec "Shapes"). */
-export const SECTION_SHAPES: Record<string, { shape: ShapeKind; color: BrandColor }> = {
+export const SECTION_SHAPES = {
   urgent: { shape: "triangle", color: "coral" },
   weekly: { shape: "circle", color: "blue" },
   capacity: { shape: "semi", color: "orange" },
@@ -11,7 +10,7 @@ export const SECTION_SHAPES: Record<string, { shape: ShapeKind; color: BrandColo
   toReview: { shape: "quarter", color: "sand" },
   approved: { shape: "semi", color: "blue" },
   notSent: { shape: "quarter", color: "orange" },
-};
+} as const satisfies Record<string, { shape: ShapeKind; color: BrandColor }>;
 
 interface SectionHeadingProps {
   shape: ShapeKind;
