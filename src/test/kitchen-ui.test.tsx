@@ -3,6 +3,9 @@ import { render } from "@testing-library/react";
 import { useCuisineTheme } from "@/kitchen/ui/useCuisineTheme";
 import { buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { contrastRatio } from "@/kitchen/ui/contrast";
+import { BrandShape } from "@/kitchen/ui/BrandShape";
+import { PILL_COLORS, toneForStatus } from "@/kitchen/ui/StatusPill";
 
 function Probe() {
   useCuisineTheme();
@@ -43,5 +46,27 @@ describe("shared shadcn components under cuisine:", () => {
       </Sheet>,
     );
     expect(document.querySelector("[data-grabber]")).not.toBeNull();
+  });
+});
+
+describe("brand primitives", () => {
+  it("computes WCAG contrast", () => {
+    expect(contrastRatio("#000000", "#FFFFFF")).toBeCloseTo(21, 0);
+    expect(contrastRatio("#FFFFFF", "#F0605C")).toBeLessThan(4.5); // why coral carries ink
+  });
+  it.each(Object.entries(PILL_COLORS))("pill %s reaches 4.5:1", (_tone, { bg, fg }) => {
+    expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("muted text on paper reaches 4.5:1", () => {
+    expect(contrastRatio("#6B645B", "#FBF8F1")).toBeGreaterThanOrEqual(4.5);
+  });
+  it("maps order statuses to tones", () => {
+    expect(toneForStatus("approved")).toBe("blue");
+    expect(toneForStatus("ready")).toBe("green");
+    expect(toneForStatus("declined")).toBe("coral");
+  });
+  it("shapes are hidden from screen readers", () => {
+    const { container } = render(<BrandShape kind="triangle" color="coral" />);
+    expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
 });
