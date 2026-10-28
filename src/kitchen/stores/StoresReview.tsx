@@ -15,38 +15,41 @@ import { formatWhen, useNow } from "../cafe/useNow";
 import UrgentOrderSheet from "../cafe/UrgentOrderSheet";
 import type { KitchenOrder } from "../types";
 import RoundPicker from "../components/RoundPicker";
+import { SectionHeading, SECTION_SHAPES } from "../ui/SectionHeading";
+import { StatusPill } from "../ui/StatusPill";
 import CapacityBar from "./CapacityBar";
 import OrderReviewSheet from "./OrderReviewSheet";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ kind, title, children }: { kind: keyof typeof SECTION_SHAPES; title: string; children: React.ReactNode }) {
+  const { shape, color } = SECTION_SHAPES[kind];
   return (
-    <section className="mt-5">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-      <ul className="flex flex-col gap-2">{children}</ul>
+    <section className="mt-6">
+      <SectionHeading shape={shape} color={color} title={title} />
+      <ul className="mt-1 flex flex-col divide-y divide-brand-line">{children}</ul>
     </section>
   );
 }
 
 function Badge({ n }: { n: number }) {
   const s = useKitchenT().stores;
-  return n > 0 ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-950">{s.urgentCount(n)}</span> : null;
+  return n > 0 ? <span><StatusPill tone="sand">{s.urgentCount(n)}</StatusPill></span> : null;
 }
 
 function Row({ o, flag, n, lang, onOpen }: { o: KitchenOrder; flag?: string; n: number; lang: Lang; onOpen: (id: string) => void }) {
   const s = useKitchenT().stores;
   return (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="font-medium">{o.cafeName}</p>
-        <p className="text-xs text-muted-foreground">
+    <li className="flex items-center justify-between gap-3 py-3">
+      <div className="flex min-w-0 flex-col items-start gap-1">
+        <p className="min-w-0 break-words text-[15px] font-semibold">{o.cafeName}</p>
+        <p className="min-w-0 break-words text-[12.5px] text-muted-foreground">
           {s.itemsCount(o.items.length)}{o.neededBy ? ` · ${s.neededBy(formatWhen(o.neededBy, lang))}` : ""}
         </p>
-        {flag && <p className="text-xs font-medium text-destructive">{flag}</p>}
+        {flag && <StatusPill tone="orange">{flag}</StatusPill>}
         <Badge n={n} />
       </div>
-      <Button className="h-11" onClick={() => onOpen(o.id)}>{s.review}</Button>
+      <Button variant="outline" className="shrink-0" onClick={() => onOpen(o.id)}>{s.review}</Button>
     </li>
   );
 }
@@ -112,37 +115,36 @@ export default function StoresReview() {
   const openOrder = [...weekly, ...urgentAll].find((o) => o.id === openId) ?? null;
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
+    <div className="mx-auto max-w-xl px-4 pb-32 pt-4">
       <RoundPicker occurrences={occurrences} value={productionDate} onChange={setPicked} defaultValue={defaultRound?.productionDate ?? null} />
       <CapacityBar neededMinutes={capacity.neededMinutes} availableMinutes={available} />
-      <Button variant="outline" className="mt-4 h-12 w-full" onClick={() => setUrgentOpen(true)}>{s.newUrgent}</Button>
 
-      <Section title={s.sectionUrgent}>
+      <Section kind="urgent" title={s.sectionUrgent}>
         {urgentWaiting.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
         {urgentWaiting.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={openOrderSheet} />)}
       </Section>
-      <Section title={s.sectionReview}>
+      <Section kind="toReview" title={s.sectionReview}>
         {toReview.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
         {toReview.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={openOrderSheet} flag={afterCutoff ? s.flagNotApproved : undefined} />)}
       </Section>
-      <Section title={s.sectionApproved}>
+      <Section kind="approved" title={s.sectionApproved}>
         {approved.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
         {approved.map((o) => <Row key={o.id} o={o} n={urgentCounts.get(o.cafeId) ?? 0} lang={lang} onOpen={openOrderSheet} />)}
       </Section>
-      <Section title={s.sectionNotSent}>
+      <Section kind="notSent" title={s.sectionNotSent}>
         {notSent.length === 0 && <li className="text-sm text-muted-foreground">{s.empty}</li>}
         {notSent.map((c) => {
           const draft = weekly.find((o) => o.cafeId === c.id && o.status === "draft");
           return (
-            <li key={c.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-              <div className="flex min-w-0 flex-col gap-1">
-                <p className="font-medium">{c.name}</p>
-                {afterCutoff && <p className="text-xs font-medium text-destructive">{s.flagNotSent}</p>}
+            <li key={c.id} className="flex items-center justify-between gap-3 py-3">
+              <div className="flex min-w-0 flex-col items-start gap-1">
+                <p className="min-w-0 break-words text-[15px] font-semibold">{c.name}</p>
+                {afterCutoff && <StatusPill tone="orange">{s.flagNotSent}</StatusPill>}
                 <Badge n={urgentCounts.get(c.id) ?? 0} />
               </div>
               <Button
                 variant="outline"
-                className="h-11"
+                className="shrink-0"
                 disabled={create.isPending}
                 onClick={() => {
                   if (draft) { openOrderSheet(draft.id); return; }
@@ -172,6 +174,14 @@ export default function StoresReview() {
           onClose={() => setOpenId(null)}
         />
       )}
+      <Button
+        data-testid="urgent-fab"
+        className="fixed left-3 z-40 h-[54px] max-w-[calc(100vw-6.5rem)] whitespace-normal px-5 leading-tight shadow-lg"
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+        onClick={() => setUrgentOpen(true)}
+      >
+        {s.newUrgent}
+      </Button>
       <UrgentOrderSheet open={urgentOpen} onOpenChange={setUrgentOpen} cafes={activeCafes} products={products} />
     </div>
   );

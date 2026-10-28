@@ -199,6 +199,14 @@ describe("StoresReview", () => {
     expect(container.querySelector('[data-over="true"]')).not.toBeNull();
   });
 
+  it("urgent order button floats as a pill and keeps its name", () => {
+    render(<StoresReview />);
+    const b = screen.getByRole("button", { name: "Nouvelle commande urgente" });
+    expect(b).toHaveAttribute("data-testid", "urgent-fab");
+    expect(b.className).toContain("fixed");
+    expect(b.className).toContain("left-3");
+  });
+
   it("creates an urgent order for a picked café", () => {
     render(<StoresReview />);
     fireEvent.click(screen.getByRole("button", { name: "Nouvelle commande urgente" }));
