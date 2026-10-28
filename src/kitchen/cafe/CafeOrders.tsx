@@ -9,6 +9,7 @@ import { formatRoundLabel } from "../lib/rounds";
 import { effectiveUnits } from "../lib/production";
 import { buildOrderShareText } from "../lib/share";
 import type { KitchenOrder } from "../types";
+import { StatusPill, toneForStatus } from "../ui/StatusPill";
 import { formatWhen } from "./useNow";
 
 const STEPS: KitchenOrder["status"][] = ["draft", "sent", "approved", "ready", "received"];
@@ -16,7 +17,7 @@ const STEPS: KitchenOrder["status"][] = ["draft", "sent", "approved", "ready", "
 function StatusSteps({ order }: { order: KitchenOrder }) {
   const t = useKitchenT().cafeApp;
   if (order.status === "declined") {
-    return <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">{t.status.declined}</span>;
+    return <StatusPill tone="coral">{t.status.declined}</StatusPill>;
   }
   const steps = order.kind === "urgent" ? STEPS.slice(1) : STEPS;
   const idx = steps.indexOf(order.status);
@@ -26,9 +27,13 @@ function StatusSteps({ order }: { order: KitchenOrder }) {
         <li
           key={s}
           aria-current={i === idx ? "step" : undefined}
-          className={i === idx ? "rounded-full bg-primary px-2 py-0.5 font-medium text-primary-foreground" : i < idx ? "text-foreground" : "text-muted-foreground"}
+          className={i < idx ? "text-foreground" : i > idx ? "text-muted-foreground" : undefined}
         >
-          {order.kind === "urgent" && s === "sent" && i === idx ? t.waitingApproval : t.status[s]}
+          {i === idx ? (
+            <StatusPill tone={toneForStatus(s)}>{order.kind === "urgent" && s === "sent" ? t.waitingApproval : t.status[s]}</StatusPill>
+          ) : (
+            t.status[s]
+          )}
           {i < steps.length - 1 && <span className="ml-1 text-muted-foreground">›</span>}
         </li>
       ))}
@@ -59,9 +64,9 @@ function OrderCard({ order }: { order: KitchenOrder }) {
   const title = order.kind === "urgent" ? c.urgentOrder : c.weeklyOrder;
 
   return (
-    <li className="rounded-xl border border-border bg-card p-4">
+    <li className="rounded-[26px] border border-brand-line bg-card p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="font-medium">{title}</p>
+        <p className="font-bold">{title}</p>
         <Button variant="ghost" size="icon" className="h-10 w-10" aria-label={c.share} onClick={() => void share()}>
           <Share2 className="h-4 w-4" />
         </Button>
@@ -74,7 +79,7 @@ function OrderCard({ order }: { order: KitchenOrder }) {
         <p className="mt-1 text-sm text-muted-foreground">{c.urgentNeededBy} : {formatWhen(order.neededBy, lang)}</p>
       )}
       {order.kind === "urgent" && order.status === "declined" && order.declineNote && (
-        <p className="mt-2 text-sm text-destructive">{c.declinedNote(order.declineNote)}</p>
+        <p className="mt-2 text-sm text-foreground">{c.declinedNote(order.declineNote)}</p>
       )}
       {order.kind === "urgent" && order.status === "approved" && order.readyEta && (
         <p className="mt-2 text-sm font-medium">{c.kitchenReady(formatWhen(order.readyEta, lang))}</p>
@@ -85,7 +90,7 @@ function OrderCard({ order }: { order: KitchenOrder }) {
           const eff = effectiveUnits(it);
           return (
             <li key={it.productId} className="flex justify-between gap-2">
-              <span>{it.productName}</span>
+              <span className="min-w-0 break-words">{it.productName}</span>
               <span className="tabular-nums text-muted-foreground">
                 {adjusted ? `${it.units} → ${eff}` : eff} × {it.unitLabel} ({unitsToPieces(eff, it.piecesPerUnit)} {c.pcs})
               </span>
@@ -95,7 +100,7 @@ function OrderCard({ order }: { order: KitchenOrder }) {
       </ul>
       {order.status === "ready" && (
         <Button
-          className="mt-3 h-12 w-full"
+          className="mt-3 w-full"
           disabled={received.isPending}
           onClick={() =>
             received.mutate({ orderId: order.id }, { onError: (err) => toast.error(kitchenErrorMessage(err, t)) })
@@ -119,7 +124,7 @@ export default function CafeOrders({ cafeId }: { cafeId: string }) {
   for (const o of list) groups.set(o.productionDate, [...(groups.get(o.productionDate) ?? []), o]);
   const dates = [...groups.keys()].sort().reverse();
   return (
-    <div className="mx-auto max-w-xl px-4 pb-8 pt-4">
+    <div className="mx-auto max-w-xl px-4 pb-8 pt-2">
       {list.length === 0 && <p className="text-sm text-muted-foreground">{c.noOrders}</p>}
       {dates.map((d) => (
         <section key={d} className="mb-5">

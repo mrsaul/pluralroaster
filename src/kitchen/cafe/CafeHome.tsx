@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +18,8 @@ import { formatRoundLabel } from "../lib/rounds";
 import type { RoundOccurrence } from "../types";
 import CafeCartBar from "./CafeCartBar";
 import UrgentOrderSheet from "./UrgentOrderSheet";
+import { BrandShape } from "../ui/BrandShape";
+import { StatusPill } from "../ui/StatusPill";
 import { formatWhen, useNow } from "./useNow";
 
 const DEBOUNCE_MS = 400;
@@ -51,10 +52,10 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
   if (isLoading) return <p className="p-4 text-sm text-muted-foreground">{c.loading}</p>;
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-32 pt-4">
+    <div className="mx-auto max-w-xl px-4 pb-20 pt-2">
       {cafeName && <p className="mb-3 text-sm text-muted-foreground">{cafeName}</p>}
 
-      <Button variant="outline" className="mb-4 h-12 w-full" onClick={() => setUrgentOpen(true)}>{c.urgentButton}</Button>
+      <Button variant="outline" className="mb-4 w-full" onClick={() => setUrgentOpen(true)}>{c.urgentButton}</Button>
 
       {!round ? (
         <p className="text-sm text-muted-foreground">{c.noRound}</p>
@@ -71,7 +72,6 @@ export default function CafeHome({ cafeId, cafeName }: { cafeId: string; cafeNam
                   <Button
                     key={r.productionDate}
                     variant={r === round ? "default" : "outline"}
-                    className="h-11"
                     aria-pressed={r === round}
                     onClick={() => setPickedDate(r.productionDate)}
                   >
@@ -212,21 +212,21 @@ function RoundCart({ cafeId, round }: { cafeId: string; round: RoundOccurrence }
   return (
     <>
       {!beforeCutoff && (
-        <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+        <div role="status" className="mb-4 rounded-[26px] bg-brand-sand p-4 text-brand-ink">
           <p className="flex items-start gap-2 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            {missed ? c.missedBanner : c.closedBanner}
+            <BrandShape kind="triangle" color="orange" size={16} className="mt-0.5 shrink-0" />
+            <span className="min-w-0 break-words">{missed ? c.missedBanner : c.closedBanner}</span>
           </p>
         </div>
       )}
 
       {visible.length === 0 && <p className="text-sm text-muted-foreground">{c.noProducts}</p>}
-      <ul className="flex flex-col gap-3">
+      <ul className="divide-y divide-brand-line rounded-[26px] border border-brand-line bg-card px-4">
         {visible.map((p) => (
-          <li key={p.id} className="rounded-xl border border-border bg-card p-4">
+          <li key={p.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-medium">{p.name}</p>
+                <p className="break-words font-bold">{p.name}</p>
                 <p className="text-sm text-muted-foreground">
                   {p.unitLabel} · {p.piecesPerUnit} {c.pcs}
                 </p>
@@ -240,6 +240,7 @@ function RoundCart({ cafeId, round }: { cafeId: string; round: RoundOccurrence }
                 disabled={!canEdit}
                 onChange={(v) => change(p.id, v)}
                 renderValue={(v) => String(v)}
+                className="shrink-0 rounded-full bg-muted p-1"
               />
             </div>
             {(qty[p.id] ?? 0) > 0 && (
@@ -250,20 +251,19 @@ function RoundCart({ cafeId, round }: { cafeId: string; round: RoundOccurrence }
           </li>
         ))}
         {shownHidden.map((i) => (
-          <li key={i.productId} className="rounded-xl border border-dashed border-border bg-card p-4">
+          <li key={i.productId} className="py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-medium">{i.productName}</p>
+                <p className="break-words font-bold">{i.productName}</p>
                 <p className="text-sm text-muted-foreground">
                   {i.unitLabel} · {i.piecesPerUnit} {c.pcs}
                 </p>
-                <p className="text-xs font-medium text-amber-700">{c.noLongerAvailable}</p>
+                <div className="mt-1"><StatusPill tone="orange">{c.noLongerAvailable}</StatusPill></div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex shrink-0 items-center gap-3">
                 <span className="tabular-nums">{qty[i.productId] ?? i.units}</span>
                 <Button
                   variant="outline"
-                  className="h-11"
                   disabled={!canEdit}
                   aria-label={`${c.remove} ${i.productName}`}
                   onClick={() => change(i.productId, 0)}
