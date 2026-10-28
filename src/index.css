@@ -94,6 +94,55 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 24 95% 46%;
   }
+
+  /* Cuisine ("Papier discret") theme: class sits on <html> so portals are themed too. */
+  .theme-cuisine {
+    --background: 42 55.6% 96.5%;
+    --foreground: 36 9.8% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 36 9.8% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 36 9.8% 10%;
+    --primary: 36 9.8% 10%;
+    --primary-foreground: 42 55.6% 96.5%;
+    --secondary: 40 27.3% 87.1%;
+    --secondary-foreground: 36 9.8% 10%;
+    --muted: 42.4 43.6% 92.4%;
+    --muted-foreground: 33.7 8.1% 38.8%;
+    --accent: 42.4 43.6% 92.4%;
+    --accent-foreground: 36 9.8% 10%;
+    --destructive: 1.6 83.1% 65.1%;
+    --destructive-foreground: 36 9.8% 10%;
+    --border: 40 27.3% 87.1%;
+    --input: 40 27.3% 87.1%;
+    --ring: 218.9 39.8% 53.7%;
+    --radius: 1.625rem;
+
+    /* Brand tokens */
+    --brand-coral: 1.6 83.1% 65.1%;
+    --brand-coral-100: 2.3 86.7% 94.1%;
+    --brand-blue: 218 46.6% 65.5%;
+    --brand-blue-600: 218.9 39.8% 53.7%;
+    --brand-orange: 33.9 87.4% 53.1%;
+    --brand-orange-200: 35.4 88.9% 75.3%;
+    --brand-sand: 43.3 72% 80.4%;
+    --brand-salmon: 7.4 71.7% 77.8%;
+    --brand-green: 108 38.5% 40.8%;
+    --brand-green-600: 108.4 41.1% 32%;
+  }
+
+  .theme-cuisine body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .theme-cuisine *,
+    .theme-cuisine *::before,
+    .theme-cuisine *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @layer base {
