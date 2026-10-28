@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 import { ChevronDown, Check } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -72,18 +73,18 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const statusLabel: Record<string, string> = {
-    pending: "Pending",
-    confirmed: "Preparing",
-    fulfilled: "Delivered",
-    synced: "Confirmed",
-    received: "Received",
-    approved: "Approved",
-    in_production: "In Production",
-    ready_for_packaging: "Ready for Packaging",
-    packaging: "Packaging",
-    ready_for_delivery: "Ready for Delivery",
-    shipped: "Shipped",
-    delivered: "Delivered",
+    pending: "En attente",
+    confirmed: "En préparation",
+    fulfilled: "Livrée",
+    synced: "Confirmée",
+    received: "Reçue",
+    approved: "Validée",
+    in_production: "En production",
+    ready_for_packaging: "Prête pour l'emballage",
+    packaging: "En emballage",
+    ready_for_delivery: "Prête à livrer",
+    shipped: "Expédiée",
+    delivered: "Livrée",
   };
 
   return (
@@ -99,7 +100,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
       >
         <div className="min-w-0 space-y-1">
           <p className="text-lg font-semibold text-foreground">
-            {format(parseISO(order.deliveryDate), "EEEE d MMMM")}
+            {format(parseISO(order.deliveryDate), "EEEE d MMMM", { locale: fr })}
           </p>
           <p className="text-xs text-muted-foreground">
             {order.items.length} item{order.items.length !== 1 ? "s" : ""} · {order.totalKg.toFixed(0)} kg
@@ -143,11 +144,11 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                   </p>
                 )}
                 <p className="text-foreground">
-                  <span className="text-muted-foreground">Order date: </span>
+                  <span className="text-muted-foreground">Date de commande : </span>
                   {format(parseISO(order.createdAt), "dd/MM/yyyy")}
                 </p>
                 <p className="text-foreground">
-                  <span className="text-muted-foreground">Delivery date: </span>
+                  <span className="text-muted-foreground">Date de livraison : </span>
                   {format(parseISO(order.deliveryDate), "dd/MM/yyyy")}
                 </p>
               </div>
@@ -155,7 +156,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
               {/* Items table */}
               <div>
                 <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 border-b-2 border-foreground pb-2 text-sm font-semibold text-foreground">
-                  <span>Product</span>
+                  <span>Produit</span>
                   <span className="text-center">Units/Kgs</span>
                   <span className="text-right">Sub.Total</span>
                 </div>
@@ -193,7 +194,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                   onClick={() => onReorder?.(order)}
                   className="rounded-full border-primary/40 text-primary hover:bg-primary/10"
                 >
-                  Order again
+                  Commander à nouveau
                 </Button>
               </div>
             </div>

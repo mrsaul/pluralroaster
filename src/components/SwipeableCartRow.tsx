@@ -129,7 +129,7 @@ export function SwipeableCartRow({
         onClick={isSnappedEdit ? openEdit : undefined}
       >
         <Pencil className="w-5 h-5 text-white" />
-        <span className="text-[11px] font-semibold text-white">Edit</span>
+        <span className="text-[11px] font-semibold text-white">Modifier</span>
       </div>
 
       {/* ── Remove action (right, revealed by swipe-left) ── */}
@@ -142,7 +142,7 @@ export function SwipeableCartRow({
         onClick={isSnappedRemove ? onRemove : undefined}
       >
         <Trash2 className="w-5 h-5 text-white" />
-        <span className="text-[11px] font-semibold text-white">Remove</span>
+        <span className="text-[11px] font-semibold text-white">Retirer</span>
       </div>
 
       {/* ── Foreground row ── */}
@@ -187,7 +187,7 @@ export function SwipeableCartRow({
                 type="button"
                 onClick={(e) => { e.stopPropagation(); openEdit(); }}
                 className="p-1.5 rounded-lg text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors"
-                title="Edit"
+                title="Modifier"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
@@ -195,7 +195,7 @@ export function SwipeableCartRow({
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onRemove(); }}
                 className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                title="Remove"
+                title="Retirer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

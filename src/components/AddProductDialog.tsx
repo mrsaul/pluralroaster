@@ -153,9 +153,9 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
       if (uploadErr) throw uploadErr;
       const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(path);
       setImageUrl(`${urlData.publicUrl}?t=${Date.now()}`);
-      toast({ title: "Image uploaded" });
+      toast({ title: "Image envoyée" });
     } catch (err) {
-      toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de l'envoi", description: String(err), variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -163,25 +163,25 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast({ title: "Product name is required", variant: "destructive" });
+      toast({ title: "Le nom du produit est obligatoire", variant: "destructive" });
       return;
     }
 
     const price = parseFloat(pricePerKg);
     if (isNaN(price) || price <= 0) {
-      toast({ title: "Please set a valid base price per kg", variant: "destructive" });
+      toast({ title: "Indiquez un prix de base au kg valide", variant: "destructive" });
       return;
     }
 
     const activeVariants = variants.filter(v => v.is_active);
     if (variants.length > 0 && activeVariants.length === 0) {
-      toast({ title: "At least one size must be active", variant: "destructive" });
+      toast({ title: "Au moins un format doit être actif", variant: "destructive" });
       return;
     }
 
     for (const v of activeVariants) {
       if (!v.price || v.price <= 0) {
-        toast({ title: `Price required for ${v.size_label}`, variant: "destructive" });
+        toast({ title: `Prix obligatoire pour ${v.size_label}`, variant: "destructive" });
         return;
       }
     }
@@ -224,12 +224,12 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
         if (varErr) throw varErr;
       }
 
-      toast({ title: "Product created" });
+      toast({ title: "Produit créé" });
       clearDraft();
       onCreated();
       onOpenChange(false);
     } catch (err) {
-      toast({ title: "Create failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de la création", description: String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -242,8 +242,8 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
     <Dialog open={open} onOpenChange={(o) => { if (!o && !showDraftBanner) { /* keep draft alive */ } onOpenChange(o); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Product</DialogTitle>
-          <DialogDescription>Create a new coffee reference with sizes and pricing.</DialogDescription>
+          <DialogTitle>Nouveau produit</DialogTitle>
+          <DialogDescription>Créer une nouvelle référence de café avec ses formats et ses prix.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -253,7 +253,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
           {/* Data Source Mode */}
           <div className="rounded-xl border-2 border-border p-4 space-y-3">
-            <p className="text-sm font-medium text-foreground">Data Source</p>
+            <p className="text-sm font-medium text-foreground">Source des données</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -265,8 +265,8 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
               >
                 <Link2 className={cn("h-4 w-4 shrink-0", dataSourceMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
                 <div>
-                  <p className={cn("text-sm font-medium", dataSourceMode === "sellsy" ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
-                  <p className="text-[11px] text-muted-foreground">Linked to Sellsy</p>
+                  <p className={cn("text-sm font-medium", dataSourceMode === "sellsy" ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
+                  <p className="text-[11px] text-muted-foreground">Lié à Sellsy</p>
                 </div>
               </button>
               <button
@@ -279,14 +279,14 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
               >
                 <Unlink2 className={cn("h-4 w-4 shrink-0", dataSourceMode === "custom" ? "text-accent-foreground" : "text-muted-foreground")} />
                 <div>
-                  <p className={cn("text-sm font-medium", dataSourceMode === "custom" ? "text-accent-foreground" : "text-foreground")}>App Only</p>
-                  <p className="text-[11px] text-muted-foreground">Managed locally</p>
+                  <p className={cn("text-sm font-medium", dataSourceMode === "custom" ? "text-accent-foreground" : "text-foreground")}>App uniquement</p>
+                  <p className="text-[11px] text-muted-foreground">Géré dans l'app</p>
                 </div>
               </button>
             </div>
             {dataSourceMode === "sellsy" && (
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Sellsy Product ID</p>
+                <p className="text-xs text-muted-foreground">ID produit Sellsy</p>
                 <Input value={sellsyId} onChange={(e) => setSellsyId(e.target.value)} placeholder="e.g. 12345" />
               </div>
             )}
@@ -295,18 +295,18 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
           {/* Basic Info */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Product Name *</p>
+              <p className="text-xs text-muted-foreground">Nom du produit *</p>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Colombia Huila" />
             </div>
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Base Price per kg (€) *</p>
+              <p className="text-xs text-muted-foreground">Prix de base au kg (€) *</p>
               <Input type="number" step="0.01" min="0" value={pricePerKg} onChange={(e) => setPricePerKg(e.target.value)} placeholder="e.g. 18.00" />
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Origin</p>
+              <p className="text-xs text-muted-foreground">Origine</p>
               <Input value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="e.g. Ethiopia, Yirgacheffe" />
             </div>
             <div className="space-y-1.5">
@@ -333,7 +333,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Roast Level</p>
+              <p className="text-xs text-muted-foreground">Niveau de torréfaction</p>
               <div className="flex gap-1.5">
                 {["light", "medium", "dark"].map((r) => (
                   <button
@@ -354,20 +354,20 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
             </div>
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Description</p>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description (optional)" />
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Courte description (facultatif)" />
             </div>
           </div>
 
           {/* Image */}
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Product image (square)</p>
+            <p className="text-sm font-medium text-foreground">Image du produit (carrée)</p>
             <div className="max-w-[200px]">
               <AspectRatio ratio={1}>
                 {imageUrl ? (
                   <img src={imageUrl} alt={name} className="h-full w-full rounded-lg object-cover border border-border" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
-                    <p className="text-xs text-muted-foreground">No image</p>
+                    <p className="text-xs text-muted-foreground">Pas d'image</p>
                   </div>
                 )}
               </AspectRatio>
@@ -375,7 +375,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
             <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()} className="gap-2">
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading ? "Uploading…" : "Upload image"}
+              {uploading ? "Envoi…" : "Envoyer une image"}
             </Button>
           </div>
 
@@ -394,7 +394,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
             </div>
             <div className="flex gap-2">
               <Input
-                placeholder="Add a tag…"
+                placeholder="Ajouter un tag…"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
@@ -423,7 +423,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
           {/* Size Variants */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-foreground">Bag Sizes & Pricing</p>
+              <p className="text-sm font-medium text-foreground">Formats de sachet et prix</p>
               {pricePerKg && <p className="text-[11px] text-muted-foreground">Base: €{parseFloat(pricePerKg).toFixed(2)}/kg</p>}
             </div>
 
@@ -436,7 +436,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
                     </div>
                     <div className="flex-1 space-y-0.5">
                       <div className="flex items-center gap-2">
-                        <label className="text-[11px] text-muted-foreground w-10 shrink-0">Price</label>
+                        <label className="text-[11px] text-muted-foreground w-10 shrink-0">Prix</label>
                         <Input
                           type="number" step="0.01" min="0"
                           value={variant.price}
@@ -450,7 +450,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
                         <Input
                           value={variant.sku}
                           onChange={(e) => updateVariant(idx, "sku", e.target.value)}
-                          placeholder="Optional"
+                          placeholder="Facultatif"
                           className="h-7 text-sm font-mono w-32"
                         />
                       </div>
@@ -485,7 +485,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
             {variants.length === 0 && (
               <p className="text-xs text-muted-foreground italic">
-                Add bag sizes above. Without variants, the product uses the base per-kg pricing.
+                Ajoutez des formats ci-dessus. Sans format, le produit utilise le prix de base au kg.
               </p>
             )}
           </div>
@@ -493,18 +493,18 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
           {/* Active toggle */}
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
-              <p className="text-sm font-medium text-foreground">Active</p>
-              <p className="text-xs text-muted-foreground">Visible to clients in the shop</p>
+              <p className="text-sm font-medium text-foreground">Actif</p>
+              <p className="text-xs text-muted-foreground">Visible des clients dans la boutique</p>
             </div>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
             <Button onClick={handleSave} disabled={saving} className="gap-2">
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create Product
+              Créer le produit
             </Button>
           </div>
         </div>

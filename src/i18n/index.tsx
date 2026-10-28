@@ -221,6 +221,13 @@ const fr = {
   },
 
   // ── Global / Index ────────────────────────────────────────────────────────
+  // ── Space switch (only shown to users with Kitchen access) ────────────────
+  // Widened to string so the English dictionary type-checks against it.
+  space: {
+    coffee:  "Café" as string,
+    kitchen: "Cuisine" as string,
+  },
+
   app: {
     loading:        "Chargement…",
     reloadPage:     "Recharger la page",
@@ -376,6 +383,11 @@ const en: typeof fr = {
     noAddress:          "No addresses",
     noAddressHint:      "Your delivery addresses will appear here.",
     signOut:            "Sign out",
+  },
+
+  space: {
+    coffee:  "Coffee",
+    kitchen: "Kitchen",
   },
 
   app: {

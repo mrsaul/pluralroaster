@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.export-packaging-sheet]
 verify_jwt = false
+# notify-kitchen authenticates the caller itself (user JWT or cron secret).
+[functions.notify-kitchen]
+verify_jwt = false

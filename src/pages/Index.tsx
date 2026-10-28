@@ -2,6 +2,11 @@ import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } fro
 import { useCart, MOCK_ORDERS, type CartItem, type Order, type Product } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
 import { useT } from "@/i18n";
+import {
+  resolveLanding, canSwitchSpaces, loadLastSpace, saveLastSpace, toKitchenAccess, showsSpaceSwitch,
+  type AppRole, type KitchenAccess, type Space,
+} from "@/lib/landing";
+import { renderSpaceSwitchIfAllowed } from "@/components/SpaceSwitch";
 
 const LoginPage = lazy(() => import("./LoginPage"));
 const CatalogPage = lazy(() => import("./CatalogPage"));
@@ -13,6 +18,8 @@ const RoasterDashboard = lazy(() => import("./RoasterDashboard"));
 const PackagingDashboard = lazy(() => import("./PackagingDashboard"));
 const OnboardingPage = lazy(() => import("./OnboardingPage"));
 const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
+// Kitchen lives in its own lazy chunk — never downloaded by coffee-only users.
+const KitchenApp = lazy(() => import("@/kitchen/KitchenApp"));
 import { supabase } from "@/integrations/supabase/client";
 import { OTP_FLOW_KEY } from "./LoginPage";
 import {
@@ -43,8 +50,7 @@ function ReorderDialog({ order, onConfirm, onCancel }: { order: Order | null; on
   );
 }
 
-type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding" | "reset-password";
-type AppRole = "admin" | "user" | "roaster" | "packaging";
+type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding" | "reset-password" | "kitchen";
 
 // ── View + draft persistence (localStorage) ───────────────────────────────────
 // localStorage survives Android tab discards; sessionStorage does not.
@@ -155,6 +161,9 @@ const Index = () => {
   // this until syncUserRole confirms what the user should see.
   const [view, setViewRaw] = useState<View>("home");
   const [role, setRole] = useState<AppRole | null>(null);
+  const [kitchenAccess, setKitchenAccess] = useState<KitchenAccess | null>(null);
+  // Where "back to coffee" goes for a client: home, or onboarding if unfinished.
+  const coffeeEntryView = useRef<View>("home");
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -232,11 +241,42 @@ const Index = () => {
       throw ensureError;
     }
 
-    const normalizedRole: AppRole = ensuredRole === "admin" ? "admin"
+    // NULL means "no coffee role" (e.g. a Kitchen-only user) — keep it NULL so
+    // they never land in the coffee catalog. Brand-new users still get 'user'
+    // from the RPC itself, so self sign-ups land in coffee as before.
+    const normalizedRole: AppRole | null = ensuredRole == null ? null
+      : ensuredRole === "admin" ? "admin"
       : ensuredRole === "roaster" ? "roaster"
       : ensuredRole === "packaging" ? "packaging"
       : "user";
+
+    // Kitchen access never blocks coffee login: on failure, treat as none.
+    let kitchen: KitchenAccess | null = null;
+    try {
+      const { data: kitchenRows, error: kitchenError } = await supabase.rpc("get_my_kitchen_access");
+      if (kitchenError) {
+        console.error("get_my_kitchen_access failed", kitchenError);
+      } else {
+        kitchen = toKitchenAccess(kitchenRows);
+      }
+    } catch (err) {
+      console.error("get_my_kitchen_access failed", err);
+    }
+
     setRole(normalizedRole);
+    setKitchenAccess(kitchen);
+    coffeeEntryView.current = "home";
+
+    const landing = resolveLanding(normalizedRole, kitchen, loadLastSpace());
+
+    // No coffee role: with no Kitchen access either, render shows the login page.
+    if (normalizedRole === null) {
+      if (landing === "kitchen") {
+        // Kitchen-only user: honour the OTP password-reset flow, else Kitchen.
+        setView(localStorage.getItem(OTP_FLOW_KEY) === "1" ? "reset-password" : "kitchen");
+      }
+      return;
+    }
 
     // Non-client roles always land on their single dedicated view
     if (normalizedRole === "admin") {
@@ -291,15 +331,17 @@ const Index = () => {
         notes: company.notes,
         current_step: company.current_step,
       } : null);
-      setView("onboarding");
+      coffeeEntryView.current = "onboarding";
+      setView(landing === "kitchen" ? "kitchen" : "onboarding");
       return;
     }
 
     // Restore last client view (home/shop/orders) — skip checkout since cart
     // might be stale. Falls back to "home" if nothing saved or view is incompatible.
+    // A client who last used the Kitchen lands back in the Kitchen.
     const savedView = loadSavedView();
     const restored = savedView && RESTORABLE_CLIENT_VIEWS.includes(savedView) ? savedView : "home";
-    setView(restored);
+    setView(landing === "kitchen" ? "kitchen" : restored);
     await loadOrders();
 
     // Load discount tier for this client's company
@@ -330,6 +372,7 @@ const Index = () => {
       clearSavedView();
       sessionInitialized.current = false;
       setRole(null);
+      setKitchenAccess(null);
       setOrders([]);
       setAuthLoading(false);
       clearCart();
@@ -526,17 +569,75 @@ const Index = () => {
     </div>
   );
 
-  if (!role) {
+  if (resolveLanding(role, kitchenAccess, null) === "login") {
     return <Suspense fallback={fallback}><LoginPage /></Suspense>;
   }
 
+  const switchToKitchen = () => {
+    saveLastSpace("kitchen");
+    setView("kitchen");
+  };
+  const switchToCoffee = () => {
+    saveLastSpace("coffee");
+    setView(role === "admin" ? "admin" : coffeeEntryView.current);
+  };
+  const canSwitch = canSwitchSpaces(role, kitchenAccess);
+
+  // Kitchen-only users always get the Kitchen (or the OTP password reset).
+  if (!role && kitchenAccess && view !== "reset-password") {
+    return (
+      <Suspense fallback={fallback}>
+        <KitchenApp access={kitchenAccess} onLogout={handleLogout} />
+      </Suspense>
+    );
+  }
+
+  // Coffee/Kitchen pill — null (renders nothing) for anyone not allowed to switch.
+  const showSwitch = showsSpaceSwitch(view, role);
+  const spaceSwitch = showSwitch
+    ? renderSpaceSwitchIfAllowed(role, kitchenAccess, view === "kitchen" ? "kitchen" : "coffee", (s: Space) => {
+        if (s === "kitchen") switchToKitchen(); else switchToCoffee();
+      })
+    : null;
+
+  const withSpaceSwitch = (page: JSX.Element): JSX.Element => {
+    if (!spaceSwitch) return page;
+    return (
+      <>
+        {page}
+        <div
+          className="fixed right-3 z-[60]"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)" }}
+        >
+          {spaceSwitch}
+        </div>
+      </>
+    );
+  };
+
   switch (view) {
+    case "kitchen":
+      if (!kitchenAccess || !canSwitch) {
+        // Stale Kitchen view without access (or a role that can't switch) — back to the coffee side.
+        setView(role === "admin" ? "admin" : "home");
+        return fallback;
+      }
+      return withSpaceSwitch(
+        <Suspense fallback={fallback}>
+          <KitchenApp
+            access={kitchenAccess}
+            onLogout={handleLogout}
+            onSwitchToCoffee={switchToCoffee}
+          />
+        </Suspense>
+      );
     case "onboarding":
-      return (
+      return withSpaceSwitch(
         <Suspense fallback={fallback}>
           <OnboardingPage
             existingData={onboardingData as any}
             onComplete={async () => {
+              coffeeEntryView.current = "home";
               setView("home");
               await loadOrders();
             }}
@@ -544,7 +645,7 @@ const Index = () => {
         </Suspense>
       );
     case "home":
-      return (
+      return withSpaceSwitch(
         <>
           <Suspense fallback={fallback}>
             <CatalogPage
@@ -563,7 +664,7 @@ const Index = () => {
         </>
       );
     case "shop":
-      return (
+      return withSpaceSwitch(
         <Suspense fallback={fallback}>
           <CatalogPage
             cart={cart}
@@ -579,7 +680,7 @@ const Index = () => {
         </Suspense>
       );
     case "checkout":
-      return (
+      return withSpaceSwitch(
         <Suspense fallback={fallback}>
           <CheckoutPage
             items={cart.items}
@@ -604,7 +705,7 @@ const Index = () => {
         </Suspense>
       );
     case "orders":
-      return (
+      return withSpaceSwitch(
         <>
           <Suspense fallback={fallback}>
             <OrderHistoryPage
@@ -627,7 +728,7 @@ const Index = () => {
         </>
       );
     case "account":
-      return (
+      return withSpaceSwitch(
         <Suspense fallback={fallback}>
           <AccountPage
             orders={visibleOrders}
@@ -640,7 +741,7 @@ const Index = () => {
         </Suspense>
       );
     case "admin":
-      return <Suspense fallback={fallback}><AdminDashboard orders={orders} onLogout={handleLogout} /></Suspense>;
+      return withSpaceSwitch(<Suspense fallback={fallback}><AdminDashboard orders={orders} onLogout={handleLogout} /></Suspense>);
     case "roaster_dashboard":
       return <Suspense fallback={fallback}><RoasterDashboard onLogout={handleLogout} /></Suspense>;
     case "packaging_dashboard":

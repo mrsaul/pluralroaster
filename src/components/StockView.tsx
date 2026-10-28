@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUrlState } from "@/hooks/useUrlState";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 import { Loader2, AlertTriangle, Pencil, History, Search, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -25,11 +26,11 @@ function RelativeTime({ iso }: { iso: string }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="cursor-default whitespace-nowrap">
-            {formatDistanceToNow(date, { addSuffix: true })}
+            {formatDistanceToNow(date, { addSuffix: true, locale: fr })}
           </span>
         </TooltipTrigger>
         <TooltipContent>
-          {format(date, "MMM d, yyyy 'at' h:mm a")}
+          {format(date, "d MMM yyyy 'à' HH:mm", { locale: fr })}
         </TooltipContent>
       </Tooltip>
     );
@@ -89,7 +90,7 @@ function HistoryEntry({ row }: { row: StockHistoryRow }) {
                 : ""
             )}
           >
-            {row.change_type === "order_delivered" ? "Order delivered" : "Manual update"}
+            {row.change_type === "order_delivered" ? "Commande livrée" : "Mise à jour manuelle"}
           </Badge>
         </div>
       </div>
@@ -138,7 +139,7 @@ function EditPopover({
     <div className="space-y-3">
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          New quantity (kg)
+          Nouvelle quantité (kg)
         </label>
         <Input
           type="number"
@@ -152,7 +153,7 @@ function EditPopover({
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          Low stock threshold (kg)
+          Seuil de stock bas (kg)
         </label>
         <Input
           type="number"
@@ -165,7 +166,7 @@ function EditPopover({
       </div>
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
-          Note (optional)
+          Note (facultatif)
         </label>
         <Input
           value={editNote}
@@ -181,7 +182,7 @@ function EditPopover({
           onClick={onClose}
           disabled={updateMutation.isPending}
         >
-          Cancel
+          Annuler
         </Button>
         <Button
           size="sm"
@@ -192,7 +193,7 @@ function EditPopover({
           {updateMutation.isPending && (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           )}
-          Save
+          Enregistrer
         </Button>
       </div>
     </div>
@@ -285,7 +286,7 @@ export function StockView() {
       <section className="space-y-6">
         {/* ── Header ── */}
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Roasted stock</h2>
+          <h2 className="text-lg font-semibold text-foreground">Stock torréfié</h2>
           <p className="text-sm text-muted-foreground">
             {totalCount} {totalCount === 1 ? "reference" : "references"}
             {lowCount > 0 && (
@@ -313,7 +314,7 @@ export function StockView() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search coffee references…"
+              placeholder="Rechercher une référence de café…"
               className="pl-8 h-8 text-sm"
             />
             {search && (
@@ -339,7 +340,7 @@ export function StockView() {
                     : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                 )}
               >
-                {f === "all" ? "All" : "Low stock"}
+                {f === "all" ? "Tous" : "Stock bas"}
               </button>
             ))}
           </div>
@@ -350,12 +351,12 @@ export function StockView() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead>Coffee reference</TableHead>
+                <TableHead>Référence café</TableHead>
                 <TableHead className="text-right">Stock (kg)</TableHead>
-                <TableHead className="text-right">Threshold (kg)</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead>Last updated by</TableHead>
-                <TableHead>Last updated</TableHead>
+                <TableHead className="text-right">Seuil (kg)</TableHead>
+                <TableHead className="text-center">Statut</TableHead>
+                <TableHead>Modifié par</TableHead>
+                <TableHead>Dernière modification</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -366,10 +367,10 @@ export function StockView() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                     {search
-                      ? `No results for "${search}"`
+                      ? `Aucun résultat pour « ${search} »`
                       : filter === "low"
-                        ? "No low-stock items."
-                        : "No active products found."}
+                        ? "Aucun produit en stock bas."
+                        : "Aucun produit actif."}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -423,21 +424,21 @@ export function StockView() {
                             variant="secondary"
                             className="text-[10px] bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400"
                           >
-                            Not tracked
+                            Non suivi
                           </Badge>
                         ) : item.is_low ? (
                           <Badge
                             variant="secondary"
                             className="text-[10px] bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400"
                           >
-                            Low stock
+                            Stock bas
                           </Badge>
                         ) : (
                           <Badge
                             variant="secondary"
                             className="text-[10px] bg-green-100 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400"
                           >
-                            In stock
+                            En stock
                           </Badge>
                         )}
                       </TableCell>
@@ -468,7 +469,7 @@ export function StockView() {
                           >
                             {initMutation.isPending
                               ? <Loader2 className="w-3 h-3 animate-spin" />
-                              : "Set up"
+                              : "Configurer"
                             }
                           </Button>
                         ) : (
@@ -522,7 +523,7 @@ export function StockView() {
         <Sheet open={!!historyId} onOpenChange={(v) => { if (!v) setHistoryId(null); }}>
           <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>{historyName} — stock history</SheetTitle>
+              <SheetTitle>{historyName} — historique du stock</SheetTitle>
             </SheetHeader>
             <div className="mt-4">
               {histLoading ? (
@@ -531,7 +532,7 @@ export function StockView() {
                 </div>
               ) : historyRows.length === 0 ? (
                 <p className="text-sm text-center text-muted-foreground py-10">
-                  No updates recorded yet.
+                  Aucune mise à jour enregistrée.
                 </p>
               ) : (
                 historyRows.map((row) => <HistoryEntry key={row.id} row={row} />)

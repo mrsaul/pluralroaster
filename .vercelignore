@@ -1,3 +1,11 @@
+.env
 .env.local
 .env.*.local
 node_modules
+node_modules.icloud-old
+.tools
+.superpowers
+whatsapp
+dist
+supabase/.temp
+supabase/.branches

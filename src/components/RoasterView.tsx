@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { format, parseISO, differenceInHours, isToday, isTomorrow, addDays, startOfDay, endOfDay } from "date-fns";
+import { fr } from "date-fns/locale";
 import { Flame, ChevronDown, ChevronRight, Clock3, Package, Check, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -110,7 +111,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
         const existing = map.get(item.product_id);
         const orderEntry = {
           orderId: order.id,
-          clientName: order.client_name || "Unknown",
+          clientName: order.client_name || "Client inconnu",
           quantity: item.quantity,
           deliveryDate: order.delivery_date,
           status: order.status,
@@ -164,9 +165,9 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
   const formatDeliveryLabel = (dateStr: string) => {
     try {
       const d = parseISO(dateStr);
-      if (isToday(d)) return "Today";
-      if (isTomorrow(d)) return "Tomorrow";
-      return format(d, "EEE, MMM d");
+      if (isToday(d)) return "Aujourd'hui";
+      if (isTomorrow(d)) return "Demain";
+      return format(d, "EEE d MMM", { locale: fr });
     } catch {
       return dateStr;
     }
@@ -176,7 +177,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
     if (kg <= 15) return null;
     const batchSize = kg <= 30 ? 15 : 20;
     const batches = Math.ceil(kg / batchSize);
-    return `${batches} batches of ~${(kg / batches).toFixed(0)} kg`;
+    return `${batches} fournées d'env. ${(kg / batches).toFixed(0)} kg`;
   };
 
   const toggleExpand = (productId: string) => {
@@ -188,19 +189,19 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Total to roast</p>
+          <p className="text-xs text-muted-foreground mb-2">Total à torréfier</p>
           <p className="text-2xl font-medium tabular-nums text-foreground">{totalKgToRoast.toFixed(0)} kg</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Roasted</p>
+          <p className="text-xs text-muted-foreground mb-2">Torréfié</p>
           <p className="text-2xl font-medium tabular-nums text-success">{totalRoastedKg.toFixed(0)} kg</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Remaining</p>
+          <p className="text-xs text-muted-foreground mb-2">Restant</p>
           <p className="text-2xl font-medium tabular-nums text-foreground">{(totalKgToRoast - totalRoastedKg).toFixed(0)} kg</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Urgent coffees</p>
+          <p className="text-xs text-muted-foreground mb-2">Cafés urgents</p>
           <p className={cn("text-2xl font-medium tabular-nums", urgentCount > 0 ? "text-destructive" : "text-foreground")}>
             {urgentCount}
           </p>
@@ -211,17 +212,17 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
       <div className="flex gap-3 items-center">
         <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Delivery date" />
+            <SelectValue placeholder="Date de livraison" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All dates</SelectItem>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="tomorrow">Tomorrow</SelectItem>
-            <SelectItem value="this_week">This week</SelectItem>
+            <SelectItem value="all">Toutes les dates</SelectItem>
+            <SelectItem value="today">Aujourd'hui</SelectItem>
+            <SelectItem value="tomorrow">Demain</SelectItem>
+            <SelectItem value="this_week">Cette semaine</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-sm text-muted-foreground">
-          {productGroups.length} coffee{productGroups.length !== 1 ? "s" : ""} · {relevantOrders.length} order{relevantOrders.length !== 1 ? "s" : ""}
+          {productGroups.length} café{productGroups.length !== 1 ? "s" : ""} · {relevantOrders.length} commande{relevantOrders.length !== 1 ? "s" : ""}
         </p>
       </div>
 
@@ -229,7 +230,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
       {productGroups.length === 0 ? (
         <div className="bg-card border border-border rounded-lg p-12 text-center">
           <Flame className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">No coffees to roast right now.</p>
+          <p className="text-sm text-muted-foreground">Aucun café à torréfier pour le moment.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -274,7 +275,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                   <div className="text-right shrink-0">
                     <p className="text-lg font-semibold tabular-nums text-foreground">{group.totalKg.toFixed(0)} kg</p>
                     {group.roastedKg > 0 && (
-                      <p className="text-xs text-success">{group.roastedKg.toFixed(0)} kg roasted</p>
+                      <p className="text-xs text-success">{group.roastedKg.toFixed(0)} kg torréfiés</p>
                     )}
                   </div>
                 </button>
@@ -321,9 +322,9 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                             }}
                           >
                             {o.isRoasted ? (
-                              <><Check className="w-3.5 h-3.5 text-success" /> Roasted</>
+                              <><Check className="w-3.5 h-3.5 text-success" /> Torréfié</>
                             ) : (
-                              <><Flame className="w-3.5 h-3.5" /> Mark Roasted</>
+                              <><Flame className="w-3.5 h-3.5" /> Marquer torréfié</>
                             )}
                           </Button>
                         </div>
@@ -333,7 +334,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                     {/* Summary footer */}
                     <div className="px-4 py-3 bg-muted/20 border-t border-border flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
-                        {group.roastedKg.toFixed(0)} / {group.totalKg.toFixed(0)} kg roasted
+                        {group.roastedKg.toFixed(0)} / {group.totalKg.toFixed(0)} kg torréfiés
                       </span>
                       <div className="flex items-center gap-2">
                         {remainingKg > 0 ? (
@@ -347,17 +348,17 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>Mark all as roasted?</AlertDialogTitle>
+                                  <AlertDialogTitle>Tout marquer comme torréfié ?</AlertDialogTitle>
                                   <AlertDialogDescription>
                                     This will mark {group.orders.filter((o) => !o.isRoasted).length} order{group.orders.filter((o) => !o.isRoasted).length !== 1 ? "s" : ""} of <span className="font-medium">{group.productName}</span> ({remainingKg.toFixed(0)} kg) as roasted.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
                                   <AlertDialogAction onClick={() => {
                                     group.orders.filter((o) => !o.isRoasted).forEach((o) => onMarkRoasted(o.orderId, true));
                                   }}>
-                                    Confirm
+                                    Confirmer
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>

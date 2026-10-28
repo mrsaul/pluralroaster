@@ -6,6 +6,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { format, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +56,9 @@ interface InvoicingViewProps {
 }
 
 const INVOICING_STATUS_LABEL: Record<InvoicingStatus, string> = {
-  not_sent: "Not Sent",
-  sent: "Sent to Sellsy",
-  error: "Error",
+  not_sent: "Non envoyée",
+  sent: "Envoyée à Sellsy",
+  error: "Erreur",
 };
 
 const INVOICING_STATUS_CLASS: Record<InvoicingStatus, string> = {
@@ -205,19 +206,19 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Total invoiceable</p>
+            <p className="text-xs text-muted-foreground mb-2">Total facturable</p>
             <p className="text-2xl font-medium tabular-nums text-foreground">{stats.total}</p>
           </div>
           <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Not sent</p>
+            <p className="text-xs text-muted-foreground mb-2">Non envoyées</p>
             <p className={cn("text-2xl font-medium tabular-nums", stats.notSent > 0 ? "text-warning" : "text-foreground")}>{stats.notSent}</p>
           </div>
           <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Sent</p>
+            <p className="text-xs text-muted-foreground mb-2">Envoyées</p>
             <p className="text-2xl font-medium tabular-nums text-success">{stats.sent}</p>
           </div>
           <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Errors</p>
+            <p className="text-xs text-muted-foreground mb-2">Erreurs</p>
             <p className={cn("text-2xl font-medium tabular-nums", stats.error > 0 ? "text-destructive" : "text-foreground")}>{stats.error}</p>
           </div>
         </div>
@@ -226,7 +227,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
         <div className="rounded-lg border border-border bg-card p-4 space-y-4">
           <div className="flex items-center gap-2 flex-wrap">
             <Sheet className="w-5 h-5 text-green-600 shrink-0" />
-            <p className="text-sm font-semibold text-foreground">Export Google Sheet</p>
+            <p className="text-sm font-semibold text-foreground">Export Google Sheets</p>
             {sheetUrl && (
               <Button variant="ghost" size="sm" className="ml-auto gap-1.5 text-green-600 hover:text-green-700 text-xs" asChild>
                 <a href={sheetUrl} target="_blank" rel="noopener noreferrer">
@@ -312,7 +313,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search orders…"
+                placeholder="Rechercher une commande…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 w-56"
@@ -326,13 +327,13 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
             <Select value={invoicingFilter} onValueChange={setInvoicingFilter}>
               <SelectTrigger className="w-48">
                 <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Filter status" />
+                <SelectValue placeholder="Filtrer par statut" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="not_sent">Not Sent</SelectItem>
-                <SelectItem value="sent">Sent to Sellsy</SelectItem>
-                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                <SelectItem value="not_sent">Non envoyée</SelectItem>
+                <SelectItem value="sent">Envoyée à Sellsy</SelectItem>
+                <SelectItem value="error">Erreur</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -365,12 +366,12 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                       disabled={selectableCount === 0}
                     />
                   </TableHead>
-                  <TableHead>Order ID</TableHead>
+                  <TableHead>N° commande</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Delivery Date</TableHead>
+                  <TableHead>Date de livraison</TableHead>
                   <TableHead className="text-right">Total (€)</TableHead>
-                  <TableHead>Order Status</TableHead>
-                  <TableHead>Invoice Status</TableHead>
+                  <TableHead>Statut commande</TableHead>
+                  <TableHead>Statut facture</TableHead>
                   <TableHead>Sellsy ID</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -379,7 +380,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                 {filteredOrders.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                      No invoiceable orders found.
+                      Aucune commande facturable.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -408,13 +409,13 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                           <span className="flex items-center gap-1.5">
                             {order.client_name || order.user_email || "—"}
                             {!order.has_sellsy_client_id && (
-                              <span title="No Sellsy Client ID — cannot invoice">
+                              <span title="Pas d'ID client Sellsy — facturation impossible">
                                 <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
                               </span>
                             )}
                           </span>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "MMM d, yyyy")}</TableCell>
+                        <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "d MMM yyyy", { locale: fr })}</TableCell>
                         <TableCell className="text-right tabular-nums text-foreground font-medium">€{order.total_price.toFixed(2)}</TableCell>
                         <TableCell>
                           <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[order.status])}>
@@ -439,7 +440,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                               </Button>
                             )
                           ) : !order.has_sellsy_client_id ? (
-                            <span className="text-xs text-warning flex items-center gap-1" title="Assign a Sellsy Client ID to this client first">
+                            <span className="text-xs text-warning flex items-center gap-1" title="Attribuez d'abord un ID client Sellsy à ce client">
                               <AlertTriangle className="w-3.5 h-3.5" /> No Sellsy ID
                             </span>
                           ) : (
@@ -455,7 +456,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                               ) : (
                                 <Send className="w-3.5 h-3.5" />
                               )}
-                              {order.invoicing_status === "error" ? "Retry" : "Send"}
+                              {order.invoicing_status === "error" ? "Réessayer" : "Envoyer"}
                             </Button>
                           )}
                         </TableCell>
@@ -481,7 +482,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                 </span>
               )}
             </DialogTitle>
-            <DialogDescription>Order invoicing details and actions.</DialogDescription>
+            <DialogDescription>Détails et actions de facturation de la commande.</DialogDescription>
           </DialogHeader>
 
           {detailOrder && (
@@ -489,26 +490,26 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg bg-muted/40 p-3">
                   <p className="text-xs text-muted-foreground">Client</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{detailOrder.client_name || detailOrder.user_email || "Unknown"}</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{detailOrder.client_name || detailOrder.user_email || "Inconnu"}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Delivery date</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(detailOrder.delivery_date), "EEEE d MMMM yyyy")}</p>
+                  <p className="text-xs text-muted-foreground">Date de livraison</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(detailOrder.delivery_date), "EEEE d MMMM yyyy", { locale: fr })}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Order status</p>
+                  <p className="text-xs text-muted-foreground">Statut de la commande</p>
                   <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium mt-1", ORDER_STATUS_CLASS[detailOrder.status])}>
                     {ORDER_STATUS_LABEL[detailOrder.status]}
                   </span>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Sellsy Invoice ID</p>
+                  <p className="text-xs text-muted-foreground">ID facture Sellsy</p>
                   <p className="mt-1 text-sm font-mono text-foreground">{detailOrder.sellsy_id || "—"}</p>
                 </div>
                 {detailOrder.last_invoice_sync && (
                   <div className="rounded-lg bg-muted/40 p-3 sm:col-span-2">
-                    <p className="text-xs text-muted-foreground">Last sync</p>
-                    <p className="mt-1 text-sm text-foreground">{format(parseISO(detailOrder.last_invoice_sync), "MMM d, yyyy HH:mm")}</p>
+                    <p className="text-xs text-muted-foreground">Dernière synchro</p>
+                    <p className="mt-1 text-sm text-foreground">{format(parseISO(detailOrder.last_invoice_sync), "d MMM yyyy HH:mm", { locale: fr })}</p>
                   </div>
                 )}
               </div>
@@ -518,10 +519,10 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty (kg)</TableHead>
+                      <TableHead>Produit</TableHead>
+                      <TableHead className="text-right">Qté (kg)</TableHead>
                       <TableHead className="text-right">€/kg</TableHead>
-                      <TableHead className="text-right">Subtotal</TableHead>
+                      <TableHead className="text-right">Sous-total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -546,7 +547,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
               {!detailOrder.has_sellsy_client_id && (
                 <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3">
                   <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-                  <p className="text-sm text-warning">This client has no Sellsy Client ID. Assign one in the Clients section before invoicing.</p>
+                  <p className="text-sm text-warning">Ce client n'a pas d'ID client Sellsy. Attribuez-en un dans la section Clients avant de facturer.</p>
                 </div>
               )}
 
@@ -574,7 +575,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                     ) : (
                       <Send className="w-4 h-4" />
                     )}
-                    {detailOrder.invoicing_status === "error" ? "Retry Send" : "Send to Sellsy"}
+                    {detailOrder.invoicing_status === "error" ? "Renvoyer" : "Envoyer à Sellsy"}
                   </Button>
                 )}
               </div>

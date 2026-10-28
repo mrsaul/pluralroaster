@@ -1,0 +1,52 @@
+-- Shared fixtures for kitchen pgTAP tests. Include with: \ir support/kitchen_setup.psql
+-- Must run inside a transaction (begin; ... rollback;), after `select plan(n)` is fine.
+-- Fixed UUIDs:
+--   coffee_client  00000000-0000-0000-0000-0000000000a1  user_roles 'user'
+--   kitchen_only   00000000-0000-0000-0000-0000000000a2  kitchen_manager
+--   both           00000000-0000-0000-0000-0000000000a3  user_roles 'user' + coffee_manager of café A
+--   coffee_b       00000000-0000-0000-0000-0000000000a4  coffee_manager of café B
+--   stores         00000000-0000-0000-0000-0000000000a5  user_roles 'user' + stores_manager
+--   admin          00000000-0000-0000-0000-0000000000a6  user_roles 'admin'
+--   brand_new      00000000-0000-0000-0000-0000000000a7  no rows at all
+-- Cafés: A 00000000-0000-0000-0000-0000000000c1 'Artivistas', B ...c2 'Nouveau café'
+
+insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+select v.id::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       v.email, '{}'::jsonb, '{}'::jsonb, now(), now()
+from (values
+  ('00000000-0000-0000-0000-0000000000a1', 'coffee_client@test.local'),
+  ('00000000-0000-0000-0000-0000000000a2', 'kitchen_only@test.local'),
+  ('00000000-0000-0000-0000-0000000000a3', 'both@test.local'),
+  ('00000000-0000-0000-0000-0000000000a4', 'coffee_b@test.local'),
+  ('00000000-0000-0000-0000-0000000000a5', 'stores@test.local'),
+  ('00000000-0000-0000-0000-0000000000a6', 'admin@test.local'),
+  ('00000000-0000-0000-0000-0000000000a7', 'brand_new@test.local')
+) as v(id, email);
+
+-- Wipe any rows auto-created by auth.users triggers so fixtures are deterministic
+delete from public.user_roles where user_id::text like '00000000-0000-0000-0000-0000000000a_';
+
+insert into public.user_roles (user_id, role, status) values
+  ('00000000-0000-0000-0000-0000000000a1', 'user',  'active'),
+  ('00000000-0000-0000-0000-0000000000a3', 'user',  'active'),
+  ('00000000-0000-0000-0000-0000000000a5', 'user',  'active'),
+  ('00000000-0000-0000-0000-0000000000a6', 'admin', 'active');
+
+insert into public.kitchen_cafes (id, name) values
+  ('00000000-0000-0000-0000-0000000000c1', 'Artivistas'),
+  ('00000000-0000-0000-0000-0000000000c2', 'Nouveau café');
+
+insert into public.kitchen_members (user_id, role, cafe_id) values
+  ('00000000-0000-0000-0000-0000000000a2', 'kitchen_manager', null),
+  ('00000000-0000-0000-0000-0000000000a3', 'coffee_manager',  '00000000-0000-0000-0000-0000000000c1'),
+  ('00000000-0000-0000-0000-0000000000a4', 'coffee_manager',  '00000000-0000-0000-0000-0000000000c2'),
+  ('00000000-0000-0000-0000-0000000000a5', 'stores_manager',  null);
+
+-- Act as a user: select kitchen_test_act_as('<uuid>'); return with `reset role;`
+create or replace function pg_temp.kitchen_test_act_as(uid uuid) returns void
+language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+end $$;
+grant execute on function pg_temp.kitchen_test_act_as(uuid) to public;

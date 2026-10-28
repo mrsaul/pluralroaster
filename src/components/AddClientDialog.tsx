@@ -92,26 +92,26 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
 
   const handleSave = async () => {
     if (!companyName.trim()) {
-      toast({ title: "Company name is required", variant: "destructive" });
+      toast({ title: "Le nom de l'entreprise est obligatoire", variant: "destructive" });
       return;
     }
     if (!email.trim()) {
-      toast({ title: "Email is required", variant: "destructive" });
+      toast({ title: "L'e-mail est obligatoire", variant: "destructive" });
       return;
     }
     if (!deliveryAddress.trim()) {
-      toast({ title: "Delivery address is required", variant: "destructive" });
+      toast({ title: "L'adresse de livraison est obligatoire", variant: "destructive" });
       return;
     }
     if (dataMode === "sellsy" && !sellsyClientId.trim()) {
-      toast({ title: "Sellsy Client ID is required for sync mode", variant: "destructive" });
+      toast({ title: "L'ID client Sellsy est obligatoire en mode synchronisé", variant: "destructive" });
       return;
     }
 
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!user) throw new Error("Non connecté");
 
       const { error } = await supabase.from("client_onboarding").insert({
         user_id: crypto.randomUUID(),
@@ -136,12 +136,12 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
 
       if (error) throw error;
 
-      toast({ title: "Client created" });
+      toast({ title: "Client créé" });
       clearDraft();
       onCreated();
       onOpenChange(false);
     } catch (err) {
-      toast({ title: "Failed to create client", description: String(err), variant: "destructive" });
+      toast({ title: "Impossible de créer le client", description: String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -151,8 +151,8 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
     <Dialog open={open} onOpenChange={(v) => { if (!v) { /* keep draft alive on close */ } onOpenChange(v); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Client</DialogTitle>
-          <DialogDescription>Create a new B2B client record.</DialogDescription>
+          <DialogTitle>Nouveau client</DialogTitle>
+          <DialogDescription>Créer une nouvelle fiche client B2B.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -162,18 +162,18 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
 
           {/* Basic Info */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Basic Information</p>
+            <p className="text-sm font-medium text-foreground">Informations générales</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Company Name *</p>
-                <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Company name" />
+                <p className="text-xs text-muted-foreground">Nom de l'entreprise *</p>
+                <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Nom de l'entreprise" />
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Contact Name</p>
-                <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Contact name" />
+                <p className="text-xs text-muted-foreground">Nom du contact</p>
+                <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Nom du contact" />
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Email *</p>
+                <p className="text-xs text-muted-foreground">E-mail *</p>
                 <Input
                   type="email"
                   value={email}
@@ -182,11 +182,11 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
                   placeholder="email@company.com"
                 />
                 {duplicateWarning && (
-                  <p className="text-xs text-primary font-medium">⚠️ Client may already exist with this email</p>
+                  <p className="text-xs text-primary font-medium">⚠️ Un client existe peut-être déjà avec cet e-mail</p>
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Phone</p>
+                <p className="text-xs text-muted-foreground">Téléphone</p>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33 6 12 34 56 78" />
               </div>
             </div>
@@ -194,19 +194,19 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
 
           {/* Delivery */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Delivery Information</p>
+            <p className="text-sm font-medium text-foreground">Livraison</p>
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Delivery Address *</p>
-              <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Full delivery address" />
+              <p className="text-xs text-muted-foreground">Adresse de livraison *</p>
+              <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Adresse de livraison complète" />
             </div>
           </div>
 
           {/* Business Settings */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Business Settings</p>
+            <p className="text-sm font-medium text-foreground">Paramètres commerciaux</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Pricing Tier</p>
+                <p className="text-xs text-muted-foreground">Palier tarifaire</p>
                 <div className="flex gap-1.5">
                   {["standard", "premium", "wholesale"].map((tier) => (
                     <button
@@ -227,14 +227,14 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Notes</p>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes..." rows={2} />
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes internes…" rows={2} />
               </div>
             </div>
           </div>
 
           {/* Sellsy Integration */}
           <div className="rounded-xl border-2 border-border p-4 space-y-3">
-            <p className="text-sm font-medium text-foreground">Sellsy Integration</p>
+            <p className="text-sm font-medium text-foreground">Intégration Sellsy</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -248,8 +248,8 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
               >
                 <Unlink2 className={cn("h-4 w-4 shrink-0", dataMode === "custom" ? "text-accent-foreground" : "text-muted-foreground")} />
                 <div>
-                  <p className={cn("text-sm font-medium", dataMode === "custom" ? "text-accent-foreground" : "text-foreground")}>App Only</p>
-                  <p className="text-[11px] text-muted-foreground">Editable in app</p>
+                  <p className={cn("text-sm font-medium", dataMode === "custom" ? "text-accent-foreground" : "text-foreground")}>App uniquement</p>
+                  <p className="text-[11px] text-muted-foreground">Modifiable dans l'app</p>
                 </div>
               </button>
               <button
@@ -264,7 +264,7 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
               >
                 <Link2 className={cn("h-4 w-4 shrink-0", dataMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
                 <div>
-                  <p className={cn("text-sm font-medium", dataMode === "sellsy" ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
+                  <p className={cn("text-sm font-medium", dataMode === "sellsy" ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
                   <p className="text-[11px] text-muted-foreground">Read-only data</p>
                 </div>
               </button>
@@ -272,25 +272,25 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
 
             {dataMode === "sellsy" && (
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Sellsy Client ID *</p>
+                <p className="text-xs text-muted-foreground">ID client Sellsy *</p>
                 <Input value={sellsyClientId} onChange={(e) => setSellsyClientId(e.target.value)} placeholder="e.g. 12345678" className="font-mono" />
               </div>
             )}
 
             {dataMode === "custom" && (
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Sellsy Client ID (optional)</p>
-                <Input value={sellsyClientId} onChange={(e) => setSellsyClientId(e.target.value)} placeholder="Link to Sellsy later" className="font-mono" />
+                <p className="text-xs text-muted-foreground">ID client Sellsy (facultatif)</p>
+                <Input value={sellsyClientId} onChange={(e) => setSellsyClientId(e.target.value)} placeholder="À lier à Sellsy plus tard" className="font-mono" />
               </div>
             )}
           </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
             <Button onClick={handleSave} disabled={saving} className="gap-2">
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create Client
+              Créer le client
             </Button>
           </div>
         </div>

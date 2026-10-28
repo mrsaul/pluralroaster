@@ -85,7 +85,7 @@ export function PricingTiersView() {
       if (error) throw error;
       setTiers((data ?? []) as PricingTier[]);
     } catch (err) {
-      toast({ title: "Failed to load pricing tiers", description: String(err), variant: "destructive" });
+      toast({ title: "Impossible de charger les paliers tarifaires", description: String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -108,7 +108,7 @@ export function PricingTiersView() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast({ title: "Name is required", variant: "destructive" });
+      toast({ title: "Le nom est obligatoire", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -128,7 +128,7 @@ export function PricingTiersView() {
           .eq("id", editTier.id);
         if (error) throw error;
         clearDraft();
-        toast({ title: "Tier updated" });
+        toast({ title: "Palier mis à jour" });
         setEditTier(null);
       } else {
         const { error } = await supabase
@@ -136,12 +136,12 @@ export function PricingTiersView() {
           .insert(payload);
         if (error) throw error;
         clearDraft();
-        toast({ title: "Tier created" });
+        toast({ title: "Palier créé" });
         setShowCreate(false);
       }
       void loadTiers();
     } catch (err) {
-      toast({ title: "Save failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de l'enregistrement", description: String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -152,11 +152,11 @@ export function PricingTiersView() {
     try {
       const { error } = await supabase.from("pricing_tiers").delete().eq("id", deleteTier.id);
       if (error) throw error;
-      toast({ title: "Tier deleted" });
+      toast({ title: "Palier supprimé" });
       setDeleteTier(null);
       void loadTiers();
     } catch (err) {
-      toast({ title: "Delete failed", description: String(err), variant: "destructive" });
+      toast({ title: "Échec de la suppression", description: String(err), variant: "destructive" });
     }
   };
 
@@ -167,8 +167,8 @@ export function PricingTiersView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Pricing Tiers</h2>
-          <p className="text-sm text-muted-foreground">Create reusable pricing templates to assign to clients.</p>
+          <h2 className="text-lg font-semibold text-foreground">Paliers tarifaires</h2>
+          <p className="text-sm text-muted-foreground">Créez des modèles de prix réutilisables à attribuer aux clients.</p>
         </div>
         <Button size="sm" className="gap-2" onClick={openCreate}>
           <Plus className="w-4 h-4" /> New Tier
@@ -180,11 +180,11 @@ export function PricingTiersView() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead>Name</TableHead>
+              <TableHead>Nom</TableHead>
               <TableHead>Description</TableHead>
-              <TableHead className="text-center">Product Discount</TableHead>
-              <TableHead className="text-center">Delivery Discount</TableHead>
-              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-center">Remise produits</TableHead>
+              <TableHead className="text-center">Remise livraison</TableHead>
+              <TableHead className="text-center">Statut</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -196,7 +196,7 @@ export function PricingTiersView() {
             ) : tiers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  No pricing tiers yet. Create one to get started.
+                  Aucun palier tarifaire. Créez-en un pour commencer.
                 </TableCell>
               </TableRow>
             ) : (
@@ -218,7 +218,7 @@ export function PricingTiersView() {
                     {tier.delivery_discount_percent > 0 ? (
                       <Badge variant="secondary" className="gap-1">
                         <Bike className="w-3 h-3" />
-                        {tier.delivery_discount_percent === 100 ? "Free" : `${tier.delivery_discount_percent}% off`}
+                        {tier.delivery_discount_percent === 100 ? "Offerte" : `-${tier.delivery_discount_percent} %`}
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground text-sm">—</span>
@@ -226,7 +226,7 @@ export function PricingTiersView() {
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant={tier.is_active ? "default" : "secondary"} className="text-[10px]">
-                      {tier.is_active ? "Active" : "Inactive"}
+                      {tier.is_active ? "Actif" : "Inactif"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -256,9 +256,9 @@ export function PricingTiersView() {
       <Dialog open={dialogOpen} onOpenChange={(v) => { if (!v) { setShowCreate(false); setEditTier(null); resetForm(); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editTier ? "Edit Pricing Tier" : "Create Pricing Tier"}</DialogTitle>
+            <DialogTitle>{editTier ? "Modifier le palier tarifaire" : "Nouveau palier tarifaire"}</DialogTitle>
             <DialogDescription>
-              {editTier ? "Update this pricing template." : "Define a reusable pricing template for clients."}
+              {editTier ? "Modifier ce modèle de prix." : "Définir un modèle de prix réutilisable pour les clients."}
             </DialogDescription>
           </DialogHeader>
 
@@ -267,16 +267,16 @@ export function PricingTiersView() {
               <DraftBanner savedAt={draftSavedAt} onDiscard={resetForm} />
             )}
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Tier VIP" />
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Nom</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. Palier VIP" />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Description</label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. 30% off all products + free delivery" rows={2} />
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. -30 % sur tous les produits + livraison offerte" rows={2} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Product Discount (%)</label>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Remise produits (%)</label>
                 <Input
                   type="number"
                   min={0}
@@ -286,7 +286,7 @@ export function PricingTiersView() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Delivery Discount (%)</label>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Remise livraison (%)</label>
                 <Input
                   type="number"
                   min={0}
@@ -294,18 +294,18 @@ export function PricingTiersView() {
                   value={deliveryDiscount}
                   onChange={(e) => setDeliveryDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
                 />
-                <p className="text-[11px] text-muted-foreground mt-1">100% = Free delivery</p>
+                <p className="text-[11px] text-muted-foreground mt-1">100 % = livraison offerte</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={isActive} onCheckedChange={setIsActive} />
-              <label className="text-sm text-foreground">Active</label>
+              <label className="text-sm text-foreground">Actif</label>
             </div>
 
             {/* Preview */}
             {(productDiscount > 0 || deliveryDiscount > 0) && (
               <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1">
-                <p className="text-xs font-medium text-foreground">Preview (on €100 order):</p>
+                <p className="text-xs font-medium text-foreground">Aperçu (sur une commande de 100 €) :</p>
                 <div className="text-sm text-muted-foreground space-y-0.5">
                   <p>Subtotal: €100.00</p>
                   {productDiscount > 0 && (
@@ -313,7 +313,7 @@ export function PricingTiersView() {
                   )}
                   {deliveryDiscount > 0 && (
                     <p className="text-primary">
-                      Delivery: {deliveryDiscount === 100 ? "Free" : `${deliveryDiscount}% off`}
+                      Livraison : {deliveryDiscount === 100 ? "offerte" : `-${deliveryDiscount} %`}
                     </p>
                   )}
                   <p className="font-medium text-foreground">
@@ -324,10 +324,10 @@ export function PricingTiersView() {
             )}
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => { setShowCreate(false); setEditTier(null); resetForm(); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setShowCreate(false); setEditTier(null); resetForm(); }}>Annuler</Button>
               <Button onClick={handleSave} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editTier ? "Save Changes" : "Create Tier"}
+                {editTier ? "Enregistrer" : "Créer le palier"}
               </Button>
             </div>
           </div>
@@ -340,12 +340,12 @@ export function PricingTiersView() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete "{deleteTier?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the pricing tier. Clients assigned to this tier will no longer have a tier. Existing orders won't be affected.
+              Ce palier tarifaire sera supprimé. Les clients qui l'avaient n'auront plus de palier. Les commandes existantes ne changent pas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Supprimer</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

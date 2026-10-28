@@ -23,6 +23,7 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
+import { fr } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
@@ -142,7 +143,7 @@ interface AdminDashboardProps {
 
 function formatDate(value: string | null) {
   if (!value) return "—";
-  try { return format(parseISO(value), "MMM d, yyyy"); } catch { return "—"; }
+  try { return format(parseISO(value), "d MMM yyyy", { locale: fr }); } catch { return "—"; }
 }
 
 /* ─── Revenue Dashboard ─── */
@@ -213,18 +214,18 @@ function RevenueSection({ orders }: { orders: _AdminOrderForRevenue[] }) {
           <p className="text-2xl font-semibold tabular-nums text-foreground">{fmt(totalRevenue)}</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-1">Active clients</p>
+          <p className="text-xs text-muted-foreground mb-1">Clients actifs</p>
           <p className="text-2xl font-semibold tabular-nums text-foreground">{topClients.length}</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-1">Orders (6 mo)</p>
+          <p className="text-xs text-muted-foreground mb-1">Commandes (6 mois)</p>
           <p className="text-2xl font-semibold tabular-nums text-foreground">{orders.length}</p>
         </div>
       </div>
 
       {/* Monthly bar chart */}
       <div className="bg-card border border-border rounded-lg p-4">
-        <p className="text-sm font-medium text-foreground mb-4">Monthly revenue</p>
+        <p className="text-sm font-medium text-foreground mb-4">Chiffre d'affaires mensuel</p>
         <div className="flex items-end gap-3 h-28">
           {months.map((m) => {
             const val = revenueByMonth[m.key];
@@ -249,9 +250,9 @@ function RevenueSection({ orders }: { orders: _AdminOrderForRevenue[] }) {
       <div className="grid sm:grid-cols-2 gap-4">
         {/* Top clients */}
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm font-medium text-foreground mb-3">Top clients</p>
+          <p className="text-sm font-medium text-foreground mb-3">Meilleurs clients</p>
           {topClients.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No data yet.</p>
+            <p className="text-xs text-muted-foreground">Pas encore de données.</p>
           ) : (
             <div className="space-y-2">
               {topClients.map(([name, revenue], i) => {
@@ -274,9 +275,9 @@ function RevenueSection({ orders }: { orders: _AdminOrderForRevenue[] }) {
 
         {/* Top products */}
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm font-medium text-foreground mb-3">Top products</p>
+          <p className="text-sm font-medium text-foreground mb-3">Meilleurs produits</p>
           {topProducts.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No data yet.</p>
+            <p className="text-xs text-muted-foreground">Pas encore de données.</p>
           ) : (
             <div className="space-y-2">
               {topProducts.map(([name, { kg, revenue }], i) => {
@@ -500,7 +501,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       }
       setSellsyVariantMap(vMap);
     } catch (err) {
-      toastRef.current({ title: "Failed to load orders", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toastRef.current({ title: "Impossible de charger les commandes", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setLoadingOrders(false);
     }
@@ -527,9 +528,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       }
 
       setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
-      toast({ title: `Status → ${ORDER_STATUS_LABEL[newStatus]}` });
+      toast({ title: `Statut → ${ORDER_STATUS_LABEL[newStatus]}` });
     } catch (err) {
-      toast({ title: "Status update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Échec du changement de statut", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -544,7 +545,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, [field]: value } : o));
     } catch (err) {
-      toast({ title: "Checklist update failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Échec de la mise à jour de la checklist", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     }
   }, [toast]);
 
@@ -569,7 +570,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
 
       if (sellsyErr || !sellsyResult?.success) {
-        const detail = sellsyResult?.error || sellsyErr?.message || "Unknown error";
+        const detail = sellsyResult?.error || sellsyErr?.message || "Erreur inconnue";
         toast({
           title: "Commande approuvée — Sellsy non synchronisé",
           description: detail,
@@ -583,7 +584,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           .eq("id", order.id);
         if (updateErr) {
           toast({
-            title: "Sellsy ID save failed",
+            title: "Échec de l'enregistrement de l'ID Sellsy",
             description: updateErr.message,
             variant: "destructive",
           });
@@ -596,7 +597,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       await loadOrders();
     } catch (err) {
-      toast({ title: "Approve failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Échec de la validation", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setApprovingIds((prev) => {
         const next = new Set(prev);
@@ -620,8 +621,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setInvoiceSendingIds((prev) => new Set(prev).add(orderId));
     try {
       const order = adminOrders.find((o) => o.id === orderId);
-      if (!order) throw new Error("Order not found");
-      if (order.invoicing_status === "sent") throw new Error("Already sent");
+      if (!order) throw new Error("Commande introuvable");
+      if (order.invoicing_status === "sent") throw new Error("Déjà envoyée");
 
       const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
 
@@ -632,8 +633,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         }).eq("id", orderId);
         setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, invoicing_status: "error" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
         toast({
-          title: "Invoice send failed",
-          description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
+          title: "Échec de l'envoi de la facture",
+          description: sellsyResult?.error || sellsyErr?.message || "Erreur inconnue",
           variant: "destructive",
         });
       } else {
@@ -644,10 +645,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           last_invoice_sync: new Date().toISOString(),
         }).eq("id", orderId);
         setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, sellsy_id: sellsyId, invoicing_status: "sent" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
-        toast({ title: "Invoice sent to Sellsy", description: `Invoice ID: ${sellsyId ?? "—"}` });
+        toast({ title: "Facture envoyée à Sellsy", description: `ID facture : ${sellsyId ?? "—"}` });
       }
     } catch (err) {
-      toast({ title: "Invoice send failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+      toast({ title: "Échec de l'envoi de la facture", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
     } finally {
       setInvoiceSendingIds((prev) => {
         const next = new Set(prev);
@@ -677,7 +678,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const removeOrderItem = useCallback(async (orderId: string, itemId: string) => {
     const { error } = await supabase.from("order_items").delete().eq("id", itemId);
-    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
+    if (error) { toast({ title: "Échec de la suppression", description: error.message, variant: "destructive" }); return; }
     const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
     setAdminOrders((prev) => prev.map((o) => {
       if (o.id !== orderId) return o;
@@ -687,13 +688,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (!prev || prev.id !== orderId) return prev;
       return { ...prev, total_kg: totalKg, total_price: totalPrice, items: prev.items.filter((i) => i.id !== itemId) };
     });
-    toast({ title: "Item removed" });
+    toast({ title: "Article retiré" });
   }, [recalcOrderTotals, toast]);
 
   const updateOrderItemQty = useCallback(async (orderId: string, itemId: string, newQty: number) => {
     if (newQty <= 0) { await removeOrderItem(orderId, itemId); return; }
     const { error } = await supabase.from("order_items").update({ quantity: newQty }).eq("id", itemId);
-    if (error) { toast({ title: "Update failed", description: error.message, variant: "destructive" }); return; }
+    if (error) { toast({ title: "Échec de la mise à jour", description: error.message, variant: "destructive" }); return; }
     const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
     setAdminOrders((prev) => prev.map((o) => {
       if (o.id !== orderId) return o;
@@ -714,7 +715,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       price_per_kg: product.custom_price_per_kg ?? product.price_per_kg,
       quantity: 1,
     }).select("id, product_id, product_name, product_sku, quantity, price_per_kg, kind").single();
-    if (error || !inserted) { toast({ title: "Add failed", description: error?.message, variant: "destructive" }); return; }
+    if (error || !inserted) { toast({ title: "Échec de l'ajout", description: error?.message, variant: "destructive" }); return; }
     const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
     const newItem: AdminOrderItem = {
       id: inserted.id, product_id: inserted.product_id, product_name: inserted.product_name,
@@ -743,10 +744,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
        await supabase.from("company_addresses").delete().eq("company_id", client.id);
        const { error } = await supabase.from("companies").delete().eq("id", client.id);
        if (error) throw error;
-       toast({ title: "Client deleted", description: `"${client.company_name || client.contact_name || "Client"}" has been removed.` });
+       toast({ title: "Client supprimé", description: `« ${client.company_name || client.contact_name || "Client"} » a été supprimé.` });
        void loadClients();
      } catch (err) {
-       toast({ title: "Delete failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+       toast({ title: "Échec de la suppression", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
      } finally {
        setClientToDelete(null);
      }
@@ -758,10 +759,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
        await supabase.from("product_variants").delete().eq("product_id", product.id);
        const { error } = await supabase.from("products").delete().eq("id", product.id);
        if (error) throw error;
-       toast({ title: "Product deleted", description: `"${product.name}" has been removed.` });
+       toast({ title: "Produit supprimé", description: `« ${product.name} » a été supprimé.` });
        void loadProducts();
      } catch (err) {
-       toast({ title: "Delete failed", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
+       toast({ title: "Échec de la suppression", description: err instanceof Error ? err.message : (err as any)?.message ?? String(err), variant: "destructive" });
      } finally {
        setProductToDelete(null);
      }
@@ -858,10 +859,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       await supabase.from("contacts").delete().eq("company_id", deleteId);
       await supabase.from("companies").delete().eq("id", deleteId);
 
-      toast({ title: "Clients merged", description: "The duplicate account has been merged into the existing client." });
+      toast({ title: "Clients fusionnés", description: "Le compte en double a été fusionné avec le client existant." });
       void loadClients();
     } catch (err) {
-      toast({ title: "Merge failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: "Échec de la fusion", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setMergingClientId(null);
     }
@@ -893,10 +894,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             : o
         )
       );
-      toast({ title: "Order updated" });
+      toast({ title: "Commande mise à jour" });
       setEditingOrder(null);
     } catch (err) {
-      toast({ title: "Save failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: "Échec de l'enregistrement", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setSavingOrderEdit(false);
     }
@@ -920,10 +921,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const { error } = await supabase.from("orders").delete().eq("id", id);
       if (error) throw error;
       setAdminOrders((prev) => prev.filter((o) => o.id !== id));
-      toast({ title: "Order deleted" });
+      toast({ title: "Commande supprimée" });
       setOrderToDelete(null);
     } catch (err) {
-      toast({ title: "Delete failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: "Échec de la suppression", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setDeletingOrder(false);
     }
@@ -992,13 +993,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         body: { mode: "sync-products" },
       });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Sync failed");
+      if (!data?.success) throw new Error(data?.error || "Échec de la synchronisation");
       await Promise.all([loadProducts(), loadLatestProductSync()]);
-      toast({ title: "Product sync completed", description: `${data.syncedCount ?? 0} products refreshed.` });
+      toast({ title: "Synchro produits terminée", description: `${data.syncedCount ?? 0} produit(s) actualisé(s).` });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setProductError(msg);
-      toast({ title: "Product sync failed", description: msg, variant: "destructive" });
+      toast({ title: "Échec de la synchro produits", description: msg, variant: "destructive" });
     } finally {
       setRunningProductSync(false);
     }
@@ -1012,13 +1013,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         body: { mode: "sync-all-clients" },
       });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Sync failed");
+      if (!data?.success) throw new Error(data?.error || "Échec de la synchronisation");
       await loadClients();
-      toast({ title: "Client sync completed", description: `${data.syncedCount ?? 0} clients synced from Sellsy.` });
+      toast({ title: "Synchro clients terminée", description: `${data.syncedCount ?? 0} client(s) synchronisé(s) depuis Sellsy.` });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setClientError(msg);
-      toast({ title: "Client sync failed", description: msg, variant: "destructive" });
+      toast({ title: "Échec de la synchro clients", description: msg, variant: "destructive" });
     } finally {
       setRunningClientSync(false);
     }
@@ -1033,14 +1034,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         body: { mode: "import-client", sellsy_client_id: id },
       });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Import failed");
+      if (!data?.success) throw new Error(data?.error || "Échec de l'import");
       setImportSellsyId("");
       await loadClients();
-      const action = data.created ? "imported" : "updated";
-      toast({ title: `Client ${action}`, description: `${data.client?.name ?? id} has been ${action}.` });
+      const action = data.created ? "importé" : "mis à jour";
+      toast({ title: `Client ${action}`, description: `${data.client?.name ?? id} a été ${action}.` });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      toast({ title: "Import failed", description: msg, variant: "destructive" });
+      toast({ title: "Échec de l'import", description: msg, variant: "destructive" });
     } finally {
       setImportingClient(false);
     }
@@ -1056,15 +1057,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (error) throw new Error(error.message);
       setHealthCheckResult(data);
       toast({
-        title: data?.success ? "Sellsy connection OK" : "Sellsy connection issue",
+        title: data?.success ? "Connexion Sellsy OK" : "Problème de connexion Sellsy",
         description: data?.success
-          ? "All checks passed — Sellsy API is reachable."
-          : "One or more checks failed. See details below.",
+          ? "Tous les tests sont passés — l'API Sellsy répond."
+          : "Un ou plusieurs tests ont échoué. Voir le détail ci-dessous.",
         variant: data?.success ? "default" : "destructive",
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      toast({ title: "Health check failed", description: msg, variant: "destructive" });
+      toast({ title: "Échec du test de connexion", description: msg, variant: "destructive" });
     } finally {
       setRunningHealthCheck(false);
     }
@@ -1162,18 +1163,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   const sectionLabels: Record<string, string> = {
-    orders: "Orders",
-    packaging: "Packaging",
-    roaster: "Roaster",
-    invoicing: "Invoicing",
+    orders: "Commandes",
+    packaging: "Conditionnement",
+    roaster: "Torréfaction",
+    invoicing: "Facturation",
     clients: "Clients",
-    products: "Products",
-    pricing: "Pricing",
+    products: "Produits",
+    pricing: "Tarifs",
     stock: "Stock",
-    team: "Team",
-    profile: "Profile Settings",
-    revenue: "Revenue",
-    delivery: "Delivery Dates",
+    team: "Équipe",
+    profile: "Profil",
+    revenue: "Chiffre d'affaires",
+    delivery: "Dates de livraison",
   };
 
   /* ── Sidebar nav items ── */
@@ -1182,21 +1183,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const invoicingBadge = adminOrders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status) && o.invoicing_status === "not_sent").length;
 
   const primaryNavItems = [
-    { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
-    { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
-    { key: "packaging" as const, icon: Bike, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
+    { key: "orders" as const, icon: Package, label: "Commandes", badge: receivedCount > 0 ? receivedCount : null },
+    { key: "roaster" as const, icon: Flame, label: "Torréfaction", badge: roasterBadge > 0 ? roasterBadge : null },
+    { key: "packaging" as const, icon: Bike, label: "Conditionnement", badge: packagingBadge > 0 ? packagingBadge : null },
   ];
 
   const menuSubItems = [
-    { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
-    { key: "revenue" as const, icon: BarChart2, label: "Revenue", badge: null },
+    { key: "invoicing" as const, icon: FileText, label: "Facturation", badge: invoicingBadge > 0 ? invoicingBadge : null },
+    { key: "revenue" as const, icon: BarChart2, label: "Chiffre d'affaires", badge: null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
-    { key: "products" as const, icon: Coffee, label: "Products", badge: null },
-    { key: "pricing" as const, icon: BadgeEuro, label: "Pricing", badge: null },
-    { key: "delivery" as const, icon: Calendar, label: "Delivery Dates", badge: null },
+    { key: "products" as const, icon: Coffee, label: "Produits", badge: null },
+    { key: "pricing" as const, icon: BadgeEuro, label: "Tarifs", badge: null },
+    { key: "delivery" as const, icon: Calendar, label: "Dates de livraison", badge: null },
     { key: "stock" as const, icon: Warehouse, label: "Stock", badge: null },
-    { key: "team" as const, icon: Shield, label: "Team", badge: null },
-    { key: "profile" as const, icon: Settings, label: "Profile Settings", badge: null },
+    { key: "team" as const, icon: Shield, label: "Équipe", badge: null },
+    { key: "profile" as const, icon: Settings, label: "Profil", badge: null },
   ];
 
   const menuSectionActive = menuSubItems.some((item) => activeSection === item.key);
@@ -1310,12 +1311,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const result = data as { url: string; orders_exported: number };
       setPackagingSheetUrl(result.url);
       toast({
-        title: "Packaging list exported",
-        description: `${result.orders_exported} order${result.orders_exported !== 1 ? "s" : ""} exported to Google Sheets.`,
+        title: "Liste de conditionnement exportée",
+        description: `${result.orders_exported} commande${result.orders_exported !== 1 ? "s" : ""} exportée${result.orders_exported !== 1 ? "s" : ""} vers Google Sheets.`,
       });
     } catch (err) {
       toast({
-        title: "Export failed",
+        title: "Échec de l'export",
         description: err instanceof Error ? err.message : String(err),
         variant: "destructive",
       });
@@ -1330,7 +1331,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         {/* Sidebar */}
         <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-card p-6">
           <h1 className="text-base font-medium text-foreground tracking-tight mb-1">Plural Roaster</h1>
-          <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
+          <p className="text-xs text-muted-foreground mb-8">Espace admin</p>
 
           <nav className="space-y-1 flex-1">
             {primaryNavItems.map((item) => (
@@ -1353,7 +1354,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
             {/* Menu separator */}
             <div className="pt-3 pb-1">
-              <p className="px-3 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">More</p>
+              <p className="px-3 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">Plus</p>
             </div>
 
             {menuSubItems.map((item) => (
@@ -1407,7 +1408,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     type="button"
                     onClick={() => void loadOrders()}
                     className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    aria-label="Refresh"
+                    aria-label="Actualiser"
                   >
                     <RefreshCw className="w-4 h-4" />
                   </button>
@@ -1415,7 +1416,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     type="button"
                     onClick={() => setShowCreateOrder(true)}
                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-fuchsia-800 text-white hover:bg-fuchsia-700 transition-colors"
-                    aria-label="New order"
+                    aria-label="Nouvelle commande"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -1433,7 +1434,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Orders today</p>
+                    <p className="text-xs text-muted-foreground mb-2">Commandes du jour</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{stats.todayCount}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
@@ -1441,19 +1442,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <p className="text-2xl font-medium tabular-nums text-foreground">{stats.totalKg.toFixed(0)}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Received</p>
+                    <p className="text-xs text-muted-foreground mb-2">Reçues</p>
                     <p className={cn("text-2xl font-medium tabular-nums", stats.receivedCount > 0 ? "text-primary" : "text-foreground")}>
                       {stats.receivedCount}
                     </p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">In packaging</p>
+                    <p className="text-xs text-muted-foreground mb-2">En conditionnement</p>
                     <p className={cn("text-2xl font-medium tabular-nums", stats.packagingCount > 0 ? "text-warning" : "text-foreground")}>
                       {stats.packagingCount}
                     </p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Delivery today</p>
+                    <p className="text-xs text-muted-foreground mb-2">Livraisons du jour</p>
                     <p className={cn("text-2xl font-medium tabular-nums", stats.deliveryTodayCount > 0 ? "text-info" : "text-foreground")}>
                       {stats.deliveryTodayCount}
                     </p>
@@ -1466,7 +1467,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <div className="relative flex-1 sm:flex-none">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search orders…"
+                        placeholder="Rechercher une commande…"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-9 w-full lg:w-56"
@@ -1479,10 +1480,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </div>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
                       <SelectTrigger className="w-full sm:w-52">
-                        <SelectValue placeholder="Filter by status" />
+                        <SelectValue placeholder="Filtrer par statut" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="all">Tous les statuts</SelectItem>
                         {ORDER_STATUSES.map((s) => (
                           <SelectItem key={s} value={s}>{ORDER_STATUS_LABEL[s]}</SelectItem>
                         ))}
@@ -1497,10 +1498,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => void loadOrders()} className="gap-2">
                       <RefreshCw className="w-4 h-4" />
-                      Refresh
+                      Actualiser
                       {dataLastUpdated && (
                         <span className="text-[10px] text-muted-foreground font-normal ml-1">
-                          {formatDistanceToNow(dataLastUpdated, { addSuffix: true })}
+                          {formatDistanceToNow(dataLastUpdated, { addSuffix: true, locale: fr })}
                         </span>
                       )}
                     </Button>
@@ -1540,9 +1541,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 {/* ── Mobile order cards (< lg) ── */}
                 <div className="lg:hidden">
                   {loadingOrders ? (
-                    <div className="text-center text-muted-foreground py-16">Loading orders…</div>
+                    <div className="text-center text-muted-foreground py-16">Chargement des commandes…</div>
                   ) : filteredOrders.length === 0 ? (
-                    <div className="text-center text-muted-foreground py-16">No orders found.</div>
+                    <div className="text-center text-muted-foreground py-16">Aucune commande.</div>
                   ) : (
                     <div className="space-y-2.5">
                       {filteredOrders.map((order) => (
@@ -1557,7 +1558,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 {order.client_name || order.user_email || "—"}
                               </p>
                               <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                                #{order.id.slice(0, 8).toUpperCase()} · {format(parseISO(order.created_at), "d MMM, HH:mm")}
+                                #{order.id.slice(0, 8).toUpperCase()} · {format(parseISO(order.created_at), "d MMM, HH:mm", { locale: fr })}
                               </p>
                             </div>
                             <span className={cn(
@@ -1572,7 +1573,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             <span className="w-px h-3 bg-border" />
                             <span className="tabular-nums font-semibold text-foreground">€{order.total_price.toFixed(2)}</span>
                             <span className="ml-auto tabular-nums text-muted-foreground">
-                              {format(parseISO(order.delivery_date), "d MMM")}
+                              {format(parseISO(order.delivery_date), "d MMM", { locale: fr })}
                             </span>
                           </div>
                           {order.status === "received" && (
@@ -1586,7 +1587,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 {approvingIds.has(order.id)
                                   ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                                   : <Check className="w-3.5 h-3.5" />}
-                                Approve
+                                Valider
                               </Button>
                             </div>
                           )}
@@ -1602,31 +1603,31 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
-                          <TableHead>Order ID</TableHead>
+                          <TableHead>N° commande</TableHead>
                           <TableHead className="cursor-pointer select-none" onClick={() => handleSort("created_at")}>
                             Date {sortField === "created_at" && (sortAsc ? "↑" : "↓")}
                           </TableHead>
                           <TableHead>Client</TableHead>
-                          <TableHead>Items</TableHead>
-                          <TableHead className="text-right">Weight</TableHead>
+                          <TableHead>Articles</TableHead>
+                          <TableHead className="text-right">Poids</TableHead>
                           <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort("total_price")}>
                             Total {sortField === "total_price" && (sortAsc ? "↑" : "↓")}
                           </TableHead>
                           <TableHead className="cursor-pointer select-none" onClick={() => handleSort("delivery_date")}>
                             Delivery {sortField === "delivery_date" && (sortAsc ? "↑" : "↓")}
                           </TableHead>
-                          <TableHead>Status</TableHead>
+                          <TableHead>Statut</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {loadingOrders ? (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Loading orders…</TableCell>
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Chargement des commandes…</TableCell>
                           </TableRow>
                         ) : filteredOrders.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No orders found.</TableCell>
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Aucune commande.</TableCell>
                           </TableRow>
                         ) : (
                           filteredOrders.map((order) => (
@@ -1650,7 +1651,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   {order.id.slice(0, 8)}
                                   {newOrderIds.has(order.id) && (
                                     <span className="inline-flex items-center rounded-full bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
-                                      New
+                                      Nouveau
                                     </span>
                                   )}
                                   {(() => {
@@ -1664,7 +1665,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   })()}
                                 </span>
                               </TableCell>
-                              <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
+                              <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "d MMM, HH:mm", { locale: fr })}</TableCell>
                               <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || (order.user_id ? order.user_id.slice(0, 8) + "…" : "—")}</TableCell>
                               <TableCell className="text-muted-foreground">
                                 {order.items.length > 0
@@ -1673,7 +1674,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-foreground">{order.total_kg.toFixed(0)} kg</TableCell>
                               <TableCell className="text-right tabular-nums text-foreground font-medium">€{order.total_price.toFixed(2)}</TableCell>
-                              <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "MMM d")}</TableCell>
+                              <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "d MMM", { locale: fr })}</TableCell>
                               <TableCell onClick={(e) => e.stopPropagation()}>
                                 <Select
                                   value={order.status}
@@ -1708,7 +1709,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                       ) : (
                                         <Check className="w-3.5 h-3.5" />
                                       )}
-                                      Approve
+                                      Valider
                                     </Button>
                                   )}
                                   {order.sellsy_id && (
@@ -1716,7 +1717,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   )}
                                   <button
                                     type="button"
-                                    title="Edit order"
+                                    title="Modifier la commande"
                                     className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                                     onClick={() => {
                                       setEditingOrder(order);
@@ -1729,7 +1730,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   </button>
                                   <button
                                     type="button"
-                                    title="Delete order"
+                                    title="Supprimer la commande"
                                     className="p-1.5 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
                                     onClick={() => setOrderToDelete(order)}
                                   >
@@ -1770,14 +1771,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-foreground">Packaging Checklist</span>
+                      <span className="text-sm font-medium text-foreground">Checklist de conditionnement</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {packagingSheetUrl && (
                         <Button variant="ghost" size="sm" className="gap-1.5 text-green-600 hover:text-green-700" asChild>
                           <a href={packagingSheetUrl} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="w-3.5 h-3.5" />
-                            Open Sheet
+                            Ouvrir la feuille
                           </a>
                         </Button>
                       )}
@@ -1789,7 +1790,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         className="gap-1.5"
                       >
                         {exportingPackaging ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
-                        {exportingPackaging ? "Exporting…" : "Export Packaging List"}
+                        {exportingPackaging ? "Export…" : "Exporter la liste de conditionnement"}
                       </Button>
                     </div>
                   </div>
@@ -1798,7 +1799,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   {!packagingSheetUrl && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <p className="text-xs text-muted-foreground mb-2">
-                        Create a Google Sheet, share it with the service account as <strong>Editor</strong>, then paste the URL below.
+                        Créez une feuille Google Sheets, partagez-la avec le compte de service en tant qu'<strong>Éditeur</strong>, puis collez l'URL ci-dessous.
                       </p>
                       <div className="flex gap-2 items-center">
                         <Input
@@ -1808,7 +1809,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           className="text-sm flex-1"
                         />
                         {packagingSheetIdInput && !parsePackagingSheetId(packagingSheetIdInput) && (
-                          <p className="text-xs text-destructive whitespace-nowrap">Invalid URL</p>
+                          <p className="text-xs text-destructive whitespace-nowrap">URL invalide</p>
                         )}
                       </div>
                       {parsePackagingSheetId(packagingSheetIdInput) && (
@@ -1841,15 +1842,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Total clients</p>
+                    <p className="text-xs text-muted-foreground mb-2">Clients</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.totalClients}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Active clients</p>
+                    <p className="text-xs text-muted-foreground mb-2">Clients actifs</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.activeClients}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Pending onboarding</p>
+                    <p className="text-xs text-muted-foreground mb-2">Inscriptions en attente</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.pendingClients}</p>
                   </div>
                 </div>
@@ -1860,10 +1861,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <div>
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
-                        <h2 className="text-sm font-medium text-foreground">Sellsy client sync</h2>
+                        <h2 className="text-sm font-medium text-foreground">Synchro clients Sellsy</h2>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Import or update client records from Sellsy.
+                        Importer ou mettre à jour les fiches clients depuis Sellsy.
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -1872,7 +1873,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </Button>
                       <Button size="sm" className="gap-2 bg-amber-600 opacity-95" onClick={() => void runClientSync()} disabled={runningClientSync}>
                         <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
-                        {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
+                        {runningClientSync ? "synchronisation…" : "Synchroniser les clients depuis Sellsy"}
                       </Button>
                     </div>
                   </div>
@@ -1881,7 +1882,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <div className="flex items-center gap-2 border-t border-border pt-3">
                     <div className="flex-1">
                       <Input
-                        placeholder="Sellsy client ID (e.g. 46)"
+                        placeholder="ID client Sellsy (ex. 46)"
                         value={importSellsyId}
                         onChange={(e) => setImportSellsyId(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && void importClientBySellsyId()}
@@ -1896,7 +1897,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       onClick={() => void importClientBySellsyId()}
                     >
                       <RefreshCw className={cn("h-3.5 w-3.5", importingClient && "animate-spin")} />
-                      {importingClient ? "Importing…" : "Import client"}
+                      {importingClient ? "Import…" : "Importer le client"}
                     </Button>
                   </div>
                 </div>
@@ -1979,15 +1980,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               <section>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Sellsy products</p>
+                    <p className="text-xs text-muted-foreground mb-2">Produits Sellsy</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{productSummary.totalProducts}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Active products</p>
+                    <p className="text-xs text-muted-foreground mb-2">Produits actifs</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{productSummary.activeProducts}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Average €/kg</p>
+                    <p className="text-xs text-muted-foreground mb-2">Prix moyen €/kg</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">€{productSummary.averagePrice.toFixed(2)}</p>
                   </div>
                 </div>
@@ -1998,10 +1999,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <div>
                       <div className="flex items-center gap-2">
                         <BadgeEuro className="h-4 w-4 text-muted-foreground" />
-                        <h2 className="text-sm font-medium text-foreground">Product sync status</h2>
+                        <h2 className="text-sm font-medium text-foreground">État de la synchro produits</h2>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Latest Sellsy product import, synced count, and any price parsing issues.
+                        Dernier import produits Sellsy, nombre synchronisé et éventuels problèmes de prix.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2 self-start">
@@ -2010,7 +2011,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </Button>
                       <Button variant="outline" size="sm" className="gap-2" onClick={() => void runProductSync()} disabled={runningProductSync}>
                         <RefreshCw className={cn("h-4 w-4", runningProductSync && "animate-spin")} />
-                        {runningProductSync ? "running sync…" : "run product sync"}
+                        {runningProductSync ? "synchronisation…" : "lancer la synchro produits"}
                       </Button>
                       <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadLatestProductSync()} disabled={runningProductSync}>
                         <RefreshCw className="h-4 w-4" /> refresh status
@@ -2036,7 +2037,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           ? <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                           : <AlertCircle className="h-4 w-4 text-destructive shrink-0" />}
                         <p className="text-sm font-medium text-foreground">
-                          Sellsy health check — {healthCheckResult.success ? "all checks passed" : "issues detected"}
+                          Test de connexion Sellsy — {healthCheckResult.success ? "tout est OK" : "problèmes détectés"}
                         </p>
                       </div>
                       <div className="space-y-1.5">
@@ -2058,24 +2059,24 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
                   {syncRunError ? (
                     <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-                      <p className="text-sm font-medium text-foreground">Sync status fetch failed</p>
+                      <p className="text-sm font-medium text-foreground">Impossible de charger l'état de la synchro</p>
                       <p className="mt-1 text-xs text-muted-foreground">{syncRunError}</p>
                     </div>
                   ) : syncRun ? (
                     <>
                       <div className="mt-4 grid gap-3 md:grid-cols-3">
                         <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">Last sync</p>
+                          <p className="text-xs text-muted-foreground">Dernière synchro</p>
                           <div className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
                             <Clock3 className="h-4 w-4 text-muted-foreground" />
                             {latestSyncTimestamp ? formatDate(latestSyncTimestamp) : "—"}
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {latestSyncTimestamp ? formatDistanceToNow(parseISO(latestSyncTimestamp), { addSuffix: true }) : "No run recorded"}
+                            {latestSyncTimestamp ? formatDistanceToNow(parseISO(latestSyncTimestamp), { addSuffix: true, locale: fr }) : "Aucune synchro enregistrée"}
                           </p>
                         </div>
                         <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">Synced items</p>
+                          <p className="text-xs text-muted-foreground">Éléments synchronisés</p>
                           <p className="mt-2 text-2xl font-medium tabular-nums text-foreground">{syncRun.synced_count}</p>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                             {productCount !== null && <span>{productCount} products</span>}
@@ -2084,7 +2085,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           </div>
                         </div>
                         <div className="rounded-lg bg-muted/40 p-3">
-                          <p className="text-xs text-muted-foreground">Result</p>
+                          <p className="text-xs text-muted-foreground">Résultat</p>
                           <div className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
                             {syncRun.status === "success" ? (
                               <CheckCircle2 className="h-4 w-4 text-success" />
@@ -2093,7 +2094,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             ) : (
                               <AlertCircle className="h-4 w-4 text-destructive" />
                             )}
-                            {syncRun.status}
+                            {syncRun.status === "success" ? "succès" : syncRun.status === "warning" ? "avertissement" : syncRun.status === "error" ? "erreur" : syncRun.status}
                           </div>
                         </div>
                       </div>
@@ -2106,7 +2107,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           <div className="divide-y divide-border">
                             {latestParseErrors.map((error, index) => (
                               <div key={`${error.sellsy_id ?? index}`} className="px-4 py-3">
-                                <p className="text-sm font-medium text-foreground">{error.name ?? error.sku ?? "Unknown product"}</p>
+                                <p className="text-sm font-medium text-foreground">{error.name ?? error.sku ?? "Produit inconnu"}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
                               </div>
                             ))}
@@ -2116,7 +2117,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </>
                   ) : (
                     <div className="mt-4 rounded-lg bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
-                      No product sync run has been logged yet.
+                      Aucune synchro produits enregistrée pour l'instant.
                     </div>
                   )}
                 </div>
@@ -2125,7 +2126,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 <div className="bg-card border border-border rounded-lg overflow-hidden">
                   {productError && (
                     <div className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-                      <p className="text-sm font-medium text-foreground">Product fetch failed</p>
+                      <p className="text-sm font-medium text-foreground">Impossible de charger les produits</p>
                       <p className="mt-1 text-xs text-muted-foreground">{productError}</p>
                     </div>
                   )}
@@ -2133,19 +2134,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
-                          <TableHead>Product</TableHead>
-                          <TableHead>Origin</TableHead>
-                          <TableHead>Roast</TableHead>
+                          <TableHead>Produit</TableHead>
+                          <TableHead>Origine</TableHead>
+                          <TableHead>Torréfaction</TableHead>
                           <TableHead>SKU</TableHead>
-                          <TableHead className="text-right">Price</TableHead>
-                          <TableHead className="text-right">Status</TableHead>
+                          <TableHead className="text-right">Prix</TableHead>
+                          <TableHead className="text-right">Statut</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {loadingProducts ? (
-                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading products…</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Chargement des produits…</TableCell></TableRow>
                         ) : products.length === 0 ? (
-                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No products found.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Aucun produit.</TableCell></TableRow>
                         ) : (
                           products.filter((p) => p.kind !== "service").map((product) => {
                             const isCustom = product.data_source_mode === "custom";
@@ -2182,9 +2183,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   {isCustom && (
-                                   <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
+                                   <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Personnalisé</Badge>
                                   )}
-                                  <span className="text-muted-foreground">{product.is_active ? "Active" : "Archived"}</span>
+                                  <span className="text-muted-foreground">{product.is_active ? "Actif" : "Archivé"}</span>
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -2245,7 +2246,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </span>
                 )}
               </SheetTitlePrimitive>
-              <SheetDescriptionPrimitive>Full order breakdown and actions.</SheetDescriptionPrimitive>
+              <SheetDescriptionPrimitive>Détail complet de la commande et actions.</SheetDescriptionPrimitive>
             </SheetHeaderPrimitive>
 
           {selectedOrder && (() => {
@@ -2258,21 +2259,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg bg-muted/40 p-3">
                   <p className="text-xs text-muted-foreground">Client</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{selectedOrder.client_name || selectedOrder.user_email || "Unknown"}</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{selectedOrder.client_name || selectedOrder.user_email || "Inconnu"}</p>
                   {selectedOrder.user_email && selectedOrder.client_name && (
                     <p className="text-xs text-muted-foreground mt-0.5">{selectedOrder.user_email}</p>
                   )}
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Delivery date</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(selectedOrder.delivery_date), "EEEE d MMMM yyyy")}</p>
+                  <p className="text-xs text-muted-foreground">Date de livraison</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(selectedOrder.delivery_date), "EEEE d MMMM yyyy", { locale: fr })}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Order date</p>
-                  <p className="mt-1 text-sm text-foreground">{format(parseISO(selectedOrder.created_at), "MMM d, yyyy HH:mm")}</p>
+                  <p className="text-xs text-muted-foreground">Date de commande</p>
+                  <p className="mt-1 text-sm text-foreground">{format(parseISO(selectedOrder.created_at), "d MMM yyyy HH:mm", { locale: fr })}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Change status</p>
+                  <p className="text-xs text-muted-foreground">Changer le statut</p>
                   <Select
                     value={selectedOrder.status}
                     onValueChange={(val) => {
@@ -2294,7 +2295,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
               {/* Checklist */}
               <div className="rounded-lg bg-muted/40 p-3 space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preparation checklist</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Checklist de préparation</p>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <Checkbox
                     checked={selectedOrder.is_roasted}
@@ -2303,7 +2304,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       setSelectedOrder({ ...selectedOrder, is_roasted: Boolean(v) });
                     }}
                   />
-                  <span className={cn(selectedOrder.is_roasted && "line-through text-muted-foreground")}>Roasted</span>
+                  <span className={cn(selectedOrder.is_roasted && "line-through text-muted-foreground")}>Torréfié</span>
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <Checkbox
@@ -2313,7 +2314,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       setSelectedOrder({ ...selectedOrder, is_packed: Boolean(v) });
                     }}
                   />
-                  <span className={cn(selectedOrder.is_packed && "line-through text-muted-foreground")}>Packed</span>
+                  <span className={cn(selectedOrder.is_packed && "line-through text-muted-foreground")}>Conditionné</span>
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <Checkbox
@@ -2323,14 +2324,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       setSelectedOrder({ ...selectedOrder, is_labeled: Boolean(v) });
                     }}
                   />
-                  <span className={cn(selectedOrder.is_labeled && "line-through text-muted-foreground")}>Labeled</span>
+                  <span className={cn(selectedOrder.is_labeled && "line-through text-muted-foreground")}>Étiqueté</span>
                 </label>
               </div>
 
               {/* Items — mobile cards */}
               <div className="lg:hidden space-y-2">
                 {selectedOrder.items.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4 text-sm">No items</p>
+                  <p className="text-center text-muted-foreground py-4 text-sm">Aucun article</p>
                 ) : selectedOrder.items.map((item) => {
                   const size = normalizeSize(item.size_label, item.size_kg);
                   const bags = size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
@@ -2389,16 +2390,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>Product</TableHead>
+                      <TableHead>Produit</TableHead>
                       <TableHead className="text-right">Qté</TableHead>
                       <TableHead className="text-right">€/kg</TableHead>
-                      <TableHead className="text-right">Subtotal</TableHead>
+                      <TableHead className="text-right">Sous-total</TableHead>
                       {canEdit && <TableHead className="w-[80px]" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedOrder.items.length === 0 ? (
-                      <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">Aucun article</TableCell></TableRow>
                     ) : (
                       selectedOrder.items.map((item) => {
                         const size = normalizeSize(item.size_label, item.size_kg);
@@ -2463,7 +2464,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   {showAddProduct ? (
                     <div className="rounded-lg border border-border p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-foreground">Add a product</p>
+                        <p className="text-sm font-medium text-foreground">Ajouter un produit</p>
                         <button onClick={() => setShowAddProduct(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
                       </div>
                       <div className="grid gap-1 max-h-48 overflow-y-auto">
@@ -2490,8 +2491,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               {/* Sellsy warning */}
               {hasSellsyWarning && (
                 <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-                  <p className="text-sm font-medium text-foreground">⚠️ This order has been sent to Sellsy</p>
-                  <p className="text-xs text-muted-foreground mt-1">Changes will not update the existing invoice.</p>
+                  <p className="text-sm font-medium text-foreground">⚠️ Cette commande a été envoyée à Sellsy</p>
+                  <p className="text-xs text-muted-foreground mt-1">Les modifications ne mettent pas à jour la facture existante.</p>
                 </div>
               )}
 
@@ -2534,7 +2535,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </span>
                 )}
               </DialogTitle>
-              <DialogDescription>Full order breakdown and actions.</DialogDescription>
+              <DialogDescription>Détail complet de la commande et actions.</DialogDescription>
             </DialogHeader>
 
             {selectedOrder && (() => {
@@ -2547,21 +2548,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-xs text-muted-foreground">Client</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">{selectedOrder.client_name || selectedOrder.user_email || "Unknown"}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{selectedOrder.client_name || selectedOrder.user_email || "Inconnu"}</p>
                     {selectedOrder.user_email && selectedOrder.client_name && (
                       <p className="text-xs text-muted-foreground mt-0.5">{selectedOrder.user_email}</p>
                     )}
                   </div>
                   <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-xs text-muted-foreground">Delivery date</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(selectedOrder.delivery_date), "EEEE d MMMM yyyy")}</p>
+                    <p className="text-xs text-muted-foreground">Date de livraison</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(selectedOrder.delivery_date), "EEEE d MMMM yyyy", { locale: fr })}</p>
                   </div>
                   <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-xs text-muted-foreground">Order date</p>
-                    <p className="mt-1 text-sm text-foreground">{format(parseISO(selectedOrder.created_at), "MMM d, yyyy HH:mm")}</p>
+                    <p className="text-xs text-muted-foreground">Date de commande</p>
+                    <p className="mt-1 text-sm text-foreground">{format(parseISO(selectedOrder.created_at), "d MMM yyyy HH:mm", { locale: fr })}</p>
                   </div>
                   <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-xs text-muted-foreground">Change status</p>
+                    <p className="text-xs text-muted-foreground">Changer le statut</p>
                     <Select
                       value={selectedOrder.status}
                       onValueChange={(val) => {
@@ -2583,7 +2584,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
                 {/* Checklist */}
                 <div className="rounded-lg bg-muted/40 p-3 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preparation checklist</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Checklist de préparation</p>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
                       checked={selectedOrder.is_roasted}
@@ -2592,7 +2593,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         setSelectedOrder({ ...selectedOrder, is_roasted: Boolean(v) });
                       }}
                     />
-                    <span className={cn(selectedOrder.is_roasted && "line-through text-muted-foreground")}>Roasted</span>
+                    <span className={cn(selectedOrder.is_roasted && "line-through text-muted-foreground")}>Torréfié</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
@@ -2602,7 +2603,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         setSelectedOrder({ ...selectedOrder, is_packed: Boolean(v) });
                       }}
                     />
-                    <span className={cn(selectedOrder.is_packed && "line-through text-muted-foreground")}>Packed</span>
+                    <span className={cn(selectedOrder.is_packed && "line-through text-muted-foreground")}>Conditionné</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
@@ -2612,14 +2613,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         setSelectedOrder({ ...selectedOrder, is_labeled: Boolean(v) });
                       }}
                     />
-                    <span className={cn(selectedOrder.is_labeled && "line-through text-muted-foreground")}>Labeled</span>
+                    <span className={cn(selectedOrder.is_labeled && "line-through text-muted-foreground")}>Étiqueté</span>
                   </label>
                 </div>
 
                 {/* Items — mobile cards */}
                 <div className="lg:hidden space-y-2">
                   {selectedOrder.items.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-4 text-sm">No items</p>
+                    <p className="text-center text-muted-foreground py-4 text-sm">Aucun article</p>
                   ) : selectedOrder.items.map((item) => {
                     const size = normalizeSize(item.size_label, item.size_kg);
                     const bags = size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
@@ -2678,16 +2679,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50 hover:bg-muted/50">
-                        <TableHead>Product</TableHead>
+                        <TableHead>Produit</TableHead>
                         <TableHead className="text-right">Qté</TableHead>
                         <TableHead className="text-right">€/kg</TableHead>
-                        <TableHead className="text-right">Subtotal</TableHead>
+                        <TableHead className="text-right">Sous-total</TableHead>
                         {canEdit && <TableHead className="w-[80px]" />}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {selectedOrder.items.length === 0 ? (
-                        <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">Aucun article</TableCell></TableRow>
                       ) : (
                         selectedOrder.items.map((item) => {
                           const size = normalizeSize(item.size_label, item.size_kg);
@@ -2752,7 +2753,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     {showAddProduct ? (
                       <div className="rounded-lg border border-border p-3 space-y-2">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-foreground">Add a product</p>
+                          <p className="text-sm font-medium text-foreground">Ajouter un produit</p>
                           <button onClick={() => setShowAddProduct(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
                         </div>
                         <div className="grid gap-1 max-h-48 overflow-y-auto">
@@ -2779,8 +2780,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 {/* Sellsy warning */}
                 {hasSellsyWarning && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-                    <p className="text-sm font-medium text-foreground">⚠️ This order has been sent to Sellsy</p>
-                    <p className="text-xs text-muted-foreground mt-1">Changes will not update the existing invoice.</p>
+                    <p className="text-sm font-medium text-foreground">⚠️ Cette commande a été envoyée à Sellsy</p>
+                    <p className="text-xs text-muted-foreground mt-1">Les modifications ne mettent pas à jour la facture existante.</p>
                   </div>
                 )}
 
@@ -2848,18 +2849,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       <AlertDialog open={!!productToDelete} onOpenChange={(open) => { if (!open) setProductToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer le produit ?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{productToDelete?.name}" and all its size variants. This action cannot be undone.
+              « {productToDelete?.name} » et tous ses formats seront définitivement supprimés. Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => productToDelete && deleteProduct(productToDelete)}
             >
-              Delete
+              Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2869,18 +2870,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       <AlertDialog open={!!clientToDelete} onOpenChange={(open) => { if (!open) setClientToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete client?</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer le client ?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{clientToDelete?.company_name || clientToDelete?.contact_name || "this client"}". This action cannot be undone.
+              « {clientToDelete?.company_name || clientToDelete?.contact_name || "ce client"} » sera définitivement supprimé. Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => clientToDelete && deleteClient(clientToDelete)}
             >
-              Delete
+              Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2890,23 +2891,23 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       <Dialog open={!!editingOrder} onOpenChange={(open) => { if (!open) setEditingOrder(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit order</DialogTitle>
+            <DialogTitle>Modifier la commande</DialogTitle>
             <DialogDescription>
               {editingOrder && `#${editingOrder.id.slice(0, 8).toUpperCase()}`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-1">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Client name</label>
+              <label className="text-sm font-medium text-foreground">Nom du client</label>
               <Input
                 value={editClientName}
                 onChange={(e) => setEditClientName(e.target.value)}
-                placeholder={editingOrder?.client_name ?? "Client name"}
+                placeholder={editingOrder?.client_name ?? "Nom du client"}
               />
-              <p className="text-xs text-muted-foreground">Overrides the name shown on this order.</p>
+              <p className="text-xs text-muted-foreground">Remplace le nom affiché sur cette commande.</p>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Delivery date</label>
+              <label className="text-sm font-medium text-foreground">Date de livraison</label>
               <Input
                 type="date"
                 value={editDeliveryDate}
@@ -2919,14 +2920,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
                 value={editNotes}
                 onChange={(e) => setEditNotes(e.target.value)}
-                placeholder="Internal notes…"
+                placeholder="Notes internes…"
               />
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setEditingOrder(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditingOrder(null)}>Annuler</Button>
             <Button disabled={savingOrderEdit} onClick={() => void saveOrderEdit()}>
-              {savingOrderEdit ? <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</> : "Save"}
+              {savingOrderEdit ? <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Enregistrement…</> : "Enregistrer"}
             </Button>
           </div>
         </DialogContent>
@@ -2936,19 +2937,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       <AlertDialog open={!!orderToDelete} onOpenChange={(open) => { if (!open) setOrderToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete order?</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer la commande ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Order #{orderToDelete?.id.slice(0, 8).toUpperCase()} from {orderToDelete?.client_name ?? "this client"} will be permanently deleted. This cannot be undone.
+              La commande #{orderToDelete?.id.slice(0, 8).toUpperCase()} de {orderToDelete?.client_name ?? "ce client"} sera définitivement supprimée. Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingOrder}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deletingOrder}>Annuler</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deletingOrder}
               onClick={() => void deleteOrder()}
             >
-              {deletingOrder ? "Deleting…" : "Delete"}
+              {deletingOrder ? "Suppression…" : "Supprimer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3056,7 +3057,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   className="flex w-full items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
-                  Sign Out
+                  Se déconnecter
                 </button>
               </div>
             </PopoverContent>
