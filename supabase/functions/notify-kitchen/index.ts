@@ -38,6 +38,7 @@ const fmtDateTime = (iso: string) =>
     hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));
 
+// Keep in sync with the French day/month tables in src/kitchen/lib/rounds.ts.
 const WEEKDAYS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 const MONTHS_FR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
@@ -291,12 +292,15 @@ async function sendOrderEvent(event: KitchenEvent, order: any, callerId: string)
 // Reminds cafés that have not ordered for a round whose reminder window is open.
 // kitchen_next_open_rounds is SECURITY DEFINER and only rejects a non-null auth.uid() that is not a
 // kitchen member; the service-role client has no uid, so the call is allowed here.
-async function handleCutoffReminder(): Promise<{ cafes: number; notified: number }> {
-  const [{ data: settings }, { data: rounds, error: roundsError }] = await Promise.all([
+async function handleCutoffReminder(): Promise<{ cafes: number; notified: number } | null> {
+  const [{ data: settings, error: settingsError }, { data: rounds, error: roundsError }] = await Promise.all([
     db.from("kitchen_settings").select("reminder_hours_before").eq("id", 1).single(),
     db.rpc("kitchen_next_open_rounds", { p_count: 4 }),
   ]);
-  if (roundsError) console.warn("[notify-kitchen] rounds lookup failed", roundsError.message);
+  if (settingsError || roundsError) {
+    console.error("[notify-kitchen] cutoff reminder read failed", settingsError?.message ?? roundsError?.message);
+    return null;
+  }
   if (!settings || !rounds?.length) return { cafes: 0, notified: 0 };
 
   const now = Date.now();
@@ -346,6 +350,7 @@ Deno.serve(async (req: Request) => {
     if (event === "cutoff_reminder") {
       if (!cronAuthorized(req)) return json({ error: "unauthorized" }, 401);
       const r = await handleCutoffReminder();
+      if (!r) return json({ error: "internal_error" }, 500);
       console.log("[notify-kitchen] cutoff_reminder", r);
       return json({ success: true, ...r });
     }

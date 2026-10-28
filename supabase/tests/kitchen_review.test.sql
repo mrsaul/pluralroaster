@@ -76,11 +76,13 @@ select lives_ok(format('select public.kitchen_decline_order(%L, %L)', :'urg2', '
 select public.kitchen_create_urgent_order('00000000-0000-0000-0000-0000000000c2', 'Same day', '2026-11-06 09:00 Europe/Paris', format('[{"product_id":"%s","units":1}]', :'cook')::jsonb) as urg3 \gset
 reset role;
 select is((select production_date from public.kitchen_orders where id = :'urg3'), '2026-11-06'::date, 'urgent needed on a production day stays on that day');
+alter table public.kitchen_rounds disable trigger kitchen_rounds_guard_weekday;
 update public.kitchen_rounds set is_active = false;
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
 select throws_ok(format($q$select public.kitchen_create_urgent_order('00000000-0000-0000-0000-0000000000c2', 'x', '2026-11-06 09:00 Europe/Paris', '[{"product_id":"%s","units":1}]')$q$, :'cook'), 'no_round', 'urgent with no active rounds: no_round');
 reset role;
 update public.kitchen_rounds set is_active = true;
+alter table public.kitchen_rounds enable trigger kitchen_rounds_guard_weekday;
 select is((select status || decline_note from public.kitchen_orders where id = :'urg2'), 'declinedno capacity', 'declined with note');
 
 -- Ready + stock

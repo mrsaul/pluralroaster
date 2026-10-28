@@ -4,6 +4,7 @@ import type { Lang } from "@/i18n";
 import { PARIS_TZ } from "./format";
 import type { RoundOccurrence } from "../types";
 
+// Keep in sync with the French day/month tables in supabase/functions/notify-kitchen/index.ts.
 /** 0 = dimanche … 6 = samedi, matching Postgres EXTRACT(DOW). */
 export const WEEKDAYS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 export const WEEKDAYS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];

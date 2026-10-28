@@ -74,12 +74,17 @@ CREATE INDEX kitchen_orders_production_date_idx ON public.kitchen_orders (produc
 
 -- ---------------------------------------------------------------------------
 -- kitchen_reminders_sent: once per café per production date.
--- Pure bookkeeping, so existing rows are dropped rather than mapped.
+-- Existing rows are mapped (week_start + 1 day = the Tuesday production date), so a release
+-- inside a reminder window does not re-send reminders.
 -- ---------------------------------------------------------------------------
-TRUNCATE public.kitchen_reminders_sent;
 ALTER TABLE public.kitchen_reminders_sent DROP CONSTRAINT kitchen_reminders_sent_pkey;
+ALTER TABLE public.kitchen_reminders_sent ADD COLUMN production_date date;
+UPDATE public.kitchen_reminders_sent SET production_date = week_start + 1;
+DELETE FROM public.kitchen_reminders_sent a
+  USING public.kitchen_reminders_sent b
+  WHERE a.ctid > b.ctid AND a.production_date = b.production_date AND a.cafe_id = b.cafe_id;
 ALTER TABLE public.kitchen_reminders_sent DROP COLUMN week_start;
-ALTER TABLE public.kitchen_reminders_sent ADD COLUMN production_date date NOT NULL;
+ALTER TABLE public.kitchen_reminders_sent ALTER COLUMN production_date SET NOT NULL;
 ALTER TABLE public.kitchen_reminders_sent ADD PRIMARY KEY (production_date, cafe_id);
 
 -- ---------------------------------------------------------------------------
@@ -104,19 +109,30 @@ CREATE TRIGGER kitchen_rounds_guard_delete
   BEFORE DELETE ON public.kitchen_rounds
   FOR EACH ROW EXECUTE FUNCTION public.kitchen_rounds_guard_delete();
 
--- A round's production weekday cannot move while upcoming orders (today or later, Paris) use it.
--- Cutoff, hours, name and is_active stay editable.
+-- A round's production weekday cannot move, and the round cannot be deactivated, while upcoming
+-- orders (today or later, Paris) use it. Deactivation only counts non-draft orders.
+-- Cutoff, hours and name stay editable.
 CREATE FUNCTION public.kitchen_rounds_guard_weekday()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM public.kitchen_orders
-    WHERE round_id = OLD.id
-      AND production_date >= (public.kitchen_now() AT TIME ZONE 'Europe/Paris')::date
-  ) THEN
+  IF OLD.production_weekday IS DISTINCT FROM NEW.production_weekday
+     AND EXISTS (
+       SELECT 1 FROM public.kitchen_orders
+       WHERE round_id = OLD.id
+         AND production_date >= (public.kitchen_now() AT TIME ZONE 'Europe/Paris')::date
+     ) THEN
+    RAISE EXCEPTION 'round_in_use';
+  END IF;
+  IF OLD.is_active AND NOT NEW.is_active
+     AND EXISTS (
+       SELECT 1 FROM public.kitchen_orders
+       WHERE round_id = OLD.id
+         AND status <> 'draft'
+         AND production_date >= (public.kitchen_now() AT TIME ZONE 'Europe/Paris')::date
+     ) THEN
     RAISE EXCEPTION 'round_in_use';
   END IF;
   RETURN NEW;
@@ -126,9 +142,9 @@ $$;
 REVOKE ALL ON FUNCTION public.kitchen_rounds_guard_weekday() FROM PUBLIC, anon, authenticated;
 
 CREATE TRIGGER kitchen_rounds_guard_weekday
-  BEFORE UPDATE OF production_weekday ON public.kitchen_rounds
+  BEFORE UPDATE OF production_weekday, is_active ON public.kitchen_rounds
   FOR EACH ROW
-  WHEN (OLD.production_weekday IS DISTINCT FROM NEW.production_weekday)
+  WHEN (OLD.production_weekday IS DISTINCT FROM NEW.production_weekday OR OLD.is_active IS DISTINCT FROM NEW.is_active)
   EXECUTE FUNCTION public.kitchen_rounds_guard_weekday();
 
 -- ---------------------------------------------------------------------------

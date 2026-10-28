@@ -117,5 +117,6 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON public.kitchen_rounds FROM anon;
 REVOKE ALL ON FUNCTION public.kitchen_round_cutoff(uuid, date), public.kitchen_round_occurrences(date, date), public.kitchen_next_open_rounds(int, timestamptz) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.kitchen_round_cutoff(uuid, date), public.kitchen_round_occurrences(date, date), public.kitchen_next_open_rounds(int, timestamptz) TO authenticated, service_role;

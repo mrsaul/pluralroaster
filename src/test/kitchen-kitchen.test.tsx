@@ -29,12 +29,13 @@ const mocks = vi.hoisted(() => ({
   markReady: vi.fn(),
   setEta: vi.fn(),
   dates: [] as (string | undefined)[],
+  loading: false,
 }));
 
 vi.mock("@/kitchen/api", () => ({
   useKitchenProducts: () => ({ data: products }),
   useKitchenRounds: () => ({ data: ROUNDS }),
-  useRoundOccurrences: () => ({ data: OCCURRENCES }),
+  useRoundOccurrences: () => (mocks.loading ? { data: undefined, isLoading: true } : { data: OCCURRENCES, isLoading: false }),
   useKitchenSettings: () => ({ data: { reminderHoursBefore: 24 } }),
   useKitchenOrders: (f: { productionDate?: string }) => { mocks.dates.push(f.productionDate); return { data: mocks.orders }; },
   useUpdateProduct: () => ({ mutate: mocks.updateProduct, isPending: false }),
@@ -63,6 +64,7 @@ const render = (ui: ReactElement) =>
 beforeEach(() => {
   Object.values(mocks).forEach((m) => typeof m === "function" && (m as ReturnType<typeof vi.fn>).mockReset());
   mocks.dates = [];
+  mocks.loading = false;
   mocks.now = new Date("2026-11-04T10:00:00Z");
   mocks.orders = [
     order({ cafeId: "c1", cafeName: "Artivistas", items: [item("p1", 1)] }),
@@ -76,7 +78,7 @@ describe("kitchen default round", () => {
       render(<View />);
       expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
       expect(mocks.dates[mocks.dates.length - 1]).toBe("2026-11-06");
-      fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tournée suivante" }));
       expect(screen.getByText("Production du mardi 10 nov.")).toBeInTheDocument();
       expect(mocks.dates[mocks.dates.length - 1]).toBe("2026-11-10");
       fireEvent.click(screen.getByRole("button", { name: "Prochaine" }));
@@ -90,6 +92,17 @@ describe("kitchen default round", () => {
   });
 });
 
+describe("round loading state", () => {
+  for (const [name, View] of [["ProductionView", ProductionView], ["KitchenOrdersList", KitchenOrdersList]] as const) {
+    it(`${name} shows the loading text, not « Aucune tournée », while occurrences load`, () => {
+      mocks.loading = true;
+      render(<View />);
+      expect(screen.getByText("Chargement…")).toBeInTheDocument();
+      expect(screen.queryByText(/Aucune tournée/)).not.toBeInTheDocument();
+    });
+  }
+});
+
 describe("ProductionView", () => {
   it("shows the pandebono row with to-produce 2 and the per-café breakdown", () => {
     render(<ProductionView />);
@@ -101,7 +114,7 @@ describe("ProductionView", () => {
   it("measures capacity against the selected round's hours", () => {
     render(<ProductionView />);
     expect(screen.getByText(/5 h/)).toBeInTheDocument(); // Vendredi: 300 min
-    fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tournée suivante" }));
     expect(screen.getByText(/6 h/)).toBeInTheDocument(); // Mardi: 360 min
   });
   it("shows an empty state when nothing is approved", () => {

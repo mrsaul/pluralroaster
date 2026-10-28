@@ -44,7 +44,7 @@ Kitchen orders now belong to a production round (Mardi, Vendredi) with its own c
 | Stores manager creates and approves Mardi after the cutoff | pass | 5c to 5g: the default target is the Mardi round being decided; café B is locked (5h) |
 | Kitchen sees Mardi production with the round's capacity | pass | 5i to 5j: two approved Mardi orders, the Vendredi order is not mixed in, capacity 420 for Mardi and 360 for Vendredi |
 | Urgent order needed on a Wednesday lands in Vendredi | pass | 6a2: `production_date` = Wednesday + 2, `round_id` = Vendredi |
-| Delete a used round fails; deactivate works | pass | R2 (`round_in_use`), R3 (weekday move with upcoming orders: `round_in_use`), R4 to R7 (edit capacity, deactivate; its orders stay visible and it stops producing occurrences), R8 and R9 (create and delete an unused round) |
+| Delete or deactivate a used round fails; unused round can be deactivated and deleted | pass | R2 (`round_in_use`), R3 (weekday move with upcoming orders: `round_in_use`), R4 to R7 (edit capacity; deactivating a round with upcoming sent/approved orders is refused with `round_in_use`, and the round keeps producing), R8, R8b and R9 (create, deactivate and delete an unused round) |
 | Café cannot edit rounds | pass | R1 |
 | Rendering of the rounds editor, round picker and capacity bar | owner to verify | UI only |
 
@@ -54,9 +54,11 @@ Other checks on this branch after the rounds work: `npx vitest run` 16 files, 14
 
 Do not run these from the branch. The owner approves each step before it is run.
 
-1. Apply migrations `20261028000006` then `20261028000007` to the live project and record both versions in `schema_migrations`. Verify with a query that the live ARTIVISTAS test order now has `production_date = 2026-11-03` and the Mardi `round_id`.
+1. Apply migration `20261028000006`, then `20261028000007` immediately after, back-to-back. Each is applied as one transaction (one apply each). Record both versions in `schema_migrations`. Verify with a query that the live ARTIVISTAS test order now has `production_date = 2026-11-03` and the Mardi `round_id`.
 2. Redeploy `notify-kitchen`.
 3. Build a fresh Vercel preview and retest with the three test accounts.
+
+Warning: the existing Vercel preview, built from the old kitchen code, breaks as soon as migration `20261028000007` lands (it reads `week_start`) and stays broken until a fresh preview is built (step 3).
 
 Steps 1 and 2 must run back-to-back: the live `notify-kitchen` (v1) reads `week_start`, which migration `20261028000007` drops, so between the two steps notifications fail. Do them in one sitting, the migration immediately followed by the redeploy.
 

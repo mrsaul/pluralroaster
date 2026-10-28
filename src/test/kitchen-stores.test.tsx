@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   decline: vi.fn(),
   extra: [] as KitchenOrder[],
   rounds: [] as { id: string; capacityMinutes: number }[],
+  loading: false,
 }));
 
 vi.mock("@/kitchen/api", () => {
@@ -38,7 +39,7 @@ vi.mock("@/kitchen/api", () => {
   return {
     useKitchenProducts: () => ({ data: products }),
     useKitchenRounds: () => ({ data: mocks.rounds }),
-    useRoundOccurrences: () => ({ data: mocks.occurrences }),
+    useRoundOccurrences: () => ({ data: mocks.loading ? undefined : mocks.occurrences, isLoading: mocks.loading }),
     useKitchenCafes: () => ({ data: mocks.cafes }),
     useKitchenOrders: (f: { kind?: string; productionDate?: string; from?: string; to?: string }) => ({
       data: [...mocks.weekly, ...mocks.urgent, ...mocks.extra].filter((o) =>
@@ -72,6 +73,7 @@ const render = (ui: ReactElement) =>
 beforeEach(() => {
   mocks.now = new Date("2026-11-02T20:30:00Z");
   mocks.occurrences = OCCURRENCES;
+  mocks.loading = false;
   mocks.createUrgent.mockReset(); mocks.notify.mockReset();
   mocks.weekly = []; mocks.urgent = []; mocks.extra = []; mocks.rounds = [];
   mocks.cafes = [{ id: "c1", name: "Artivistas", isActive: true }, { id: "c2", name: "Belleville", isActive: true }];
@@ -93,6 +95,12 @@ describe("CapacityBar", () => {
 });
 
 describe("StoresReview", () => {
+  it("shows the loading text, not « Aucune tournée », while occurrences load", () => {
+    mocks.loading = true;
+    render(<StoresReview />);
+    expect(screen.getByText("Chargement…")).toBeInTheDocument();
+    expect(screen.queryByText(/Aucune tournée/)).not.toBeInTheDocument();
+  });
   it("renders urgent orders above weekly ones", () => {
     mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", items: [item("p1", 1)] })];
     mocks.urgent = [order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "sent", neededBy: "2026-11-03T08:00:00Z", items: [item("p1", 1)] })];
@@ -156,17 +164,17 @@ describe("StoresReview", () => {
     it("steps previous/next and returns to the default with Prochaine", () => {
       render(<StoresReview />);
       expect(screen.queryByRole("button", { name: "Prochaine" })).toBeNull();
-      fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tournée suivante" }));
       expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Tour précédent" }));
-      fireEvent.click(screen.getByRole("button", { name: "Tour précédent" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tournée précédente" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tournée précédente" }));
       expect(screen.getByText("Production du vendredi 30 oct.")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Prochaine" }));
       expect(screen.getByText("Production du mardi 3 nov.")).toBeInTheDocument();
     });
     it("keeps the picked round when the list changes", () => {
       const { rerender } = render(<StoresReview />);
-      fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tournée suivante" }));
       mocks.occurrences = OCCURRENCES.slice(1);
       rerender(<QueryClientProvider client={new QueryClient()}><StoresReview /></QueryClientProvider>);
       expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
@@ -251,7 +259,7 @@ describe("StoresReview", () => {
   it("creates the café order for the picked round", () => {
     mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", productionDate: "2026-11-06", items: [item("p1", 1)] })];
     render(<StoresReview />);
-    fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tournée suivante" }));
     fireEvent.click(screen.getByRole("button", { name: "Créer la commande pour ce café" }));
     expect(mocks.create).toHaveBeenCalledWith({ cafeId: "c1", productionDate: "2026-11-06" }, expect.anything());
   });

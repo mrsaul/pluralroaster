@@ -96,7 +96,7 @@ export default function KitchenOrdersList() {
   const k = t.kitchen;
   const now = useNow();
   const today = parisDate(now);
-  const { data: occurrences = [] } = useRoundOccurrences(
+  const { data: occurrences = [], isLoading: occLoading } = useRoundOccurrences(
     format(addDays(parseISO(today), -28), "yyyy-MM-dd"),
     format(addDays(parseISO(today), 28), "yyyy-MM-dd"),
   );
@@ -117,7 +117,7 @@ export default function KitchenOrdersList() {
     return [...urgent, ...weekly];
   }, [orders]);
 
-  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occurrences.length ? k.loading : k.noRound}</p>;
+  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occLoading ? k.loading : k.noRound}</p>;
 
   const stockOf = (id: string) => products.find((p) => p.id === id)?.stockUnits ?? 0;
 

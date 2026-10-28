@@ -167,6 +167,12 @@ try {
   ok("4d stores re-approves", !ap2.error, errOf(ap2));
 
   // ---- UAT 5
+  let orderB = null;
+  // Monday 20:00-21:00 Paris: the next Mardi is 8 days out, so moving its cutoff back an hour does not lock it. Skip.
+  const daysToM = Math.round((Date.parse(M.production_date + "T12:00:00Z") - Date.parse(parisParts(new Date()).date + "T12:00:00Z")) / 864e5);
+  if (daysToM > 7) {
+    console.log("SKIP 5 (clock window; rerun in 1h)");
+  } else {
   console.log("== UAT 5: after the Mardi cutoff (Mardi cutoff moved to one hour ago; Vendredi stays open)");
   const past = parisParts(new Date(Date.now() - 3600e3));
   console.log(`   moving the Mardi cutoff to weekday ${past.dow} at ${past.hhmm} Paris, capacity 420`);
@@ -181,7 +187,7 @@ try {
   ok("5b2 same café can still order Vendredi and send it", !vEdit.error && !vSend.error, errOf(vEdit) || errOf(vSend));
   const cBx = await login("cafeB");
   const mkB = await rpc(sc, "kitchen_create_order_for_cafe", { p_cafe_id: cafeB });
-  const orderB = mkB.data;
+  orderB = mkB.data;
   ok("5c stores creates order for cafe B", !mkB.error && !!orderB, errOf(mkB));
   const ob = await svc.from("kitchen_orders").select("production_date,round_id,status,kind").eq("id", orderB).single();
   ok("5d default order targets the Mardi round being decided", ob.data.production_date === M.production_date && ob.data.round_id === mardiId, `${ob.data.production_date}`);
@@ -208,6 +214,7 @@ try {
   await svc.from("kitchen_rounds").update({ cutoff_weekday: origMardi.cutoff_weekday, cutoff_time: origMardi.cutoff_time, capacity_minutes: origMardi.capacity_minutes }).eq("id", mardiId);
   const restored = (await svc.from("kitchen_rounds").select("cutoff_weekday,cutoff_time,capacity_minutes").eq("id", mardiId).single()).data;
   ok("5k Mardi round settings restored", restored.cutoff_weekday === origMardi.cutoff_weekday && restored.cutoff_time === origMardi.cutoff_time && restored.capacity_minutes === origMardi.capacity_minutes);
+  }
 
   // ---- UAT 6/7
   console.log("== UAT 6/7: urgent flow and stock");
@@ -242,11 +249,11 @@ try {
   const otherRcv = await rpc(await login("cafeB"), "kitchen_mark_received", { p_order_id: orderU });
   ok("6g other cafe cannot confirm someone else's order", !!otherRcv.error, errOf(otherRcv));
   // weekly ready, stock capped
-  const rdyB = await rpc(kc, "kitchen_mark_ready", { p_order_id: orderB });
+  const rdyB = orderB ? await rpc(kc, "kitchen_mark_ready", { p_order_id: orderB }) : null;
   const stk2 = (await svc.from("kitchen_products").select("name,stock_units").eq("id", P["Pandebono"]).single()).data;
-  ok("7c weekly mark ready caps at stock (Pandebono 1 -> 0, order wanted 2)", !rdyB.error && stk2.stock_units === 0, String(stk2.stock_units));
-  const stop = await rpc(kc, "kitchen_mark_ready", { p_order_id: orderB });
-  ok("7d double mark-ready rejected (invalid_status)", /invalid_status/.test(errOf(stop) || ""));
+  if (orderB) ok("7c weekly mark ready caps at stock (Pandebono 1 -> 0, order wanted 2)", !rdyB.error && stk2.stock_units === 0, String(stk2.stock_units));
+  const stop = orderB ? await rpc(kc, "kitchen_mark_ready", { p_order_id: orderB }) : null;
+  if (orderB) ok("7d double mark-ready rejected (invalid_status)", /invalid_status/.test(errOf(stop) || ""));
   const rdyA = await rpc(kc, "kitchen_mark_ready", { p_order_id: orderA });
   ok("7e second weekly order marked ready, stock stays >= 0", !rdyA.error);
 
@@ -285,14 +292,16 @@ try {
   const edName = await kc.from("kitchen_rounds").update({ capacity_minutes: 400 }).eq("id", mardiId).select();
   ok("R4 kitchen manager can edit capacity of a used round", !edName.error && edName.data.length === 1 && edName.data[0].capacity_minutes === 400, errOf(edName));
   const deact = await kc.from("kitchen_rounds").update({ is_active: false }).eq("id", mardiId).select();
-  ok("R5 deactivating a used round works", !deact.error && deact.data.length === 1 && deact.data[0].is_active === false, errOf(deact));
+  ok("R5 deactivating a round with upcoming sent/approved orders fails (round_in_use)", /round_in_use/.test(errOf(deact) || ""), errOf(deact));
   const occOff = (await rpc(kc, "kitchen_round_occurrences", { p_from: lo, p_to: hi })).data || [];
-  ok("R6 deactivated round no longer produces occurrences", !occOff.some(o => o.round_name === "Mardi") && occOff.some(o => o.round_name === "Vendredi"));
+  ok("R6 refused deactivation leaves the round producing occurrences", occOff.some(o => o.round_name === "Mardi") && occOff.some(o => o.round_name === "Vendredi"));
   const stillThere = await kc.from("kitchen_orders").select("id").eq("id", orderA);
   ok("R7 its existing orders stay visible", stillThere.data.length === 1);
   const newR = await kc.from("kitchen_rounds").insert({ name: "Test", production_weekday: 3, cutoff_weekday: 1, cutoff_time: "20:00", capacity_minutes: 60 }).select().single();
   tmpRound = newR.data?.id;
   ok("R8 kitchen manager can create a round", !newR.error && !!tmpRound, errOf(newR));
+  const deactFree = await kc.from("kitchen_rounds").update({ is_active: false }).eq("id", tmpRound).select();
+  ok("R8b deactivating an unused round works", !deactFree.error && deactFree.data.length === 1 && deactFree.data[0].is_active === false, errOf(deactFree));
   const delFree = await kc.from("kitchen_rounds").delete().eq("id", tmpRound).select();
   ok("R9 deleting an unused round works", !delFree.error && delFree.data.length === 1, errOf(delFree));
   tmpRound = null;

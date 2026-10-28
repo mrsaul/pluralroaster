@@ -16,6 +16,12 @@ const field = "flex flex-col gap-1 text-sm";
 type Draft = Omit<KitchenRound, "id"> & { id?: string };
 const BLANK: Draft = { name: "", productionWeekday: 2, cutoffWeekday: 0, cutoffTime: "20:00", capacityMinutes: 360, isActive: true };
 
+/** Minutes to hours, at most one decimal; French decimal comma when shown as text. */
+function fmtHours(minutes: number, comma = false): string {
+  const s = String(+(minutes / 60).toFixed(1));
+  return comma ? s.replace(".", ",") : s;
+}
+
 function RoundForm({ initial, rounds, onDone }: { initial: Draft; rounds: KitchenRound[]; onDone: () => void }) {
   const t = useKitchenT();
   const k = t.kitchen;
@@ -24,7 +30,7 @@ function RoundForm({ initial, rounds, onDone }: { initial: Draft; rounds: Kitche
   const [prodDay, setProdDay] = useState(String(initial.productionWeekday));
   const [cutDay, setCutDay] = useState(String(initial.cutoffWeekday));
   const [time, setTime] = useState(initial.cutoffTime);
-  const [hours, setHours] = useState(String(initial.capacityMinutes / 60));
+  const [hours, setHours] = useState(fmtHours(initial.capacityMinutes));
   const [active, setActive] = useState(initial.isActive);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -33,7 +39,7 @@ function RoundForm({ initial, rounds, onDone }: { initial: Draft; rounds: Kitche
     const h = Number(hours);
     if (!name.trim()) errs.push(k.errRoundName);
     if (!/^\d{2}:\d{2}$/.test(time)) errs.push(k.errTime);
-    if (hours.trim() === "" || !Number.isFinite(h) || Math.round(h * 60) <= 0) errs.push(k.errHours);
+    if (hours.trim() === "" || !Number.isFinite(h) || Math.round(h * 60) <= 0 || h > 168) errs.push(k.errHours);
     if (rounds.some((r) => r.id !== initial.id && r.productionWeekday === Number(prodDay))) errs.push(k.errDuplicateDay);
     setErrors(errs);
     if (errs.length) return;
@@ -77,7 +83,7 @@ function RoundForm({ initial, rounds, onDone }: { initial: Draft; rounds: Kitche
         <input className={inputCls} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
       </label>
       <label className={field}>{k.teamHours}
-        <input className={inputCls} type="number" inputMode="decimal" min={0} step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} />
+        <input className={inputCls} type="number" inputMode="decimal" min={0} max={168} step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} />
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="h-5 w-5" checked={active} onChange={(e) => setActive(e.target.checked)} />
@@ -117,7 +123,7 @@ export default function RoundsEditor() {
                 <div className="min-w-0">
                   <p className="font-medium">{r.name} <span className="text-xs font-normal text-muted-foreground">{r.isActive ? k.roundActive : k.roundInactive}</span></p>
                   <p className="text-xs text-muted-foreground">
-                    {k.roundSummary(k.weekdays[r.productionWeekday].toLowerCase(), k.weekdays[r.cutoffWeekday].toLowerCase(), r.cutoffTime, String(r.capacityMinutes / 60))}
+                    {k.roundSummary(k.weekdays[r.productionWeekday].toLowerCase(), k.weekdays[r.cutoffWeekday].toLowerCase(), r.cutoffTime, fmtHours(r.capacityMinutes, true))}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">

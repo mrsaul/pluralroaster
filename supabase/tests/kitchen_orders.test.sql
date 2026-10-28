@@ -1,5 +1,5 @@
 begin;
-select plan(75);
+select plan(80);
 \ir support/kitchen_setup.psql
 
 set local kitchen.now_override = '2026-11-01 12:00 Europe/Paris';
@@ -171,6 +171,8 @@ reset role;
 
 -- Round in use cannot be deleted; deactivated round keeps its orders approvable
 select throws_ok(format('delete from public.kitchen_rounds where id = %L', :'mardi'), 'round_in_use', 'deleting a round with orders is refused');
+-- The guard blocks deactivating a round with upcoming orders; bypass it to set up the deactivated-round scenarios.
+alter table public.kitchen_rounds disable trigger kitchen_rounds_guard_weekday;
 update public.kitchen_rounds set is_active = false where id = :'mardi';
 update public.kitchen_orders set status = 'sent', locked_by = null, locked_at = null where id = :'oid';
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a5');
@@ -191,14 +193,25 @@ select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 select throws_ok('select public.kitchen_get_or_create_draft()', 'no_round', 'no active rounds: no_round');
 reset role;
 update public.kitchen_rounds set is_active = true;
+alter table public.kitchen_rounds enable trigger kitchen_rounds_guard_weekday;
 
 -- Production weekday cannot move while upcoming orders use the round
 select throws_ok(format('update public.kitchen_rounds set production_weekday = 3 where id = %L', :'mardi'), 'round_in_use', 'weekday change with an upcoming order is refused');
+select throws_ok(format('update public.kitchen_rounds set is_active = false where id = %L', :'mardi'), 'round_in_use', 'deactivating a round with an upcoming sent/approved order is refused');
 select lives_ok(format('update public.kitchen_rounds set cutoff_time = %L, capacity_minutes = 300, name = %L where id = %L', '19:00', 'Mardi matin', :'mardi'), 'cutoff/hours/name stay editable with upcoming orders');
 set local kitchen.now_override = '2026-11-20 12:00 Europe/Paris';
 select lives_ok(format('update public.kitchen_rounds set production_weekday = 6 where id = %L', :'vendredi'), 'weekday change with only past orders succeeds');
 insert into public.kitchen_rounds (name, production_weekday, cutoff_weekday, cutoff_time, capacity_minutes) values ('Dimanche', 0, 6, '20:00', 100);
 select lives_ok($q$update public.kitchen_rounds set production_weekday = 3 where name = 'Dimanche'$q$, 'weekday change on a round without orders succeeds');
+
+-- Deactivation: drafts only or past orders do not block; reactivation always works
+insert into public.kitchen_rounds (name, production_weekday, cutoff_weekday, cutoff_time, capacity_minutes) values ('Jeudi', 4, 3, '20:00', 100);
+select id as jeudi from public.kitchen_rounds where name = 'Jeudi' \gset
+insert into public.kitchen_orders (cafe_id, production_date, round_id, kind, status) values ('00000000-0000-0000-0000-0000000000c1', '2026-12-03', :'jeudi', 'weekly', 'draft');
+select lives_ok(format('update public.kitchen_rounds set is_active = false where id = %L', :'jeudi'), 'deactivating a round with only upcoming drafts succeeds');
+select lives_ok(format('update public.kitchen_rounds set is_active = false where id = %L', :'vendredi'), 'deactivating a round with only past orders succeeds');
+select lives_ok(format('update public.kitchen_rounds set is_active = true where id = %L', :'vendredi'), 'reactivating a round succeeds');
+select lives_ok(format('update public.kitchen_rounds set is_active = true where id = %L', :'jeudi'), 'reactivating a round with orders succeeds');
 
 select * from finish();
 rollback;

@@ -25,7 +25,7 @@ const fr = {
   generic: "Une erreur est survenue",
 };
 // Minimal strings object; kitchenErrorMessage only reads t.errors.*
-const t = { errors: { ...fr, orderLocked: "l", forbidden: "f", emptyOrder: "e", productHidden: "p", invalidStatus: "s", invalidInput: "i", notKitchenMember: "n", noRound: "Aucune tournée de production configurée.", roundInUse: "Cette tournée a des commandes : désactivez-la plutôt que de la supprimer." } } as unknown as Parameters<typeof kitchenErrorMessage>[1];
+const t = { errors: { ...fr, orderLocked: "l", forbidden: "f", emptyOrder: "e", productHidden: "p", invalidStatus: "s", invalidInput: "i", notKitchenMember: "n", noRound: "Aucune tournée de production configurée.", roundInUse: "Cette tournée a des commandes : impossible de la supprimer. Pour la désactiver ou changer son jour, attendez que ses commandes à venir soient passées." } } as unknown as Parameters<typeof kitchenErrorMessage>[1];
 
 function wrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -39,7 +39,7 @@ describe("kitchenErrorMessage", () => {
     expect(kitchenErrorMessage(null, t)).toBe(fr.generic);
     expect(kitchenErrorMessage({ message: "no_round" }, t)).toBe("Aucune tournée de production configurée.");
     expect(kitchenErrorMessage({ message: "round_in_use" }, t)).toBe(
-      "Cette tournée a des commandes : désactivez-la plutôt que de la supprimer.",
+      "Cette tournée a des commandes : impossible de la supprimer. Pour la désactiver ou changer son jour, attendez que ses commandes à venir soient passées.",
     );
   });
 });

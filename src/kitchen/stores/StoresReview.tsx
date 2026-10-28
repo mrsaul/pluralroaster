@@ -59,7 +59,7 @@ export default function StoresReview() {
   const { data: products = [] } = useKitchenProducts();
   const { data: cafes = [] } = useKitchenCafes();
   const today = parisDate(now);
-  const { data: occurrences = [] } = useRoundOccurrences(
+  const { data: occurrences = [], isLoading: occLoading } = useRoundOccurrences(
     iso(addDays(parseISO(today), -28)),
     iso(addDays(parseISO(today), 28)),
   );
@@ -107,7 +107,7 @@ export default function StoresReview() {
   const available = round?.capacityMinutes ?? 0;
   const capacity = useMemo(() => computeCapacity(computeProduction(counted, products), products, available), [counted, products, available]);
 
-  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occurrences.length ? s.loading : s.noRound}</p>;
+  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occLoading ? s.loading : s.noRound}</p>;
 
   const openOrder = [...weekly, ...urgentAll].find((o) => o.id === openId) ?? null;
 
