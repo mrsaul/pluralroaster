@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { addDays, format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,14 +9,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useKitchenLang } from "@/kitchen/i18n";
 import {
-  kitchenErrorMessage, useProductionWeek, useKitchenOrders, useKitchenProducts, useMarkReady, useSetReadyEta,
+  kitchenErrorMessage, useKitchenOrders, useKitchenProducts, useMarkReady, useRoundOccurrences, useSetReadyEta,
 } from "../api";
 import { useKitchenT } from "../i18n";
 import { parisLocalToIso, unitsToPieces } from "../lib/format";
 import { effectiveUnits } from "../lib/production";
 import { buildPackingListText } from "../lib/share";
-import { formatWhen } from "../cafe/useNow";
-import WeekPicker from "../components/WeekPicker";
+import { kitchenDefaultRound, parisDate } from "../lib/rounds";
+import { formatWhen, useNow } from "../cafe/useNow";
+import RoundPicker from "../components/RoundPicker";
 import { useShareText } from "../components/useShareText";
 import type { KitchenOrder } from "../types";
 
@@ -92,12 +94,19 @@ function OrderCard({ order, onMarkReady }: { order: KitchenOrder; onMarkReady: (
 export default function KitchenOrdersList() {
   const t = useKitchenT();
   const k = t.kitchen;
-  // Kitchen works on the production week (the one whose cutoff passed most recently).
-  const { data: production } = useProductionWeek();
+  const now = useNow();
+  const today = parisDate(now);
+  const { data: occurrences = [] } = useRoundOccurrences(
+    format(addDays(parseISO(today), -28), "yyyy-MM-dd"),
+    format(addDays(parseISO(today), 28), "yyyy-MM-dd"),
+  );
   const { data: products = [] } = useKitchenProducts();
+  // Selection is stored as a production date so refetches never swap the viewed round.
   const [picked, setPicked] = useState<string | null>(null);
-  const weekStart = picked ?? production?.weekStart;
-  const { data: orders = [] } = useKitchenOrders({ weekStart });
+  const defaultRound = useMemo(() => kitchenDefaultRound(occurrences, now), [occurrences, now]);
+  const round = occurrences.find((o) => o.productionDate === picked) ?? defaultRound;
+  const productionDate = round?.productionDate;
+  const { data: orders = [] } = useKitchenOrders({ productionDate });
   const markReady = useMarkReady();
   const [pending, setPending] = useState<KitchenOrder | null>(null);
 
@@ -108,13 +117,13 @@ export default function KitchenOrdersList() {
     return [...urgent, ...weekly];
   }, [orders]);
 
-  if (!production || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{k.loading}</p>;
+  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occurrences.length ? k.loading : k.noRound}</p>;
 
   const stockOf = (id: string) => products.find((p) => p.id === id)?.stockUnits ?? 0;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <WeekPicker weekStart={weekStart} currentWeekStart={production.weekStart} onChange={setPicked} />
+      <RoundPicker occurrences={occurrences} value={productionDate} onChange={setPicked} defaultValue={defaultRound?.productionDate ?? null} />
       {list.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{k.noOrders}</p>}
       <ul className="flex flex-col gap-2">
         {list.map((o) => <OrderCard key={o.id} order={o} onMarkReady={setPending} />)}

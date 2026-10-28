@@ -1,38 +1,47 @@
 import { useMemo, useState } from "react";
+import { addDays, format, parseISO } from "date-fns";
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKitchenLang } from "@/kitchen/i18n";
-import { useProductionWeek, useKitchenOrders, useKitchenProducts, useKitchenSettings } from "../api";
+import { useKitchenOrders, useKitchenProducts, useRoundOccurrences } from "../api";
 import { useKitchenT } from "../i18n";
 import { unitsToPieces } from "../lib/format";
 import { computeCapacity, computeProduction } from "../lib/production";
 import { buildProductionShareText } from "../lib/share";
+import { kitchenDefaultRound, parisDate } from "../lib/rounds";
+import { useNow } from "../cafe/useNow";
 import CapacityBar from "../stores/CapacityBar";
-import WeekPicker from "../components/WeekPicker";
+import RoundPicker from "../components/RoundPicker";
 import { useShareText } from "../components/useShareText";
 
 export default function ProductionView() {
   const k = useKitchenT().kitchen;
   const lang = useKitchenLang();
   const share = useShareText();
-  // Kitchen works on the production week (the one whose cutoff passed most recently).
-  const { data: production } = useProductionWeek();
-  const { data: settings } = useKitchenSettings();
+  const now = useNow();
+  const today = parisDate(now);
+  const { data: occurrences = [] } = useRoundOccurrences(
+    format(addDays(parseISO(today), -28), "yyyy-MM-dd"),
+    format(addDays(parseISO(today), 28), "yyyy-MM-dd"),
+  );
   const { data: products = [] } = useKitchenProducts();
+  // Selection is stored as a production date so refetches never swap the viewed round.
   const [picked, setPicked] = useState<string | null>(null);
-  const weekStart = picked ?? production?.weekStart;
-  const { data: orders = [] } = useKitchenOrders({ weekStart });
-  const available = settings?.weeklyCapacityMinutes ?? 0;
+  const defaultRound = useMemo(() => kitchenDefaultRound(occurrences, now), [occurrences, now]);
+  const round = occurrences.find((o) => o.productionDate === picked) ?? defaultRound;
+  const productionDate = round?.productionDate;
+  const { data: orders = [] } = useKitchenOrders({ productionDate });
+  const available = round?.capacityMinutes ?? 0;
 
   const rows = useMemo(() => computeProduction(orders.filter((o) => o.status === "approved"), products), [orders, products]);
   const capacity = useMemo(() => computeCapacity(rows, products, available), [rows, products, available]);
   const piecesPer = useMemo(() => new Map(products.map((p) => [p.id, p.piecesPerUnit])), [products]);
 
-  if (!production || !weekStart) return <p className="p-4 text-sm text-muted-foreground">{k.loading}</p>;
+  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occurrences.length ? k.loading : k.noRound}</p>;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <WeekPicker weekStart={weekStart} currentWeekStart={production.weekStart} onChange={setPicked} />
+      <RoundPicker occurrences={occurrences} value={productionDate} onChange={setPicked} defaultValue={defaultRound?.productionDate ?? null} />
       <CapacityBar neededMinutes={capacity.neededMinutes} availableMinutes={available} />
       {rows.length === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">{k.noApproved}</p>
@@ -66,7 +75,7 @@ export default function ProductionView() {
               );
             })}
           </ul>
-          <Button className="mt-4 h-12 w-full" onClick={() => void share(buildProductionShareText(weekStart, rows, lang))}>
+          <Button className="mt-4 h-12 w-full" onClick={() => void share(buildProductionShareText(productionDate, rows, lang))}>
             <Share2 className="mr-2 h-4 w-4" />{k.shareProduction}
           </Button>
         </>

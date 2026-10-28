@@ -5,36 +5,52 @@ import type { ReactElement } from "react";
 import { products, item, order } from "./kitchen-fixtures";
 import type { KitchenOrder } from "@/kitchen/types";
 
+const occ = (roundId: string, productionDate: string, cutoffAt: string, capacityMinutes: number) =>
+  ({ roundId, roundName: roundId, productionDate, cutoffAt, capacityMinutes });
+const OCCURRENCES = [
+  occ("r2", "2026-10-30", "2026-10-29T19:00:00Z", 300),
+  occ("r1", "2026-11-03", "2026-11-02T19:00:00Z", 360),
+  occ("r2", "2026-11-06", "2026-11-05T19:00:00Z", 300),
+  occ("r1", "2026-11-10", "2026-11-09T19:00:00Z", 360),
+];
+const ROUNDS = [
+  { id: "r1", name: "Mardi", productionWeekday: 2, cutoffWeekday: 0, cutoffTime: "20:00", capacityMinutes: 360, isActive: true },
+  { id: "r2", name: "Vendredi", productionWeekday: 5, cutoffWeekday: 3, cutoffTime: "20:00", capacityMinutes: 300, isActive: true },
+];
+
 const mocks = vi.hoisted(() => ({
+  now: new Date("2026-11-04T10:00:00Z"), // Wednesday -> default round Vendredi 6 nov.
   orders: [] as KitchenOrder[],
   updateProduct: vi.fn(),
   createProduct: vi.fn(),
   updateSettings: vi.fn(),
+  upsertRound: vi.fn(),
+  deleteRound: vi.fn(),
   markReady: vi.fn(),
   setEta: vi.fn(),
-  weeks: [] as (string | undefined)[],
+  dates: [] as (string | undefined)[],
 }));
 
-// Server-realistic: ordering week 9 Nov (cutoff ahead), so the production week is 2 Nov.
-vi.mock("@/kitchen/api", async () => {
-  const { productionWeekStart } = await import("@/kitchen/lib/weeks");
-  const current = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
-  return {
+vi.mock("@/kitchen/api", () => ({
   useKitchenProducts: () => ({ data: products }),
-  useCurrentWeek: () => ({ data: current }),
-  useProductionWeek: () => ({ data: { weekStart: productionWeekStart(current.weekStart) } }),
-  useKitchenSettings: () => ({
-    data: { cutoffWeekday: 0, cutoffTime: "20:00:00", reminderHoursBefore: 24, weeklyCapacityMinutes: 600 },
-  }),
-  useKitchenOrders: (f: { weekStart?: string }) => { mocks.weeks.push(f.weekStart); return { data: mocks.orders }; },
+  useKitchenRounds: () => ({ data: ROUNDS }),
+  useRoundOccurrences: () => ({ data: OCCURRENCES }),
+  useKitchenSettings: () => ({ data: { reminderHoursBefore: 24 } }),
+  useKitchenOrders: (f: { productionDate?: string }) => { mocks.dates.push(f.productionDate); return { data: mocks.orders }; },
   useUpdateProduct: () => ({ mutate: mocks.updateProduct, isPending: false }),
   useCreateProduct: () => ({ mutate: mocks.createProduct, isPending: false }),
   useUpdateSettings: () => ({ mutate: mocks.updateSettings, isPending: false }),
+  useUpsertRound: () => ({ mutate: mocks.upsertRound, isPending: false }),
+  useDeleteRound: () => ({ mutate: mocks.deleteRound, isPending: false }),
   useMarkReady: () => ({ mutate: mocks.markReady, isPending: false }),
   useSetReadyEta: () => ({ mutate: mocks.setEta, isPending: false }),
-  kitchenErrorMessage: () => "err",
-  };
-});
+  kitchenErrorMessage: (e: { message?: string }) => (e?.message === "round_in_use" ? "ROUND_IN_USE_MSG" : "err"),
+}));
+
+vi.mock("@/kitchen/cafe/useNow", async (orig) => ({
+  ...(await orig<typeof import("@/kitchen/cafe/useNow")>()),
+  useNow: () => mocks.now,
+}));
 
 import ProductionView from "@/kitchen/kitchen/ProductionView";
 import KitchenOrdersList from "@/kitchen/kitchen/KitchenOrdersList";
@@ -46,26 +62,32 @@ const render = (ui: ReactElement) =>
 
 beforeEach(() => {
   Object.values(mocks).forEach((m) => typeof m === "function" && (m as ReturnType<typeof vi.fn>).mockReset());
-  mocks.weeks = [];
+  mocks.dates = [];
+  mocks.now = new Date("2026-11-04T10:00:00Z");
   mocks.orders = [
     order({ cafeId: "c1", cafeName: "Artivistas", items: [item("p1", 1)] }),
     order({ cafeId: "c2", cafeName: "Nouveau café", items: [item("p1", 2)] }),
   ];
 });
 
-describe("kitchen default week", () => {
+describe("kitchen default round", () => {
   for (const [name, View] of [["ProductionView", ProductionView], ["KitchenOrdersList", KitchenOrdersList]] as const) {
-    it(`${name} defaults to the production week and 'this week' returns to it`, () => {
+    it(`${name} defaults to the next round not yet produced and 'Prochaine' returns to it`, () => {
       render(<View />);
-      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
-      expect(mocks.weeks[mocks.weeks.length - 1]).toBe("2026-11-02");
-      fireEvent.click(screen.getByRole("button", { name: "Semaine suivante" }));
-      expect(screen.getByText("Semaine du 09/11")).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Cette semaine" }));
-      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
-      expect(mocks.weeks[mocks.weeks.length - 1]).toBe("2026-11-02");
+      expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
+      expect(mocks.dates[mocks.dates.length - 1]).toBe("2026-11-06");
+      fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+      expect(screen.getByText("Production du mardi 10 nov.")).toBeInTheDocument();
+      expect(mocks.dates[mocks.dates.length - 1]).toBe("2026-11-10");
+      fireEvent.click(screen.getByRole("button", { name: "Prochaine" }));
+      expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
     });
   }
+  it("on the production day itself the round is still the default", () => {
+    mocks.now = new Date("2026-11-03T08:00:00Z");
+    render(<ProductionView />);
+    expect(screen.getByText("Production du mardi 3 nov.")).toBeInTheDocument();
+  });
 });
 
 describe("ProductionView", () => {
@@ -75,6 +97,12 @@ describe("ProductionView", () => {
     expect(screen.getByText("Artivistas 1 · Nouveau café 2")).toBeInTheDocument();
     expect(screen.getByTestId("to-produce-p1")).toHaveTextContent("2");
     expect(screen.getByTestId("to-produce-p1")).toHaveTextContent("100 pcs");
+  });
+  it("measures capacity against the selected round's hours", () => {
+    render(<ProductionView />);
+    expect(screen.getByText(/5 h/)).toBeInTheDocument(); // Vendredi: 300 min
+    fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+    expect(screen.getByText(/6 h/)).toBeInTheDocument(); // Mardi: 360 min
   });
   it("shows an empty state when nothing is approved", () => {
     mocks.orders = [];
@@ -129,20 +157,85 @@ describe("ProductsEditor", () => {
 });
 
 describe("KitchenSettings", () => {
-  it("saves 30 h as 1800 minutes", () => {
+  it("lists the rounds Monday-first with their days", () => {
     render(<KitchenSettings />);
-    fireEvent.change(screen.getByLabelText("Heures disponibles par semaine"), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
-    expect(mocks.updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ weeklyCapacityMinutes: 1800, cutoffWeekday: 0, cutoffTime: "20:00:00", reminderHoursBefore: 24 }),
+    const items = screen.getAllByTestId(/^round-/);
+    expect(items.map((e) => e.getAttribute("data-testid"))).toEqual(["round-r1", "round-r2"]);
+    expect(items[0]).toHaveTextContent("Mardi");
+    expect(items[1]).toHaveTextContent("Vendredi");
+  });
+  const edit = (id: string) => {
+    fireEvent.click(within(screen.getByTestId(`round-${id}`)).getByRole("button", { name: "Modifier" }));
+    return screen.getByTestId(`round-${id}`);
+  };
+  it("saves 6 h as 360 minutes", () => {
+    render(<KitchenSettings />);
+    const card = edit("r1");
+    fireEvent.change(within(card).getByLabelText("Heures d'équipe"), { target: { value: "6" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Enregistrer" }));
+    expect(mocks.upsertRound).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "r1", name: "Mardi", productionWeekday: 2, cutoffWeekday: 0, cutoffTime: "20:00", capacityMinutes: 360, isActive: true }),
       expect.anything(),
     );
   });
   it("refuses 0 hours", () => {
     render(<KitchenSettings />);
-    fireEvent.change(screen.getByLabelText("Heures disponibles par semaine"), { target: { value: "0" } });
-    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    const card = edit("r1");
+    fireEvent.change(within(card).getByLabelText("Heures d'équipe"), { target: { value: "0" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Enregistrer" }));
+    expect(mocks.upsertRound).not.toHaveBeenCalled();
+    expect(within(card).getByRole("alert")).toBeInTheDocument();
+  });
+  it("refuses an empty name", () => {
+    render(<KitchenSettings />);
+    const card = edit("r1");
+    fireEvent.change(within(card).getByLabelText("Nom de la tournée"), { target: { value: " " } });
+    fireEvent.click(within(card).getByRole("button", { name: "Enregistrer" }));
+    expect(mocks.upsertRound).not.toHaveBeenCalled();
+    expect(within(card).getByRole("alert")).toHaveTextContent("obligatoire");
+  });
+  it("refuses a second round on the same production day", () => {
+    render(<KitchenSettings />);
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter une tournée" }));
+    const form = screen.getByTestId("round-new");
+    fireEvent.change(within(form).getByLabelText("Nom de la tournée"), { target: { value: "Autre mardi" } });
+    fireEvent.change(within(form).getByLabelText("Jour de production"), { target: { value: "2" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Enregistrer" }));
+    expect(mocks.upsertRound).not.toHaveBeenCalled();
+    expect(within(form).getByRole("alert")).toHaveTextContent("Une tournée existe déjà ce jour-là.");
+  });
+  it("maps a server unique violation to the same message", () => {
+    mocks.upsertRound.mockImplementation((_v, o) => o.onError({ code: "23505", message: "duplicate key" }));
+    render(<KitchenSettings />);
+    const card = edit("r1");
+    fireEvent.click(within(card).getByRole("button", { name: "Enregistrer" }));
+    expect(within(card).getByRole("alert")).toHaveTextContent("Une tournée existe déjà ce jour-là.");
+  });
+  it("shows the round_in_use message when changing the production day is refused", () => {
+    mocks.upsertRound.mockImplementation((_v, o) => o.onError({ message: "round_in_use" }));
+    render(<KitchenSettings />);
+    const card = edit("r1");
+    fireEvent.change(within(card).getByLabelText("Jour de production"), { target: { value: "3" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Enregistrer" }));
+    expect(within(card).getByRole("alert")).toHaveTextContent("ROUND_IN_USE_MSG");
+  });
+  it("shows the round_in_use message when deleting is refused", () => {
+    mocks.deleteRound.mockImplementation((_v, o) => o.onError({ message: "round_in_use" }));
+    render(<KitchenSettings />);
+    fireEvent.click(within(screen.getByTestId("round-r1")).getByRole("button", { name: "Supprimer" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Supprimer" }));
+    expect(mocks.deleteRound).toHaveBeenCalledWith({ id: "r1" }, expect.anything());
+    expect(screen.getByRole("alert")).toHaveTextContent("ROUND_IN_USE_MSG");
+  });
+  it("round-trips the reminder hours and refuses > 48", () => {
+    render(<KitchenSettings />);
+    const input = screen.getByLabelText("Rappel avant la date limite (heures)") as HTMLInputElement;
+    expect(input.value).toBe("24");
+    fireEvent.change(input, { target: { value: "49" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer le rappel" }));
     expect(mocks.updateSettings).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer le rappel" }));
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ reminderHoursBefore: 12 }, expect.anything());
   });
 });
