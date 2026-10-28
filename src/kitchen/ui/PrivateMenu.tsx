@@ -1,5 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Coffee, LogOut, X } from "lucide-react";
 import { BrandShape } from "./BrandShape";
 import type { MenuStrings, ShellTab } from "./CuisineShell";
@@ -9,6 +9,10 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 const ROW =
   "flex w-full items-center gap-3 rounded-[18px] px-4 py-3 text-left transition-transform duration-[120ms] active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none";
+
+/** Re-skins slotted buttons (e.g. the ghost NotificationsToggle) for the black menu: paper text, night-2 hover/focus. */
+const ON_NIGHT_BUTTONS =
+  "[&_button]:text-brand-paper [&_button:hover]:bg-brand-night-2 [&_button:hover]:text-brand-paper [&_button:focus-visible]:bg-brand-night-2 [&_button:focus-visible]:text-brand-paper";
 
 interface PrivateMenuProps {
   open: boolean;
@@ -42,6 +46,7 @@ function MenuPanel({
   strings,
 }: Omit<PrivateMenuProps, "open">) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
 
   // Focus the first row on open.
   useEffect(() => {
@@ -62,7 +67,7 @@ function MenuPanel({
   // Keep Tab inside the dialog.
   const trapTab = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Tab" || !panelRef.current) return;
-    const items = panelRef.current.querySelectorAll<HTMLElement>("button, [href], input, [tabindex]:not([tabindex='-1'])");
+    const items = panelRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex='-1'])");
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];
@@ -82,11 +87,11 @@ function MenuPanel({
       aria-modal="true"
       aria-label={strings.menu}
       onKeyDown={trapTab}
-      initial={{ opacity: 0, y: 12 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 12 }}
-      transition={{ duration: 0.24, ease: EASE }}
-      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-brand-night text-brand-paper"
+      exit={reduceMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, y: 12 }}
+      transition={{ duration: reduceMotion ? 0 : 0.24, ease: EASE }}
+      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain bg-brand-night text-brand-paper"
     >
       <BrandShape kind="semi" color="coral" size={220} className="pointer-events-none absolute -right-20 -top-14" />
       <div className="relative mx-auto flex max-w-lg flex-col gap-8 px-5 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-[calc(env(safe-area-inset-top)+40px)]">
@@ -124,7 +129,11 @@ function MenuPanel({
           <h2 className="px-4 pb-1 text-[13px] font-semibold uppercase tracking-wide text-brand-paper/70">
             {strings.account}
           </h2>
-          {notifications ? <div className="px-4 py-2">{notifications}</div> : null}
+          {notifications ? (
+            <div data-testid="menu-notifications" className={`px-4 py-2 ${ON_NIGHT_BUTTONS}`}>
+              {notifications}
+            </div>
+          ) : null}
           {onSwitchToCoffee ? (
             <button
               type="button"
@@ -149,7 +158,7 @@ function MenuPanel({
         type="button"
         aria-label={strings.closeMenu}
         onClick={onClose}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-brand-paper text-brand-ink shadow-lg transition-transform duration-[120ms] active:scale-[0.96] motion-reduce:transition-none"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-brand-paper text-brand-ink shadow-lg transition-transform duration-[120ms] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100"
       >
         <X aria-hidden="true" className="h-6 w-6" />
       </button>

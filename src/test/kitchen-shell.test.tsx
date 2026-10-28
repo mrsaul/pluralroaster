@@ -2,6 +2,13 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { ClipboardList, Factory, Package } from "lucide-react";
 import CuisineShell, { type MenuStrings, type ShellTab } from "@/kitchen/ui/CuisineShell";
+import { Button } from "@/components/ui/button";
+
+const motionPrefs = vi.hoisted(() => ({ reduce: false }));
+vi.mock("framer-motion", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("framer-motion")>()),
+  useReducedMotion: () => motionPrefs.reduce,
+}));
 
 const STRINGS: MenuStrings = {
   menu: "Menu",
@@ -40,6 +47,7 @@ function renderShell(over: Partial<Parameters<typeof CuisineShell>[0]> = {}) {
 }
 
 afterEach(() => {
+  motionPrefs.reduce = false;
   Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
 });
 
@@ -159,5 +167,49 @@ describe("CuisineShell", () => {
   it("applies the Cuisine theme while mounted", () => {
     renderShell();
     expect(document.documentElement).toHaveClass("theme-cuisine");
+  });
+
+  it("makes the background inert while the menu is open", async () => {
+    renderShell();
+    const background = screen.getByTestId("cuisine-background");
+    expect(background).toContainElement(screen.getByTestId("cuisine-content"));
+    expect(background).toContainElement(screen.getByRole("navigation", { name: "Navigation" }));
+    expect(background).not.toHaveAttribute("inert");
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(background).toHaveAttribute("inert");
+    expect(background).toHaveAttribute("aria-hidden", "true");
+    expect(background).not.toContainElement(screen.getByRole("dialog", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fermer le menu" }));
+    expect(background).not.toHaveAttribute("inert");
+    expect(background).not.toHaveAttribute("aria-hidden");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Menu" })).toBeNull());
+  });
+
+  it("fades the menu in by default", () => {
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("dialog", { name: "Menu" }).style.opacity).toBe("0");
+  });
+
+  it("shows and hides the menu instantly under reduced motion", async () => {
+    motionPrefs.reduce = true;
+    renderShell();
+    expect(screen.getByTestId("cuisine-content").style.opacity).not.toBe("0");
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    const dialog = screen.getByRole("dialog", { name: "Menu" });
+    expect(dialog.style.opacity).not.toBe("0");
+    expect(dialog.style.transform).toBe("none");
+    fireEvent.click(screen.getByRole("button", { name: "Fermer le menu" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Menu" })).toBeNull());
+  });
+
+  it("re-skins slotted notification buttons for the black menu", () => {
+    renderShell({ notifications: <Button variant="ghost" aria-label="Activer les notifications" /> });
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    const wrapper = screen.getByTestId("menu-notifications");
+    expect(wrapper).toContainElement(screen.getByRole("button", { name: "Activer les notifications" }));
+    for (const cls of ["[&_button]:text-brand-paper", "[&_button:hover]:bg-brand-night-2", "[&_button:focus-visible]:bg-brand-night-2"]) {
+      expect(wrapper).toHaveClass(cls);
+    }
   });
 });

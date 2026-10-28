@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
-import { MotionConfig, motion } from "framer-motion";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { MotionConfig, motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { useCuisineTheme } from "./useCuisineTheme";
 import { LargeTitle } from "./LargeTitle";
@@ -44,37 +44,55 @@ export default function CuisineShell({
   useCuisineTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const backgroundRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
+  const reduceMotion = useReducedMotion();
 
-  const closeMenu = useCallback(() => {
-    setMenuOpen(false);
-    menuButtonRef.current?.focus();
-  }, []);
+  // While the menu is open, everything behind it is inert (React 18 has no `inert` prop).
+  // On close, lift inert first, then return focus to the menu button.
+  useEffect(() => {
+    const background = backgroundRef.current;
+    if (!background) return;
+    if (menuOpen) {
+      background.setAttribute("inert", "");
+      background.setAttribute("aria-hidden", "true");
+    } else {
+      background.removeAttribute("inert");
+      background.removeAttribute("aria-hidden");
+      if (wasOpen.current) menuButtonRef.current?.focus();
+    }
+    wasOpen.current = menuOpen;
+  }, [menuOpen]);
+
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen bg-background text-foreground">
-        <LargeTitle title={title} actions={topActions} />
-        <motion.div
-          key={activeTab ?? "single"}
-          data-testid="cuisine-content"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.15 }}
-          className="px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)]"
-        >
-          {children}
-        </motion.div>
-        <TabBar
-          tabs={tabs}
-          activeTab={activeTab}
-          onTabChange={onTabChange}
-          floatingAction={floatingAction}
-          navLabel={strings.nav}
-          menuLabel={strings.menu}
-          menuOpen={menuOpen}
-          onMenuClick={() => setMenuOpen(true)}
-          menuButtonRef={menuButtonRef}
-        />
+        <div ref={backgroundRef} data-testid="cuisine-background">
+          <LargeTitle title={title} actions={topActions} />
+          <motion.div
+            key={activeTab ?? "single"}
+            data-testid="cuisine-content"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: reduceMotion ? 0 : 0.15 }}
+            className="px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)]"
+          >
+            {children}
+          </motion.div>
+          <TabBar
+            tabs={tabs}
+            activeTab={activeTab}
+            onTabChange={onTabChange}
+            floatingAction={floatingAction}
+            navLabel={strings.nav}
+            menuLabel={strings.menu}
+            menuOpen={menuOpen}
+            onMenuClick={() => setMenuOpen(true)}
+            menuButtonRef={menuButtonRef}
+          />
+        </div>
         <PrivateMenu
           open={menuOpen}
           onClose={closeMenu}

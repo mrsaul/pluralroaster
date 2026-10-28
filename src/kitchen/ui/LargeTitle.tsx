@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 /** Spec ease-out: cubic-bezier(0.22, 1, 0.36, 1). */
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -27,6 +27,7 @@ function useScrolledPast(offset: number): boolean {
 /** iOS-style large title with a frosted compact bar that fades in on scroll. */
 export function LargeTitle({ title, actions }: LargeTitleProps) {
   const compact = useScrolledPast(COMPACT_AFTER);
+  const reduceMotion = useReducedMotion();
   return (
     <>
       <motion.div
@@ -35,7 +36,7 @@ export function LargeTitle({ title, actions }: LargeTitleProps) {
         aria-hidden="true"
         initial={false}
         animate={{ opacity: compact ? 1 : 0, scale: compact ? 1 : 0.98 }}
-        transition={{ duration: 0.2, ease: EASE }}
+        transition={{ duration: reduceMotion ? 0 : 0.2, ease: EASE }}
         className={`fixed inset-x-0 top-0 z-30 border-b border-brand-line bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-[18px] backdrop-saturate-150 ${
           compact ? "" : "pointer-events-none"
         }`}
