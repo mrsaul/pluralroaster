@@ -176,7 +176,7 @@ export default function StoresReview() {
       )}
       <Button
         data-testid="urgent-fab"
-        className="fixed left-3 z-40 h-[54px] max-w-[calc(100vw-6.5rem)] whitespace-normal px-5 leading-tight shadow-lg"
+        className="fixed left-3 z-40 h-[54px] cuisine:h-[54px] max-w-[calc(100vw-6.5rem)] whitespace-normal px-5 leading-tight shadow-lg"
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
         onClick={() => setUrgentOpen(true)}
       >

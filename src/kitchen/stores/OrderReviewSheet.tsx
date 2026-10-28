@@ -267,7 +267,7 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
                     <Button variant="destructive" disabled={note.trim() === "" || decline.isPending} onClick={doDecline}>{s.declineConfirm}</Button>
                   </>
                 ) : (
-                  <Button variant="outline" onClick={() => setDeclining(true)}>{s.decline}</Button>
+                  <Button variant="destructive" onClick={() => setDeclining(true)}>{s.decline}</Button>
                 )
               )}
             </div>

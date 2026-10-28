@@ -205,6 +205,8 @@ describe("StoresReview", () => {
     expect(b).toHaveAttribute("data-testid", "urgent-fab");
     expect(b.className).toContain("fixed");
     expect(b.className).toContain("left-3");
+    expect(b.className).toContain("cuisine:h-[54px]");
+    expect(b.className).toContain("max-w-[calc(100vw-6.5rem)]");
   });
 
   it("creates an urgent order for a picked café", () => {
@@ -307,6 +309,7 @@ describe("StoresReview", () => {
     render(<StoresReview />);
     fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
     await act(async () => {});
+    expect(screen.getByRole("button", { name: "Refuser" }).className).toContain("bg-destructive");
     fireEvent.click(screen.getByRole("button", { name: "Refuser" }));
     expect(screen.getByRole("button", { name: "Confirmer le refus" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Motif du refus"), { target: { value: "no" } });
