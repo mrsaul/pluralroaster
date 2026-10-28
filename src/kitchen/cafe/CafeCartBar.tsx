@@ -22,7 +22,7 @@ export default function CafeCartBar({ totalUnits, status, countdown, cutoffLabel
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{t.totalUnits(totalUnits)}</p>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="line-clamp-2 text-xs text-muted-foreground">
             {status === "sent" ? t.sentNote(cutoffLabel) : status === "approved" ? t.approvedNote : t.cutoffIn(countdown)}
           </p>
         </div>

@@ -221,6 +221,7 @@ function RoundCart({ cafeId, round }: { cafeId: string; round: RoundOccurrence }
       )}
 
       {visible.length === 0 && <p className="text-sm text-muted-foreground">{c.noProducts}</p>}
+      {(visible.length > 0 || shownHidden.length > 0) && (
       <ul className="divide-y divide-brand-line rounded-[26px] border border-brand-line bg-card px-4">
         {visible.map((p) => (
           <li key={p.id} className="py-3">
@@ -240,7 +241,7 @@ function RoundCart({ cafeId, round }: { cafeId: string; round: RoundOccurrence }
                 disabled={!canEdit}
                 onChange={(v) => change(p.id, v)}
                 renderValue={(v) => String(v)}
-                className="shrink-0 rounded-full bg-muted p-1"
+                className="shrink-0"
               />
             </div>
             {(qty[p.id] ?? 0) > 0 && (
@@ -275,6 +276,7 @@ function RoundCart({ cafeId, round }: { cafeId: string; round: RoundOccurrence }
           </li>
         ))}
       </ul>
+      )}
 
       {beforeCutoff && (
         <CafeCartBar

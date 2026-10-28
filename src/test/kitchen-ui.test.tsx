@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QuantityStepper } from "@/components/QuantityStepper";
 import CapacityBar from "@/kitchen/stores/CapacityBar";
 import { useCuisineTheme } from "@/kitchen/ui/useCuisineTheme";
 import { buttonVariants } from "@/components/ui/button";
@@ -79,5 +80,16 @@ describe("CapacityBar", () => {
     expect(alert).toHaveTextContent("Dépassement de 1 h 40");
     expect(alert.className).not.toMatch(/text-destructive/);
     expect(alert.className).toMatch(/bg-brand-coral-100/);
+  });
+});
+
+describe("QuantityStepper", () => {
+  it("adds cuisine pill classes and keeps the coffee classes", () => {
+    render(<QuantityStepper value={1} step={1} onChange={() => {}} />);
+    for (const name of ["Diminuer la quantité", "Augmenter la quantité"]) {
+      const cls = screen.getByRole("button", { name }).className;
+      expect(cls).toContain("cuisine:rounded-full");
+      expect(cls).toContain("rounded-lg");
+    }
   });
 });
