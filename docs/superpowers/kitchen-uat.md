@@ -1,6 +1,6 @@
 # Kitchen orders: UAT results
 
-Branch `feat/kitchen-orders-design`, run 2026-10-27 against the local Supabase stack.
+Branch `feat/kitchen-orders-design`, run 2026-10-27 against the local Supabase stack. Re-run 2026-10-28 for the production rounds (Mardi, Vendredi), see "Production rounds" below.
 
 ## Automated checks
 
@@ -14,7 +14,7 @@ Branch `feat/kitchen-orders-design`, run 2026-10-27 against the local Supabase s
 
 ## Manual UAT
 
-Items 1 to 9 were run with a script (`scripts/kitchen-uat.mjs`). It uses `@supabase/supabase-js`, reads the local keys at runtime and refuses non-local hosts. Re-run: `export PATH="$HOME/.docker/bin:$PATH"; node scripts/kitchen-uat.mjs` (latest run, after the final-review fixes: `SUMMARY pass=65 fail=0`; the script exits non-zero if any step fails and restores the cutoff settings even on failure). It creates eight test users with passwords through the admin API (coffee-only, café Artivistas, café Nouveau café, stores manager, kitchen manager, admin, roaster, packaging). It signs in as each and walks the flows through the same RPCs the UI calls. The cutoff was moved by updating `kitchen_settings` (not by faking time) and restored afterwards. Stock was seeded on two products. The first run printed 58 PASS and 0 FAIL; steps 3a', 4a and F1 to F5 were added for the final-review fixes (set_item `flipped`, stores manager drafting a hidden product, lock refresh, Kitchen push subscription). The script then deleted every user, café, order and member row and reset stock. Afterwards the local DB had 0 users, orders and cafés, and the cutoff was back to Sunday 20:00.
+Items 1 to 9 were run with a script (`scripts/kitchen-uat.mjs`). It uses `@supabase/supabase-js`, reads the local keys at runtime and refuses non-local hosts. Re-run: `export PATH="$HOME/.docker/bin:$PATH"; node scripts/kitchen-uat.mjs` (latest run, after the final-review fixes: `SUMMARY pass=65 fail=0` before production rounds; `pass=85 fail=0` after, see below; the script exits non-zero if any step fails and restores the cutoff settings even on failure). It creates eight test users with passwords through the admin API (coffee-only, café Artivistas, café Nouveau café, stores manager, kitchen manager, admin, roaster, packaging). It signs in as each and walks the flows through the same RPCs the UI calls. The cutoff was moved by updating the round row (not by faking time) and restored afterwards. Stock was seeded on two products. The first run printed 58 PASS and 0 FAIL; steps 3a', 4a and F1 to F5 were added for the final-review fixes (set_item `flipped`, stores manager drafting a hidden product, lock refresh, Kitchen push subscription). The script then deleted every user, café, order and member row and reset stock. Afterwards the local DB had 0 users, orders and cafés, and the cutoff was back to Sunday 20:00.
 
 Browser-only parts (network tab, push, actual rendering) were not run. They are listed as owner to verify.
 
@@ -32,6 +32,33 @@ Browser-only parts (network tab, push, actual rendering) were not run. They are 
 | 7 | Mark ready subtracts stock | partial: data/API pass; production view refresh owner to verify | steps 7a to 7e. Banana stock 3 to 1 after a 2-unit urgent order; a weekly order wanting 2 with stock 1 serves 1 and stock goes to 0, never negative; a double mark-ready is rejected. Production view refresh: owner to verify |
 | 8 | Cutoff reminder fires once for a café with no sent order | owner to verify after deploy | `kitchen_send_cutoff_reminders()` is a safe no-op locally without Vault secrets (pass). pg_cron is not on the local stack and the window and once-per-week logic lives in the `notify-kitchen` function (Deno not installed). `kitchen_reminders` pgTAP passes |
 | 9 | Stores manager switches Coffee and Kitchen; carts stay separate | partial: data/API pass; switcher and separate carts in the browser owner to verify | Stores manager has a kitchen role and the coffee role `user`. `space-switch.test.tsx` passes |
+
+## Production rounds (2026-10-28)
+
+Kitchen orders now belong to a production round (Mardi, Vendredi) with its own cutoff and capacity. `scripts/kitchen-uat.mjs` was rewritten for this model and runs on the real clock: it finds the next open Mardi and Vendredi with `kitchen_next_open_rounds`, so it works on any day. To simulate "Monday 20:01" it moves the Mardi cutoff to one hour ago (and Mardi capacity to 420) through `kitchen_rounds`, and restores the row in `finally`. Result: `SUMMARY pass=85 fail=0`. The local DB is left with the two seeded rounds untouched.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Café orders Mardi and Vendredi separately | pass | 3a0 to 3a4: default draft = next open round; an explicit date gives a separate order with the right `round_id` and `production_date`; asking again returns the same order; a day with no round is `invalid_input` |
+| After the Mardi cutoff the café is locked on Mardi but can still order Vendredi | pass | 5a, 5b, 5b2: `cutoff_passed` on Mardi; the same café edits and sends Vendredi |
+| Stores manager creates and approves Mardi after the cutoff | pass | 5c to 5g: the default target is the Mardi round being decided; café B is locked (5h) |
+| Kitchen sees Mardi production with the round's capacity | pass | 5i to 5j: two approved Mardi orders, the Vendredi order is not mixed in, capacity 420 for Mardi and 360 for Vendredi |
+| Urgent order needed on a Wednesday lands in Vendredi | pass | 6a2: `production_date` = Wednesday + 2, `round_id` = Vendredi |
+| Delete a used round fails; deactivate works | pass | R2 (`round_in_use`), R3 (weekday move with upcoming orders: `round_in_use`), R4 to R7 (edit capacity, deactivate; its orders stay visible and it stops producing occurrences), R8 and R9 (create and delete an unused round) |
+| Café cannot edit rounds | pass | R1 |
+| Rendering of the rounds editor, round picker and capacity bar | owner to verify | UI only |
+
+Other checks on this branch after the rounds work: `npx vitest run` 16 files, 144 tests pass; `supabase test db` 6 files, 193 tests pass; `tsc` 131 errors (same baseline); eslint 0 errors on the files changed since `237b161`; `npm run build` OK and the main chunks (`index-*`, `Index-*`) hold no kitchen code beyond the `kitchen_access` RPC name; "Tournées de production" and the round RPC names appear only in `KitchenApp-*.js`.
+
+## Release steps for production rounds
+
+Do not run these from the branch. The owner approves each step before it is run.
+
+1. Apply migrations `20261028000006` then `20261028000007` to the live project and record both versions in `schema_migrations`. Verify with a query that the live ARTIVISTAS test order now has `production_date = 2026-11-03` and the Mardi `round_id`.
+2. Redeploy `notify-kitchen`.
+3. Build a fresh Vercel preview and retest with the three test accounts.
+
+Steps 1 and 2 must run back-to-back: the live `notify-kitchen` (v1) reads `week_start`, which migration `20261028000007` drops, so between the two steps notifications fail. Do them in one sitting, the migration immediately followed by the redeploy.
 
 ## Bugs found
 

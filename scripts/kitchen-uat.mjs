@@ -1,8 +1,9 @@
-// Local-only UAT walk-through of the Kitchen flows through the same RPCs the UI uses.
+// Local-only UAT walk-through of the Kitchen flows (production rounds: Mardi / Vendredi) through the same RPCs the UI uses.
 // Re-run: export PATH="$HOME/.docker/bin:$PATH"; node scripts/kitchen-uat.mjs
 // Reads the local URL/keys from env (API_URL, ANON_KEY, SERVICE_ROLE_KEY) or `supabase status -o env`.
 // Refuses to run against anything but localhost. Creates throwaway users and removes them (and all
-// kitchen rows) at the end, so only run it on a disposable local database.
+// kitchen rows) at the end, so only run it on a disposable local database. It runs on the real clock:
+// to simulate "after the Mardi cutoff" it moves the Mardi round's cutoff to one hour ago and restores the row in `finally`.
 import { createClient } from "@supabase/supabase-js";
 import { execSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -43,7 +44,15 @@ async function login(key) {
 }
 const rpc = async (c, fn, args) => { const r = await c.rpc(fn, args); return r; };
 const errOf = (r) => r.error ? (r.error.message || "").trim() : null;
-let cafeA, cafeB, origSettings = null, P = {};
+// Paris weekday (0 = Sunday) and HH:MM of an instant.
+function parisParts(d) {
+  const f = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false, year: "numeric", month: "2-digit", day: "2-digit" });
+  const p = Object.fromEntries(f.formatToParts(d).map(x => [x.type, x.value]));
+  const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(p.weekday);
+  return { dow, hhmm: `${p.hour === "24" ? "00" : p.hour}:${p.minute}`, date: `${p.year}-${p.month}-${p.day}` };
+}
+const addDays = (iso, n) => new Date(Date.parse(iso + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+let cafeA, cafeB, origMardi = null, mardiId = null, tmpRound = null, P = {};
 try {
   for (const k of ["coffeeonly", "cafeA", "cafeB", "stores", "kitchen", "admin", "roaster", "packaging"]) await mk(k);
   const roles = { coffeeonly: "user", cafeA: "user", cafeB: "user", stores: "user", admin: "admin", roaster: "roaster", packaging: "packaging" };
@@ -59,20 +68,27 @@ try {
   ]);
   const { data: prods } = await svc.from("kitchen_products").select("*");
   P = Object.fromEntries(prods.map(p => [p.name, p.id]));
-  origSettings = (await svc.from("kitchen_settings").select("*").eq("id", 1).single()).data;
+  const { data: rounds } = await svc.from("kitchen_rounds").select("*");
+  const mardi = rounds.find(r => r.name === "Mardi"), vendredi = rounds.find(r => r.name === "Vendredi");
+  origMardi = mardi; mardiId = mardi.id;
+  // Next open occurrences on the real clock: one Mardi, one Vendredi, whatever today is.
+  const openR = (await svc.rpc("kitchen_next_open_rounds", { p_count: 4 })).data;
+  const M = openR.find(o => o.round_name === "Mardi"), V = openR.find(o => o.round_name === "Vendredi");
+  const lo = [M.production_date, V.production_date].sort()[0], hi = [M.production_date, V.production_date].sort()[1];
+  console.log(`   next Mardi ${M.production_date} (cutoff ${M.cutoff_at}), next Vendredi ${V.production_date} (cutoff ${V.cutoff_at})`);
 
   // ---- UAT 1 (DB side) coffee-only client
   console.log("== UAT 1/2: access separation and roles");
   const co = await login("coffeeonly");
   const acc = await rpc(co, "get_my_kitchen_access");
   ok("1a coffee-only get_my_kitchen_access returns no rows", !acc.error && acc.data.length === 0);
-  for (const t of ["kitchen_orders", "kitchen_order_items", "kitchen_order_history", "kitchen_members", "kitchen_cafes", "kitchen_settings"]) {
+  for (const t of ["kitchen_orders", "kitchen_order_items", "kitchen_order_history", "kitchen_members", "kitchen_cafes", "kitchen_settings", "kitchen_rounds"]) {
     const r = await co.from(t).select("*");
     ok(`1b coffee-only select ${t} empty/forbidden`, (r.error && true) || (r.data && r.data.length === 0), r.error ? r.error.message : "0 rows");
   }
   const pr = await co.from("kitchen_products").select("*");
   ok("1c coffee-only select kitchen_products empty/forbidden", !!pr.error || pr.data.length === 0);
-  for (const [fn, args] of [["kitchen_get_or_create_draft", {}], ["kitchen_create_urgent_order", { p_cafe_id: cafeA, p_reason: "x", p_needed_by: new Date().toISOString(), p_items: [] }], ["kitchen_approve_order", { p_order_id: "00000000-0000-0000-0000-000000000000" }], ["kitchen_current_week", {}]]) {
+  for (const [fn, args] of [["kitchen_get_or_create_draft", {}], ["kitchen_create_urgent_order", { p_cafe_id: cafeA, p_reason: "x", p_needed_by: new Date().toISOString(), p_items: [] }], ["kitchen_approve_order", { p_order_id: "00000000-0000-0000-0000-000000000000" }], ["kitchen_next_open_rounds", {}], ["kitchen_round_occurrences", { p_from: M.production_date, p_to: M.production_date }]]) {
     const r = await rpc(co, fn, args);
     ok(`1d coffee-only rpc ${fn} rejected`, !!r.error, errOf(r));
   }
@@ -93,14 +109,29 @@ try {
   // ---- UAT 3
   console.log("== UAT 3: draft over two sessions, send, adjust, approve");
   const cA1 = await login("cafeA");
-  const d1 = await rpc(cA1, "kitchen_get_or_create_draft");
+  const dDef = await rpc(cA1, "kitchen_get_or_create_draft");
+  const first = openR[0];
+  const dDefRow = (await svc.from("kitchen_orders").select("production_date,round_id,kind").eq("id", dDef.data).single()).data;
+  ok("3a0 default draft targets the next open round", !dDef.error && dDefRow?.production_date === first.production_date && dDefRow?.round_id === first.round_id, `${dDefRow?.production_date} vs ${first.production_date}`);
+  const d1 = await rpc(cA1, "kitchen_get_or_create_draft", { p_production_date: M.production_date });
   const orderA = d1.data;
-  ok("3a cafe A creates draft", !d1.error && !!orderA, errOf(d1));
+  ok("3a cafe A creates a Mardi draft", !d1.error && !!orderA, errOf(d1));
+  const oMrow = (await svc.from("kitchen_orders").select("production_date,round_id,kind").eq("id", orderA).single()).data;
+  ok("3a1 Mardi order has the Mardi round and date", oMrow.round_id === mardi.id && oMrow.production_date === M.production_date && oMrow.kind === "weekly", JSON.stringify(oMrow));
+  const d1v = await rpc(cA1, "kitchen_get_or_create_draft", { p_production_date: V.production_date });
+  const orderAV = d1v.data;
+  const oVrow = (await svc.from("kitchen_orders").select("production_date,round_id").eq("id", orderAV).single()).data;
+  ok("3a2 same café has a separate Vendredi order", !d1v.error && !!orderAV && orderAV !== orderA && oVrow.round_id === vendredi.id && oVrow.production_date === V.production_date, errOf(d1v));
+  const d1again = await rpc(cA1, "kitchen_get_or_create_draft", { p_production_date: M.production_date });
+  ok("3a3 asking again for Mardi returns the same order", d1again.data === orderA);
+  const badDay = await rpc(cA1, "kitchen_get_or_create_draft", { p_production_date: addDays(M.production_date, 1) });
+  ok("3a4 a day with no round is rejected (invalid_input)", /invalid_input/.test(errOf(badDay) || ""), errOf(badDay));
+  await rpc(cA1, "kitchen_set_item", { p_order_id: orderAV, p_product_id: P["Cookies"], p_units: 1 });
   const plain = await rpc(cA1, "kitchen_set_item", { p_order_id: orderA, p_product_id: P["Banana bread"], p_units: 1 });
   ok("3a' set_item on a draft returns flipped = false", !plain.error && plain.data === false, String(plain.data));
   await rpc(cA1, "kitchen_set_item", { p_order_id: orderA, p_product_id: P["Pandebono"], p_units: 2 });
   const cA2 = await login("cafeA"); // second session
-  const d2 = await rpc(cA2, "kitchen_get_or_create_draft");
+  const d2 = await rpc(cA2, "kitchen_get_or_create_draft", { p_production_date: M.production_date });
   ok("3b second session resumes same draft", d2.data === orderA);
   const it2 = await cA2.from("kitchen_order_items").select("*").eq("order_id", orderA);
   ok("3c draft items persisted across sessions", it2.data.length === 2);
@@ -136,52 +167,61 @@ try {
   ok("4d stores re-approves", !ap2.error, errOf(ap2));
 
   // ---- UAT 5
-  console.log("== UAT 5: after cutoff");
-  const wk = (await svc.rpc("kitchen_current_week")).data[0];
-  const parisHour = new Date(Date.now() - 3600e3);
-  const hhmm = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hour12: false }).format(parisHour);
-  const dowParis = new Date(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date()) + "T12:00:00Z").getUTCDay();
-  console.log(`   current week ${wk.week_start}, cutoff ${wk.cutoff_at}; moving cutoff to weekday ${dowParis} at ${hhmm} Paris`);
-  await svc.from("kitchen_settings").update({ cutoff_weekday: dowParis, cutoff_time: hhmm }).eq("id", 1);
-  const lockedWeek = wk.week_start;
-  const cut = (await svc.rpc("kitchen_cutoff_for_week", { p_week_start: lockedWeek })).data;
-  ok("5a cutoff for the target week is now in the past", new Date(cut) < new Date(), cut);
+  console.log("== UAT 5: after the Mardi cutoff (Mardi cutoff moved to one hour ago; Vendredi stays open)");
+  const past = parisParts(new Date(Date.now() - 3600e3));
+  console.log(`   moving the Mardi cutoff to weekday ${past.dow} at ${past.hhmm} Paris, capacity 420`);
+  await svc.from("kitchen_rounds").update({ cutoff_weekday: past.dow, cutoff_time: past.hhmm, capacity_minutes: 420 }).eq("id", mardiId);
+  const occM = (await svc.rpc("kitchen_round_occurrences", { p_from: M.production_date, p_to: M.production_date })).data.find(o => o.round_name === "Mardi");
+  ok("5a Mardi cutoff for the target date is now in the past", !!occM && new Date(occM.cutoff_at) < new Date(), occM?.cutoff_at);
   const cAx = await login("cafeA");
   const lockedEdit = await rpc(cAx, "kitchen_set_item", { p_order_id: orderA, p_product_id: P["Cookies"], p_units: 1 });
-  ok("5b cafe A locked after cutoff (cutoff_passed)", /cutoff_passed/.test(errOf(lockedEdit) || ""), errOf(lockedEdit));
+  ok("5b cafe A locked on Mardi after cutoff (cutoff_passed)", /cutoff_passed/.test(errOf(lockedEdit) || ""), errOf(lockedEdit));
+  const vEdit = await rpc(cAx, "kitchen_set_item", { p_order_id: orderAV, p_product_id: P["Pandebono"], p_units: 4 });
+  const vSend = await rpc(cAx, "kitchen_send_order", { p_order_id: orderAV });
+  ok("5b2 same café can still order Vendredi and send it", !vEdit.error && !vSend.error, errOf(vEdit) || errOf(vSend));
   const cBx = await login("cafeB");
   const mkB = await rpc(sc, "kitchen_create_order_for_cafe", { p_cafe_id: cafeB });
   const orderB = mkB.data;
   ok("5c stores creates order for cafe B", !mkB.error && !!orderB, errOf(mkB));
-  const ob = await svc.from("kitchen_orders").select("week_start,status,kind").eq("id", orderB).single();
-  ok("5d order targets the locked week", ob.data.week_start === lockedWeek, ob.data.week_start);
+  const ob = await svc.from("kitchen_orders").select("production_date,round_id,status,kind").eq("id", orderB).single();
+  ok("5d default order targets the Mardi round being decided", ob.data.production_date === M.production_date && ob.data.round_id === mardiId, `${ob.data.production_date}`);
   const s1 = await rpc(sc, "kitchen_set_item", { p_order_id: orderB, p_product_id: P["Pandebono"], p_units: 2 });
   const s2 = await rpc(sc, "kitchen_set_item", { p_order_id: orderB, p_product_id: P["Cookies"], p_units: 1 });
   ok("5e stores adds lines after cutoff", !s1.error && !s2.error, errOf(s1) || errOf(s2));
   const sendB = await rpc(sc, "kitchen_send_order", { p_order_id: orderB });
   ok("5f stores sends it", !sendB.error, errOf(sendB));
   const apB = await rpc(sc, "kitchen_approve_order", { p_order_id: orderB });
-  ok("5g stores approves it", !apB.error, errOf(apB));
+  ok("5g stores approves Mardi after cutoff", !apB.error, errOf(apB));
   const cbSelf = await cBx.rpc("kitchen_set_item", { p_order_id: orderB, p_product_id: P["Cookies"], p_units: 5 });
-  ok("5h cafe B also locked after cutoff", /cutoff_passed/.test(errOf(cbSelf) || ""), errOf(cbSelf));
-  const kv = await kc.from("kitchen_orders").select("id,status,cafe_id").eq("week_start", lockedWeek);
-  ok("5i kitchen manager sees both approved orders for the week", kv.data.length === 2 && kv.data.every(o => o.status === "approved"), `${kv.data.length} orders`);
+  ok("5h cafe B also locked on Mardi after cutoff", /cutoff_passed/.test(errOf(cbSelf) || ""), errOf(cbSelf));
+  const kv = await kc.from("kitchen_orders").select("id,status,cafe_id,round_id").eq("production_date", M.production_date);
+  ok("5i kitchen manager sees both approved Mardi orders", kv.data.length === 2 && kv.data.every(o => o.status === "approved" && o.round_id === mardiId), `${kv.data.length} orders`);
+  const kvV = await kc.from("kitchen_orders").select("id").eq("production_date", V.production_date);
+  ok("5i2 Vendredi order (sent, not approved) is not in the kitchen's Mardi production", kvV.data.length === 0 && !kv.data.some(o => o.id === orderAV));
+  const kOcc = (await rpc(kc, "kitchen_round_occurrences", { p_from: lo, p_to: hi })).data || [];
+  const kM = kOcc.find(o => o.round_name === "Mardi" && o.production_date === M.production_date), kV = kOcc.find(o => o.round_name === "Vendredi" && o.production_date === V.production_date);
+  ok("5i3 kitchen sees the Mardi round's own capacity (420) and Vendredi's (360)", kM?.capacity_minutes === 420 && kV?.capacity_minutes === vendredi.capacity_minutes, `${kM?.capacity_minutes}/${kV?.capacity_minutes}`);
   const kitems = await kc.from("kitchen_order_items").select("product_name,units,adjusted_units,order_id").in("order_id", [orderA, orderB]);
   const prod = {};
   kitems.data.forEach(i => { prod[i.product_name] = (prod[i.product_name] || 0) + (i.adjusted_units ?? i.units); });
-  ok("5j production totals (Banana 0, Pandebono 5, Empanadas 1, Cookies 1)", prod["Banana bread"] === 0 && prod["Pandebono"] === 5 && prod["Empanadas"] === 1 && prod["Cookies"] === 1, JSON.stringify(prod));
-  await svc.from("kitchen_settings").update({ cutoff_weekday: origSettings.cutoff_weekday, cutoff_time: origSettings.cutoff_time }).eq("id", 1);
-  const restored = (await svc.from("kitchen_settings").select("cutoff_weekday,cutoff_time").eq("id", 1).single()).data;
-  ok("5k cutoff settings restored", restored.cutoff_weekday === origSettings.cutoff_weekday && restored.cutoff_time === origSettings.cutoff_time);
+  ok("5j Mardi production totals (Banana 0, Pandebono 5, Empanadas 1, Cookies 1)", prod["Banana bread"] === 0 && prod["Pandebono"] === 5 && prod["Empanadas"] === 1 && prod["Cookies"] === 1, JSON.stringify(prod));
+  await svc.from("kitchen_rounds").update({ cutoff_weekday: origMardi.cutoff_weekday, cutoff_time: origMardi.cutoff_time, capacity_minutes: origMardi.capacity_minutes }).eq("id", mardiId);
+  const restored = (await svc.from("kitchen_rounds").select("cutoff_weekday,cutoff_time,capacity_minutes").eq("id", mardiId).single()).data;
+  ok("5k Mardi round settings restored", restored.cutoff_weekday === origMardi.cutoff_weekday && restored.cutoff_time === origMardi.cutoff_time && restored.capacity_minutes === origMardi.capacity_minutes);
 
   // ---- UAT 6/7
   console.log("== UAT 6/7: urgent flow and stock");
   await svc.from("kitchen_products").update({ stock_units: 3 }).eq("id", P["Banana bread"]);
   await svc.from("kitchen_products").update({ stock_units: 1 }).eq("id", P["Pandebono"]);
-  const need = new Date(Date.now() + 36 * 3600e3).toISOString();
+  // Needed on the next Wednesday (today included): no round produces on Wednesday, so it lands in Vendredi (Wednesday + 2).
+  const todayP = parisParts(new Date());
+  const wed = addDays(todayP.date, (3 - todayP.dow + 7) % 7);
+  const need = `${wed}T12:00:00Z`;
   const urg = await rpc(await login("cafeA"), "kitchen_create_urgent_order", { p_cafe_id: cafeA, p_reason: "Event tomorrow", p_needed_by: need, p_items: [{ product_id: P["Banana bread"], units: 2 }] });
   const orderU = urg.data;
   ok("6a cafe creates urgent order (sent)", !urg.error && !!orderU, errOf(urg));
+  const uRow = (await svc.from("kitchen_orders").select("production_date,round_id,kind").eq("id", orderU).single()).data;
+  ok("6a2 urgent order for a Wednesday lands in the Vendredi round (Friday)", uRow.kind === "urgent" && uRow.round_id === vendredi.id && uRow.production_date === addDays(wed, 2), JSON.stringify(uRow));
   const kSeeU = await kc.from("kitchen_orders").select("id").eq("id", orderU);
   ok("6b kitchen cannot see urgent before approval", kSeeU.data.length === 0);
   const apU = await rpc(sc, "kitchen_approve_order", { p_order_id: orderU });
@@ -213,11 +253,9 @@ try {
   // ---- Final-review fixes (DB side)
   console.log("== Fixes: stores hidden-product draft, lock refresh, Kitchen push subscription");
   await svc.from("kitchen_products").update({ is_visible: false }).eq("id", P["Cookies"]);
-  // The week after the current one: café B has no order there yet (its current-week order is ready).
-  const cw = (await svc.rpc("kitchen_current_week")).data[0];
-  const nextWeek = new Date(Date.parse(cw.week_start + "T00:00:00Z") + 7 * 864e5).toISOString().slice(0, 10);
-  const mkH = await rpc(sc, "kitchen_create_order_for_cafe", { p_cafe_id: cafeB, p_week_start: nextWeek });
-  ok("F1 stores creates a fresh draft for cafe B (next week)", !mkH.error && !!mkH.data, errOf(mkH));
+  // The Vendredi round: café B has no order there yet (its Mardi order is ready).
+  const mkH = await rpc(sc, "kitchen_create_order_for_cafe", { p_cafe_id: cafeB, p_production_date: V.production_date });
+  ok("F1 stores creates a fresh Vendredi draft for cafe B", !mkH.error && !!mkH.data, errOf(mkH));
   const hS = await rpc(sc, "kitchen_set_item", { p_order_id: mkH.data, p_product_id: P["Cookies"], p_units: 2 });
   ok("F2 stores manager drafts a hidden product", !hS.error && hS.data === false, errOf(hS));
   const hC = await rpc(await login("cafeB"), "kitchen_set_item", { p_order_id: mkH.data, p_product_id: P["Cookies"], p_units: 3 });
@@ -235,6 +273,31 @@ try {
   );
   ok("F5 Kitchen-only user can save a push subscription (same upsert as the hook)", !subUp.error, errOf(subUp));
 
+  // ---- Rounds administration
+  console.log("== Rounds: edit rights, delete guard, deactivate");
+  const cAr = await login("cafeA");
+  const capTry = await cAr.from("kitchen_rounds").update({ capacity_minutes: 1 }).eq("id", mardiId).select();
+  ok("R1 café manager cannot edit a round", !!capTry.error || (capTry.data || []).length === 0);
+  const delUsed = await kc.from("kitchen_rounds").delete().eq("id", mardiId);
+  ok("R2 deleting a round that has orders fails (round_in_use)", /round_in_use/.test(errOf(delUsed) || ""), errOf(delUsed));
+  const moveUsed = await kc.from("kitchen_rounds").update({ production_weekday: 3 }).eq("id", mardiId);
+  ok("R3 moving the weekday of a round with upcoming orders fails (round_in_use)", /round_in_use/.test(errOf(moveUsed) || ""), errOf(moveUsed));
+  const edName = await kc.from("kitchen_rounds").update({ capacity_minutes: 400 }).eq("id", mardiId).select();
+  ok("R4 kitchen manager can edit capacity of a used round", !edName.error && edName.data.length === 1 && edName.data[0].capacity_minutes === 400, errOf(edName));
+  const deact = await kc.from("kitchen_rounds").update({ is_active: false }).eq("id", mardiId).select();
+  ok("R5 deactivating a used round works", !deact.error && deact.data.length === 1 && deact.data[0].is_active === false, errOf(deact));
+  const occOff = (await rpc(kc, "kitchen_round_occurrences", { p_from: lo, p_to: hi })).data || [];
+  ok("R6 deactivated round no longer produces occurrences", !occOff.some(o => o.round_name === "Mardi") && occOff.some(o => o.round_name === "Vendredi"));
+  const stillThere = await kc.from("kitchen_orders").select("id").eq("id", orderA);
+  ok("R7 its existing orders stay visible", stillThere.data.length === 1);
+  const newR = await kc.from("kitchen_rounds").insert({ name: "Test", production_weekday: 3, cutoff_weekday: 1, cutoff_time: "20:00", capacity_minutes: 60 }).select().single();
+  tmpRound = newR.data?.id;
+  ok("R8 kitchen manager can create a round", !newR.error && !!tmpRound, errOf(newR));
+  const delFree = await kc.from("kitchen_rounds").delete().eq("id", tmpRound).select();
+  ok("R9 deleting an unused round works", !delFree.error && delFree.data.length === 1, errOf(delFree));
+  tmpRound = null;
+  await svc.from("kitchen_rounds").update({ is_active: origMardi.is_active, capacity_minutes: origMardi.capacity_minutes }).eq("id", mardiId);
+
   // ---- UAT 9 (DB side)
   console.log("== UAT 9 (data side): stores manager has both spaces");
   const sa = await rpc(sc, "get_my_kitchen_access");
@@ -250,12 +313,13 @@ try {
 } finally {
   console.log("== cleanup");
   try {
-    if (origSettings) {
-      await svc.from("kitchen_settings").update({ cutoff_weekday: origSettings.cutoff_weekday, cutoff_time: origSettings.cutoff_time }).eq("id", 1);
+    if (origMardi) {
+      await svc.from("kitchen_rounds").update({ production_weekday: origMardi.production_weekday, cutoff_weekday: origMardi.cutoff_weekday, cutoff_time: origMardi.cutoff_time, capacity_minutes: origMardi.capacity_minutes, is_active: origMardi.is_active }).eq("id", mardiId);
     }
     if (P["Cookies"]) await svc.from("kitchen_products").update({ is_visible: true }).eq("id", P["Cookies"]);
     await svc.from("kitchen_order_history").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     await svc.from("kitchen_orders").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (tmpRound) await svc.from("kitchen_rounds").delete().eq("id", tmpRound);
     await svc.from("kitchen_members").delete().neq("user_id", "00000000-0000-0000-0000-000000000000");
     await svc.from("kitchen_cafes").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     for (const u of Object.values(users)) await svc.auth.admin.deleteUser(u.id);
