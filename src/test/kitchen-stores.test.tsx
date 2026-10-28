@@ -5,11 +5,19 @@ import type { ReactElement } from "react";
 import { products, item, order } from "./kitchen-fixtures";
 import type { KitchenOrder } from "@/kitchen/types";
 
-// Server-realistic: the current (ordering) week's cutoff is always in the future.
-// Default moment: Tue 27 Oct 2026 10:00 Paris → ordering week 2 Nov, production week 26 Oct.
+// Default moment: Mon 2 Nov 2026 21:30 Paris, after the Tuesday 3 Nov cutoff -> default round Mardi 3 nov.
+const occ = (productionDate: string, cutoffAt: string, capacityMinutes: number) =>
+  ({ roundId: "r1", roundName: "Round", productionDate, cutoffAt, capacityMinutes });
+const OCCURRENCES = [
+  occ("2026-10-27", "2026-10-26T19:00:00Z", 360),
+  occ("2026-10-30", "2026-10-29T19:00:00Z", 300),
+  occ("2026-11-03", "2026-11-02T19:00:00Z", 360),
+  occ("2026-11-06", "2026-11-05T19:00:00Z", 300),
+  occ("2026-11-10", "2026-11-09T19:00:00Z", 360),
+];
 const mocks = vi.hoisted(() => ({
-  now: new Date("2026-10-27T09:00:00Z"),
-  week: { weekStart: "2026-11-02", cutoffAt: "2026-11-01T19:00:00Z" },
+  now: new Date("2026-11-02T20:30:00Z"),
+  occurrences: [] as { roundId: string; roundName: string; productionDate: string; cutoffAt: string; capacityMinutes: number }[],
   createUrgent: vi.fn(),
   notify: vi.fn(),
   weekly: [] as KitchenOrder[],
@@ -21,20 +29,19 @@ const mocks = vi.hoisted(() => ({
   adjust: vi.fn(),
   approve: vi.fn(),
   decline: vi.fn(),
-  byWeek: {} as Record<string, KitchenOrder[]>,
+  extra: [] as KitchenOrder[],
 }));
 
 vi.mock("@/kitchen/api", () => {
   const mut = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false });
   return {
     useKitchenProducts: () => ({ data: products }),
-    useCurrentWeek: () => ({ data: mocks.week }),
-    useKitchenSettings: () => ({ data: { weeklyCapacityMinutes: 600 } }),
+    useRoundOccurrences: () => ({ data: mocks.occurrences }),
     useKitchenCafes: () => ({ data: mocks.cafes }),
-    useKitchenOrders: (f: { kind?: string; weekStart?: string }) => ({
-      data: f.kind === "urgent" ? mocks.urgent
-        : f.kind === "weekly" ? mocks.weekly.filter((o) => !f.weekStart || o.weekStart === f.weekStart)
-        : (mocks.byWeek[f.weekStart ?? ""] ?? []),
+    useKitchenOrders: (f: { kind?: string; productionDate?: string; from?: string; to?: string }) => ({
+      data: [...mocks.weekly, ...mocks.urgent, ...mocks.extra].filter((o) =>
+        (!f.kind || o.kind === f.kind) && (!f.productionDate || o.productionDate === f.productionDate) &&
+        (!f.from || o.productionDate >= f.from) && (!f.to || o.productionDate <= f.to)),
     }),
     useCreateUrgentOrder: () => ({ mutate: mocks.createUrgent, isPending: false }),
     useLockOrder: () => ({ mutate: mocks.lock, mutateAsync: mocks.lock }),
@@ -61,14 +68,13 @@ const render = (ui: ReactElement) =>
   rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 beforeEach(() => {
-  mocks.now = new Date("2026-10-27T09:00:00Z");
-  mocks.week = { weekStart: "2026-11-02", cutoffAt: "2026-11-01T19:00:00Z" };
+  mocks.now = new Date("2026-11-02T20:30:00Z");
+  mocks.occurrences = OCCURRENCES;
   mocks.createUrgent.mockReset(); mocks.notify.mockReset();
-  mocks.weekly = []; mocks.urgent = [];
+  mocks.weekly = []; mocks.urgent = []; mocks.extra = [];
   mocks.cafes = [{ id: "c1", name: "Artivistas", isActive: true }, { id: "c2", name: "Belleville", isActive: true }];
   mocks.lock.mockReset().mockResolvedValue(undefined); mocks.unlock.mockClear(); mocks.create.mockClear();
   mocks.adjust.mockReset().mockResolvedValue(undefined); mocks.approve.mockReset(); mocks.decline.mockReset();
-  mocks.byWeek = {};
 });
 
 describe("CapacityBar", () => {
@@ -98,7 +104,7 @@ describe("StoresReview", () => {
     mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", items: [item("p1", 1)] })];
     render(<StoresReview />);
     fireEvent.click(screen.getByRole("button", { name: "Créer la commande pour ce café" }));
-    expect(mocks.create).toHaveBeenCalledWith({ cafeId: "c1", weekStart: "2026-11-02" }, expect.anything());
+    expect(mocks.create).toHaveBeenCalledWith({ cafeId: "c1", productionDate: "2026-11-03" }, expect.anything());
   });
 
   it("locks on open and unlocks on unmount", async () => {
@@ -112,57 +118,65 @@ describe("StoresReview", () => {
     expect(mocks.unlock).toHaveBeenCalledWith({ orderId: "ord1" });
   });
 
-  it("flags sent-but-unapproved and unsent cafés after cutoff (Sunday 20:30), and shows urgent counts", () => {
-    mocks.now = new Date("2026-11-01T19:30:00Z"); // Sun 20:30 Paris, just after the cutoff
-    mocks.week = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
-    mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", weekStart: "2026-11-02", items: [item("p1", 1)] })];
+  it("flags sent-but-unapproved and unsent cafés after cutoff, and shows urgent counts", () => {
+    mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", items: [item("p1", 1)] })];
     mocks.urgent = [
-      order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "approved", weekStart: "2026-10-26", items: [item("p1", 1)] }),
-      order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "declined", weekStart: "2026-10-12", items: [item("p1", 1)] }),
+      order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "approved", productionDate: "2026-10-27", items: [item("p1", 1)] }),
+      order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "declined", productionDate: "2026-08-15", items: [item("p1", 1)] }),
     ];
     render(<StoresReview />);
-    expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+    expect(screen.getByText("Production du mardi 3 nov.")).toBeInTheDocument();
     expect(screen.getByText("Non approuvée, non comptée par la cuisine")).toBeInTheDocument();
     expect(screen.getByText("Non envoyée")).toBeInTheDocument();
-    expect(screen.getByText(/: 2$/)).toBeInTheDocument();
+    expect(screen.getByText(/: 1$/)).toBeInTheDocument(); // the 15 Aug one is older than 8 weeks
   });
 
-  describe("default week", () => {
-    it("mid-week (Tue): the ordering week, no after-cutoff flags", () => {
+  it("does not flag anything before the round's cutoff", () => {
+    mocks.now = new Date("2026-11-04T10:00:00Z"); // Wed: Fri 6 still open
+    render(<StoresReview />);
+    expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
+    expect(screen.queryByText("Non envoyée")).toBeNull();
+  });
+
+  describe("default round", () => {
+    it("Monday 21:30: the Tuesday round", () => {
       render(<StoresReview />);
-      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
-      expect(screen.queryByText("Non envoyée")).toBeNull();
+      expect(screen.getByText("Production du mardi 3 nov.")).toBeInTheDocument();
     });
-    it("mid-week (Tue): the production week while it still has sent orders", () => {
-      mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", weekStart: "2026-10-26", items: [item("p1", 1)] })];
+    it("Wednesday: the Friday round", () => {
+      mocks.now = new Date("2026-11-04T10:00:00Z");
       render(<StoresReview />);
-      expect(screen.getByText("Semaine du 26/10")).toBeInTheDocument();
-      expect(screen.getByText("Non approuvée, non comptée par la cuisine")).toBeInTheDocument();
+      expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
     });
-    it("Sunday 20:30: the week starting tomorrow, even with nothing sent", () => {
-      mocks.now = new Date("2026-11-01T19:30:00Z");
-      mocks.week = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
+  });
+
+  describe("round picker", () => {
+    it("steps previous/next and returns to the default with Prochaine", () => {
       render(<StoresReview />);
-      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Prochaine" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+      expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Tour précédent" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tour précédent" }));
+      expect(screen.getByText("Production du vendredi 30 oct.")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Prochaine" }));
+      expect(screen.getByText("Production du mardi 3 nov.")).toBeInTheDocument();
     });
-    it("Monday 00:30: the started week while it has sent orders, else the ordering week", () => {
-      mocks.now = new Date("2026-11-01T23:30:00Z");
-      mocks.week = { weekStart: "2026-11-09", cutoffAt: "2026-11-08T19:00:00Z" };
-      mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", weekStart: "2026-11-02", items: [item("p1", 1)] })];
-      const { unmount } = render(<StoresReview />);
-      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
-      unmount();
-      mocks.weekly = [];
-      render(<StoresReview />);
-      expect(screen.getByText("Semaine du 09/11")).toBeInTheDocument();
+    it("keeps the picked round when the list changes", () => {
+      const { rerender } = render(<StoresReview />);
+      fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+      mocks.occurrences = OCCURRENCES.slice(1);
+      rerender(<QueryClientProvider client={new QueryClient()}><StoresReview /></QueryClientProvider>);
+      expect(screen.getByText("Production du vendredi 6 nov.")).toBeInTheDocument();
     });
-    it("'this week' returns to the default week", () => {
-      render(<StoresReview />);
-      fireEvent.click(screen.getByRole("button", { name: "Semaine précédente" }));
-      expect(screen.getByText("Semaine du 26/10")).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Cette semaine" }));
-      expect(screen.getByText("Semaine du 02/11")).toBeInTheDocument();
-    });
+  });
+
+  it("shows capacity of the selected round: 360 min available, over by 1 h at 420", () => {
+    mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "approved", items: [item("p2", 7)] })];
+    const { container } = render(<StoresReview />);
+    expect(screen.getByText(/7 h \/ 6 h/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Dépassement de 1 h");
+    expect(container.querySelector('[data-over="true"]')).not.toBeNull();
   });
 
   it("creates an urgent order for a picked café", () => {
@@ -202,13 +216,13 @@ describe("StoresReview", () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it("previews capacity from the opened order's own week", async () => {
-    mocks.urgent = [order({ id: "u1", cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "sent", weekStart: "2026-11-09", neededBy: "2026-11-10T08:00:00Z", items: [item("p1", 1)] })];
-    mocks.byWeek["2026-11-09"] = [order({ cafeId: "c2", cafeName: "Belleville", status: "approved", weekStart: "2026-11-09", items: [item("p1", 10)] })];
+  it("previews capacity from the opened order's own round", async () => {
+    mocks.urgent = [order({ id: "u1", cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "sent", productionDate: "2026-11-06", neededBy: "2026-11-06T08:00:00Z", items: [item("p1", 1)] })];
+    mocks.extra = [order({ cafeId: "c2", cafeName: "Belleville", status: "approved", productionDate: "2026-11-06", items: [item("p1", 10)] })];
     render(<StoresReview />);
     fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
     await act(async () => {});
-    expect(screen.getAllByText(/13 h 30/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/13 h 30 \/ 5 h/).length).toBeGreaterThan(0); // Friday capacity, not Tuesday's 6 h
   });
 
   it("unlocks only after a pending lock resolves", async () => {

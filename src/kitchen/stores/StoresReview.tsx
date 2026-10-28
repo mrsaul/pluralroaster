@@ -5,16 +5,16 @@ import { Button } from "@/components/ui/button";
 import type { Lang } from "@/i18n";
 import { useKitchenLang } from "@/kitchen/i18n";
 import {
-  kitchenErrorMessage, useCreateOrderForCafe, useCurrentWeek, useKitchenCafes, useKitchenOrders,
-  useKitchenProducts, useKitchenSettings,
+  kitchenErrorMessage, useCreateOrderForCafe, useKitchenCafes, useKitchenOrders,
+  useKitchenProducts, useRoundOccurrences,
 } from "../api";
 import { useKitchenT } from "../i18n";
 import { computeCapacity, computeProduction } from "../lib/production";
-import { isAfterCutoff, productionWeekStart, storesDefaultWeek } from "../lib/weeks";
+import { isAfterCutoff, parisDate, storesDefaultRound } from "../lib/rounds";
 import { formatWhen, useNow } from "../cafe/useNow";
 import UrgentOrderSheet from "../cafe/UrgentOrderSheet";
 import type { KitchenOrder } from "../types";
-import WeekPicker from "../components/WeekPicker";
+import RoundPicker from "../components/RoundPicker";
 import CapacityBar from "./CapacityBar";
 import OrderReviewSheet from "./OrderReviewSheet";
 
@@ -56,33 +56,31 @@ export default function StoresReview() {
   const s = t.stores;
   const lang = useKitchenLang();
   const now = useNow();
-  const { data: current } = useCurrentWeek();
-  const { data: settings } = useKitchenSettings();
   const { data: products = [] } = useKitchenProducts();
   const { data: cafes = [] } = useKitchenCafes();
+  const today = parisDate(now);
+  const { data: occurrences = [] } = useRoundOccurrences(
+    iso(addDays(parseISO(today), -28)),
+    iso(addDays(parseISO(today), 28)),
+  );
+  // Selection is stored as a production date so refetches never swap the viewed round.
   const [picked, setPicked] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [urgentOpen, setUrgentOpen] = useState(false);
-  const productionWeek = current ? productionWeekStart(current.weekStart) : undefined;
-  const { data: productionWeekly = [] } = useKitchenOrders({ weekStart: productionWeek, kind: "weekly" });
+  const defaultRound = useMemo(() => storesDefaultRound(occurrences, now), [occurrences, now]);
+  const round = occurrences.find((o) => o.productionDate === picked) ?? defaultRound;
+  const productionDate = round?.productionDate;
+  const { data: weekly = [] } = useKitchenOrders({ productionDate, kind: "weekly" });
   const { data: urgentAll = [] } = useKitchenOrders({ kind: "urgent" });
-  // Default: the production week until it starts or while it has orders to review, else the ordering week.
-  const productionHasSent = !!productionWeek && (
-    productionWeekly.some((o) => o.status === "sent") ||
-    urgentAll.some((o) => o.weekStart === productionWeek && o.status === "sent")
-  );
-  const defaultWeek = current ? storesDefaultWeek(current.weekStart, now, productionHasSent) : undefined;
-  const weekStart = picked ?? defaultWeek;
-  const { data: weekly = [] } = useKitchenOrders({ weekStart, kind: "weekly" });
   const create = useCreateOrderForCafe();
   const activeCafes = useMemo(() => cafes.filter((c) => c.isActive), [cafes]);
 
-  const afterCutoff = !!current && !!weekStart && isAfterCutoff(weekStart, current, now);
+  const afterCutoff = !!round && isAfterCutoff(round, now);
 
-  // Opening an order pins the viewed week, so approving the last sent order does not
-  // switch the default week (and close the sheet) underneath the stores manager.
+  // Opening an order pins the viewed round, so approving the last sent order does not
+  // switch the default round (and close the sheet) underneath the stores manager.
   const openOrderSheet = (id: string) => {
-    setPicked((p) => p ?? weekStart ?? null);
+    setPicked((p) => p ?? productionDate ?? null);
     setOpenId(id);
   };
 
@@ -92,30 +90,29 @@ export default function StoresReview() {
   );
   const urgentCounts = useMemo(() => {
     const m = new Map<string, number>();
-    if (!current) return m;
-    const from = iso(addDays(parseISO(current.weekStart), -49));
-    for (const o of urgentAll) if (o.weekStart >= from) m.set(o.cafeId, (m.get(o.cafeId) ?? 0) + 1);
+    const from = iso(addDays(parseISO(today), -56));
+    for (const o of urgentAll) if (o.productionDate >= from) m.set(o.cafeId, (m.get(o.cafeId) ?? 0) + 1);
     return m;
-  }, [urgentAll, current]);
+  }, [urgentAll, today]);
 
   const toReview = weekly.filter((o) => o.status === "sent");
   const approved = weekly.filter((o) => ["approved", "ready", "received"].includes(o.status));
   const notSent = cafes.filter((c) => c.isActive && !weekly.some((o) => o.cafeId === c.id && o.status !== "draft"));
 
   const counted = useMemo(
-    () => [...weekly, ...urgentAll.filter((o) => o.weekStart === weekStart)].filter((o) => o.status === "approved"),
-    [weekly, urgentAll, weekStart],
+    () => [...weekly, ...urgentAll.filter((o) => o.productionDate === productionDate)].filter((o) => o.status === "approved"),
+    [weekly, urgentAll, productionDate],
   );
-  const available = settings?.weeklyCapacityMinutes ?? 0;
+  const available = round?.capacityMinutes ?? 0;
   const capacity = useMemo(() => computeCapacity(computeProduction(counted, products), products, available), [counted, products, available]);
 
-  if (!current || !weekStart || !defaultWeek) return <p className="p-4 text-sm text-muted-foreground">{s.loading}</p>;
+  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occurrences.length ? s.loading : s.noRound}</p>;
 
   const openOrder = [...weekly, ...urgentAll].find((o) => o.id === openId) ?? null;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <WeekPicker weekStart={weekStart} currentWeekStart={defaultWeek} onChange={setPicked} />
+      <RoundPicker occurrences={occurrences} value={productionDate} onChange={setPicked} defaultValue={defaultRound?.productionDate ?? null} />
       <CapacityBar neededMinutes={capacity.neededMinutes} availableMinutes={available} />
       <Button variant="outline" className="mt-4 h-12 w-full" onClick={() => setUrgentOpen(true)}>{s.newUrgent}</Button>
 
@@ -148,7 +145,7 @@ export default function StoresReview() {
                 disabled={create.isPending}
                 onClick={() => {
                   if (draft) { openOrderSheet(draft.id); return; }
-                  create.mutate({ cafeId: c.id, weekStart }, {
+                  create.mutate({ cafeId: c.id, productionDate }, {
                     onSuccess: (id) => openOrderSheet(id as string),
                     onError: (err) => toast.error(kitchenErrorMessage(err, t)),
                   });
@@ -166,7 +163,7 @@ export default function StoresReview() {
           key={openOrder.id}
           order={openOrder}
           products={products}
-          availableMinutes={available}
+          availableMinutes={occurrences.find((o) => o.productionDate === openOrder.productionDate)?.capacityMinutes ?? 0}
           onClose={() => setOpenId(null)}
         />
       )}

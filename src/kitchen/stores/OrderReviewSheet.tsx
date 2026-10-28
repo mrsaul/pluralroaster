@@ -30,8 +30,8 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
   const t = useKitchenT();
   const s = t.stores;
   const lang = useKitchenLang();
-  const { data: weekOrders = [] } = useKitchenOrders({ weekStart: order.weekStart });
-  const orders = useMemo(() => weekOrders.filter((o) => o.status === "approved"), [weekOrders]);
+  const { data: dayOrders = [] } = useKitchenOrders({ productionDate: order.productionDate });
+  const orders = useMemo(() => dayOrders.filter((o) => o.status === "approved"), [dayOrders]);
   const lock = useLockOrder();
   const unlock = useUnlockOrder();
   const adjust = useAdjustItem();
