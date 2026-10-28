@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   extra: [] as KitchenOrder[],
   rounds: [] as { id: string; capacityMinutes: number }[],
   loading: false,
+  error: false,
 }));
 
 vi.mock("@/kitchen/api", () => {
@@ -39,7 +40,9 @@ vi.mock("@/kitchen/api", () => {
   return {
     useKitchenProducts: () => ({ data: products }),
     useKitchenRounds: () => ({ data: mocks.rounds }),
-    useRoundOccurrences: () => ({ data: mocks.loading ? undefined : mocks.occurrences, isLoading: mocks.loading }),
+    useRoundOccurrences: () => ({
+      data: mocks.loading || mocks.error ? undefined : mocks.occurrences, isLoading: mocks.loading, isError: mocks.error,
+    }),
     useKitchenCafes: () => ({ data: mocks.cafes }),
     useKitchenOrders: (f: { kind?: string; productionDate?: string; from?: string; to?: string }) => ({
       data: [...mocks.weekly, ...mocks.urgent, ...mocks.extra].filter((o) =>
@@ -74,6 +77,7 @@ beforeEach(() => {
   mocks.now = new Date("2026-11-02T20:30:00Z");
   mocks.occurrences = OCCURRENCES;
   mocks.loading = false;
+  mocks.error = false;
   mocks.createUrgent.mockReset(); mocks.notify.mockReset();
   mocks.weekly = []; mocks.urgent = []; mocks.extra = []; mocks.rounds = [];
   mocks.cafes = [{ id: "c1", name: "Artivistas", isActive: true }, { id: "c2", name: "Belleville", isActive: true }];
@@ -99,6 +103,12 @@ describe("StoresReview", () => {
     mocks.loading = true;
     render(<StoresReview />);
     expect(screen.getByText("Chargement…")).toBeInTheDocument();
+    expect(screen.queryByText(/Aucune tournée/)).not.toBeInTheDocument();
+  });
+  it("shows an error, not « Aucune tournée », when occurrences fail to load", () => {
+    mocks.error = true;
+    render(<StoresReview />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Impossible de charger les tournées. Réessayez plus tard.");
     expect(screen.queryByText(/Aucune tournée/)).not.toBeInTheDocument();
   });
   it("renders urgent orders above weekly ones", () => {

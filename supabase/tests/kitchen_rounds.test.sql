@@ -1,5 +1,5 @@
 begin;
-select plan(21);
+select plan(26);
 \ir support/kitchen_setup.psql
 
 create temp table r as select name, id from public.kitchen_rounds;
@@ -35,6 +35,14 @@ select is((select count(*)::int from public.kitchen_next_open_rounds(2)), 0, 'no
 update public.kitchen_rounds set is_active = true;
 
 select throws_ok($$insert into public.kitchen_rounds (name, production_weekday, cutoff_weekday, cutoff_time, capacity_minutes) values ('Mardi bis', 2, 1, '20:00', 100)$$, '23505', null, 'production_weekday is unique');
+
+select throws_ok($$insert into public.kitchen_rounds (name, production_weekday, cutoff_weekday, cutoff_time, capacity_minutes) values ('Trop', 0, 6, '20:00', 10081)$$, '23514', null, 'insert over 10080 minutes is rejected');
+select throws_ok($$update public.kitchen_rounds set capacity_minutes = 10081 where name = 'Mardi'$$, '23514', null, 'update over 10080 minutes is rejected');
+select throws_ok($$update public.kitchen_rounds set capacity_minutes = 0 where name = 'Mardi'$$, '23514', null, 'zero capacity is still rejected');
+select lives_ok($$update public.kitchen_rounds set capacity_minutes = 10080 where name = 'Mardi'$$, 'exactly 10080 minutes is allowed');
+select lives_ok($$insert into public.kitchen_rounds (name, production_weekday, cutoff_weekday, cutoff_time, capacity_minutes, is_active) values ('Max', 0, 6, '20:00', 10080, false)$$, 'insert of exactly 10080 minutes is allowed');
+delete from public.kitchen_rounds where name = 'Max';
+update public.kitchen_rounds set capacity_minutes = 360 where name = 'Mardi';
 
 select pg_temp.kitchen_test_act_as('00000000-0000-0000-0000-0000000000a3');
 with u as (update public.kitchen_rounds set capacity_minutes = 1 returning 1)
