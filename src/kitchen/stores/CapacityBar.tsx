@@ -1,19 +1,22 @@
 import { useKitchenT } from "../i18n";
 import { formatMinutes } from "../lib/format";
 
-type Props = { neededMinutes: number; availableMinutes: number; previewMinutes?: number };
+type Props = { neededMinutes: number; availableMinutes: number | null; previewMinutes?: number };
 
 /** Production hours needed vs available; turns red and says "over by X" when over. */
-export default function CapacityBar({ neededMinutes, availableMinutes, previewMinutes }: Props) {
+export default function CapacityBar({ neededMinutes, availableMinutes: availableOrNull, previewMinutes }: Props) {
   const s = useKitchenT().stores;
+  // Unknown capacity (round data missing): show "—" and never warn about an overrun.
+  const unknown = availableOrNull === null;
+  const availableMinutes = availableOrNull ?? 0;
   const worst = Math.max(neededMinutes, previewMinutes ?? 0);
-  const over = worst > availableMinutes;
+  const over = !unknown && worst > availableMinutes;
   const pct = (m: number) => (availableMinutes > 0 ? Math.min(100, (m / availableMinutes) * 100) : m > 0 ? 100 : 0);
   return (
     <div data-over={over} className={`rounded-xl border p-3 ${over ? "border-destructive bg-destructive/10 text-destructive" : "border-border bg-card"}`}>
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium">{s.capacityTitle}</span>
-        <span className="font-mono tabular-nums">{formatMinutes(neededMinutes)} / {formatMinutes(availableMinutes)}</span>
+        <span className="font-mono tabular-nums">{formatMinutes(neededMinutes)} / {unknown ? "—" : formatMinutes(availableMinutes)}</span>
       </div>
       <div className="relative mt-2 h-2 overflow-hidden rounded-full bg-muted">
         {previewMinutes !== undefined && (

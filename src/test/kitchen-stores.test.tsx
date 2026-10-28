@@ -30,12 +30,14 @@ const mocks = vi.hoisted(() => ({
   approve: vi.fn(),
   decline: vi.fn(),
   extra: [] as KitchenOrder[],
+  rounds: [] as { id: string; capacityMinutes: number }[],
 }));
 
 vi.mock("@/kitchen/api", () => {
   const mut = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false });
   return {
     useKitchenProducts: () => ({ data: products }),
+    useKitchenRounds: () => ({ data: mocks.rounds }),
     useRoundOccurrences: () => ({ data: mocks.occurrences }),
     useKitchenCafes: () => ({ data: mocks.cafes }),
     useKitchenOrders: (f: { kind?: string; productionDate?: string; from?: string; to?: string }) => ({
@@ -71,7 +73,7 @@ beforeEach(() => {
   mocks.now = new Date("2026-11-02T20:30:00Z");
   mocks.occurrences = OCCURRENCES;
   mocks.createUrgent.mockReset(); mocks.notify.mockReset();
-  mocks.weekly = []; mocks.urgent = []; mocks.extra = [];
+  mocks.weekly = []; mocks.urgent = []; mocks.extra = []; mocks.rounds = [];
   mocks.cafes = [{ id: "c1", name: "Artivistas", isActive: true }, { id: "c2", name: "Belleville", isActive: true }];
   mocks.lock.mockReset().mockResolvedValue(undefined); mocks.unlock.mockClear(); mocks.create.mockClear();
   mocks.adjust.mockReset().mockResolvedValue(undefined); mocks.approve.mockReset(); mocks.decline.mockReset();
@@ -223,6 +225,44 @@ describe("StoresReview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
     await act(async () => {});
     expect(screen.getAllByText(/13 h 30 \/ 5 h/).length).toBeGreaterThan(0); // Friday capacity, not Tuesday's 6 h
+  });
+
+  it("falls back to the round's capacity when the order is outside the occurrence window", async () => {
+    mocks.rounds = [{ id: "r1", capacityMinutes: 360 }];
+    mocks.urgent = [order({ id: "u1", cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "sent", productionDate: "2026-06-02", neededBy: "2026-06-02T08:00:00Z", items: [item("p2", 1)] })];
+    mocks.extra = [order({ cafeId: "c2", cafeName: "Belleville", status: "approved", productionDate: "2026-06-02", items: [item("p2", 2)] })];
+    render(<StoresReview />);
+    fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
+    await act(async () => {});
+    expect(screen.getAllByText(/2 h \/ 6 h/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Dépassement/)).toBeNull();
+  });
+
+  it("shows a dash and no overrun warning when no capacity is known", async () => {
+    mocks.urgent = [order({ id: "u1", cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "sent", productionDate: "2026-06-02", neededBy: "2026-06-02T08:00:00Z", items: [item("p2", 1)] })];
+    mocks.extra = [order({ cafeId: "c2", cafeName: "Belleville", status: "approved", productionDate: "2026-06-02", items: [item("p2", 20)] })];
+    render(<StoresReview />);
+    fireEvent.click(screen.getByRole("button", { name: "Examiner" }));
+    await act(async () => {});
+    expect(screen.getAllByText(/ \/ —/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Dépassement/)).toBeNull();
+  });
+
+  it("creates the café order for the picked round", () => {
+    mocks.weekly = [order({ cafeId: "c2", cafeName: "Belleville", status: "sent", productionDate: "2026-11-06", items: [item("p1", 1)] })];
+    render(<StoresReview />);
+    fireEvent.click(screen.getByRole("button", { name: "Tour suivant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Créer la commande pour ce café" }));
+    expect(mocks.create).toHaveBeenCalledWith({ cafeId: "c1", productionDate: "2026-11-06" }, expect.anything());
+  });
+
+  it("counts urgent orders 55 days old but not 57 days old", () => {
+    mocks.urgent = [
+      order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "approved", productionDate: "2026-09-08", items: [item("p1", 1)] }), // 55 days before 2 Nov
+      order({ cafeId: "c1", cafeName: "Artivistas", kind: "urgent", status: "approved", productionDate: "2026-09-06", items: [item("p1", 1)] }), // 57 days
+    ];
+    render(<StoresReview />);
+    expect(screen.getByText(/: 1$/)).toBeInTheDocument();
   });
 
   it("unlocks only after a pending lock resolves", async () => {

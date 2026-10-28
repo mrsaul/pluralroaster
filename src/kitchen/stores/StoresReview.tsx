@@ -6,7 +6,7 @@ import type { Lang } from "@/i18n";
 import { useKitchenLang } from "@/kitchen/i18n";
 import {
   kitchenErrorMessage, useCreateOrderForCafe, useKitchenCafes, useKitchenOrders,
-  useKitchenProducts, useRoundOccurrences,
+  useKitchenProducts, useKitchenRounds, useRoundOccurrences,
 } from "../api";
 import { useKitchenT } from "../i18n";
 import { computeCapacity, computeProduction } from "../lib/production";
@@ -72,6 +72,7 @@ export default function StoresReview() {
   const productionDate = round?.productionDate;
   const { data: weekly = [] } = useKitchenOrders({ productionDate, kind: "weekly" });
   const { data: urgentAll = [] } = useKitchenOrders({ kind: "urgent" });
+  const { data: allRounds = [] } = useKitchenRounds();
   const create = useCreateOrderForCafe();
   const activeCafes = useMemo(() => cafes.filter((c) => c.isActive), [cafes]);
 
@@ -163,7 +164,11 @@ export default function StoresReview() {
           key={openOrder.id}
           order={openOrder}
           products={products}
-          availableMinutes={occurrences.find((o) => o.productionDate === openOrder.productionDate)?.capacityMinutes ?? 0}
+          availableMinutes={
+            occurrences.find((o) => o.productionDate === openOrder.productionDate)?.capacityMinutes ??
+            allRounds.find((r) => r.id === openOrder.roundId)?.capacityMinutes ??
+            null
+          }
           onClose={() => setOpenId(null)}
         />
       )}

@@ -22,11 +22,12 @@ const DEBOUNCE_MS = 400;
 type Props = {
   order: KitchenOrder;
   products: KitchenProduct[];
-  availableMinutes: number;
+  availableMinutes: number | null;
   onClose: () => void;
 };
 
 export default function OrderReviewSheet({ order, products, availableMinutes, onClose }: Props) {
+  const minutes = availableMinutes ?? 0; // only feeds the arithmetic; the bar shows "—" when unknown
   const t = useKitchenT();
   const s = t.stores;
   const lang = useKitchenLang();
@@ -147,11 +148,11 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
       };
       return { ...base, adjustedUnits: qty[id] ?? effectiveUnits(base) };
     });
-    return capacityIfApproved(orders, { ...order, items }, products, availableMinutes);
-  }, [orders, order, lineIds, qty, products, byId, availableMinutes]);
+    return capacityIfApproved(orders, { ...order, items }, products, minutes);
+  }, [orders, order, lineIds, qty, products, byId, minutes]);
   const current = useMemo(
-    () => computeCapacity(computeProduction(orders.filter((o) => o.id !== order.id || order.status === "approved"), products), products, availableMinutes),
-    [orders, order, products, availableMinutes],
+    () => computeCapacity(computeProduction(orders.filter((o) => o.id !== order.id || order.status === "approved"), products), products, minutes),
+    [orders, order, products, minutes],
   );
 
   const share = async (list: KitchenChange[]) => {
