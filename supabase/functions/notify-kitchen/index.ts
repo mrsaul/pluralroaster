@@ -5,7 +5,8 @@
 // Best effort: per-recipient failures are logged and never fail the call.
 //
 // Secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT,
-//          RESEND_API_KEY, FROM_EMAIL, KITCHEN_CRON_SECRET
+//          RESEND_API_KEY, FROM_EMAIL, KITCHEN_CRON_SECRET (optional: the
+//          cron secret is also checked against Vault kitchen_cron_secret)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
@@ -84,10 +85,16 @@ function safeEqual(a: string, b: string): boolean {
 
 type Caller = { userId: string; role: "admin" | "coffee_manager" | "stores_manager" | "kitchen_manager"; cafeId: string | null };
 
-function cronAuthorized(req: Request): boolean {
-  const expected = Deno.env.get("KITCHEN_CRON_SECRET");
+// Cron calls carry x-kitchen-cron-secret. Accept it if it matches the
+// KITCHEN_CRON_SECRET function secret, or else the Vault copy (kitchen_cron_secret).
+async function cronAuthorized(req: Request): Promise<boolean> {
   const got = req.headers.get("x-kitchen-cron-secret");
-  return !!expected && !!got && safeEqual(got, expected);
+  if (!got) return false;
+  const expected = Deno.env.get("KITCHEN_CRON_SECRET");
+  if (expected && safeEqual(got, expected)) return true;
+  const { data, error } = await db.rpc("kitchen_cron_secret_ok", { p_secret: got });
+  if (error) console.error("kitchen_cron_secret_ok failed", error.message);
+  return !error && data === true;
 }
 
 async function getCaller(req: Request): Promise<Caller | null> {
@@ -348,7 +355,7 @@ Deno.serve(async (req: Request) => {
     if (!event) return json({ error: "unauthorized" }, 401);
 
     if (event === "cutoff_reminder") {
-      if (!cronAuthorized(req)) return json({ error: "unauthorized" }, 401);
+      if (!(await cronAuthorized(req))) return json({ error: "unauthorized" }, 401);
       const r = await handleCutoffReminder();
       if (!r) return json({ error: "internal_error" }, 500);
       console.log("[notify-kitchen] cutoff_reminder", r);
