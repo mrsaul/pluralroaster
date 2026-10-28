@@ -10,8 +10,8 @@ import { useKitchenT } from "../i18n";
 import type { KitchenRound } from "../types";
 
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first; stored value 0 = Sunday
-const inputCls = "h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground";
-const field = "flex flex-col gap-1 text-sm";
+const inputCls = "h-12 rounded-full border border-brand-line bg-card px-4 text-sm text-foreground";
+const field = "flex flex-col gap-1 text-[12.5px] text-muted-foreground";
 
 type Draft = Omit<KitchenRound, "id"> & { id?: string };
 const BLANK: Draft = { name: "", productionWeekday: 2, cutoffWeekday: 0, cutoffTime: "20:00", capacityMinutes: 360, isActive: true };
@@ -90,11 +90,11 @@ function RoundForm({ initial, rounds, onDone }: { initial: Draft; rounds: Kitche
         {k.roundActive}
       </label>
       {errors.length > 0 && (
-        <div role="alert" className="text-sm font-medium text-destructive">{errors.map((e) => <p key={e}>{e}</p>)}</div>
+        <div role="alert" className="rounded-[18px] bg-brand-coral-100 px-3 py-2 text-sm font-semibold text-brand-ink">{errors.map((e) => <p key={e}>{e}</p>)}</div>
       )}
       <div className="flex gap-2">
-        <Button className="h-11 flex-1" disabled={upsert.isPending} onClick={save}>{k.save}</Button>
-        <Button variant="outline" className="h-11" onClick={onDone}>{k.cancelEdit}</Button>
+        <Button className="flex-1" disabled={upsert.isPending} onClick={save}>{k.save}</Button>
+        <Button variant="outline" onClick={onDone}>{k.cancelEdit}</Button>
       </div>
     </div>
   );
@@ -111,37 +111,37 @@ export default function RoundsEditor() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold">{k.roundsTitle}</h3>
-      {deleteError && <p role="alert" className="text-sm font-medium text-destructive">{deleteError}</p>}
-      <ul className="flex flex-col gap-2">
+      <h3 className="text-[16px] font-bold text-brand-ink">{k.roundsTitle}</h3>
+      {deleteError && <p role="alert" className="rounded-[18px] bg-brand-coral-100 px-3 py-2 text-sm font-semibold text-brand-ink">{deleteError}</p>}
+      <ul className="flex flex-col gap-3">
         {rounds.map((r) => (
-          <li key={r.id} data-testid={`round-${r.id}`} className="rounded-xl border border-border bg-card p-3">
+          <li key={r.id} data-testid={`round-${r.id}`} className="rounded-[26px] border border-brand-line bg-card p-4">
             {editing === r.id ? (
               <RoundForm initial={r} rounds={rounds} onDone={() => setEditing(null)} />
             ) : (
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-medium">{r.name} <span className="text-xs font-normal text-muted-foreground">{r.isActive ? k.roundActive : k.roundInactive}</span></p>
+                  <p className="break-words font-bold text-brand-ink">{r.name} <span className="text-xs font-normal text-muted-foreground">{r.isActive ? k.roundActive : k.roundInactive}</span></p>
                   <p className="text-xs text-muted-foreground">
                     {k.roundSummary(k.weekdays[r.productionWeekday].toLowerCase(), k.weekdays[r.cutoffWeekday].toLowerCase(), r.cutoffTime, fmtHours(r.capacityMinutes, true))}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button variant="outline" className="h-10" onClick={() => { setDeleteError(null); setEditing(r.id); }}>{k.edit}</Button>
-                  <Button variant="outline" className="h-10" onClick={() => { setDeleteError(null); setToDelete(r); }}>{k.remove}</Button>
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  <Button variant="outline" onClick={() => { setDeleteError(null); setEditing(r.id); }}>{k.edit}</Button>
+                  <Button variant="outline" onClick={() => { setDeleteError(null); setToDelete(r); }}>{k.remove}</Button>
                 </div>
               </div>
             )}
           </li>
         ))}
         {editing === "new" && (
-          <li data-testid="round-new" className="rounded-xl border border-border bg-card p-3">
+          <li data-testid="round-new" className="rounded-[26px] border border-brand-line bg-card p-4">
             <RoundForm initial={BLANK} rounds={rounds} onDone={() => setEditing(null)} />
           </li>
         )}
       </ul>
       {editing !== "new" && (
-        <Button variant="outline" className="h-11" onClick={() => { setDeleteError(null); setEditing("new"); }}>{k.addRound}</Button>
+        <Button variant="outline" onClick={() => { setDeleteError(null); setEditing("new"); }}>{k.addRound}</Button>
       )}
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>

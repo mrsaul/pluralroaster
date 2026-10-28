@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import CapacityBar from "@/kitchen/stores/CapacityBar";
 import { useCuisineTheme } from "@/kitchen/ui/useCuisineTheme";
 import { buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -68,5 +69,15 @@ describe("brand primitives", () => {
   it("shapes are hidden from screen readers", () => {
     const { container } = render(<BrandShape kind="triangle" color="coral" />);
     expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
+});
+
+describe("CapacityBar", () => {
+  it("capacity overrun is ink text on a coral pill, not red text", () => {
+    render(<CapacityBar neededMinutes={400} availableMinutes={300} />);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Dépassement de 1 h 40");
+    expect(alert.className).not.toMatch(/text-destructive/);
+    expect(alert.className).toMatch(/bg-brand-coral-100/);
   });
 });
