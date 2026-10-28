@@ -38,6 +38,25 @@ const fmtDateTime = (iso: string) =>
     hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));
 
+const WEEKDAYS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const MONTHS_FR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+
+// "2026-11-03" -> "mardi 3 nov." (calendar date, no year, no time zone shift).
+const fmtProductionDay = (productionDate: string) => {
+  const [y, m, d] = productionDate.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return `${WEEKDAYS_FR[dow]} ${d} ${MONTHS_FR[m - 1]}`;
+};
+
+// cutoff instant -> "lundi 20:00" (Paris time).
+const fmtCutoff = (iso: string) => {
+  const parts = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris", weekday: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${g("weekday")} ${g("hour")}:${g("minute")}`;
+};
+
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 let vapidReady = false;
@@ -221,6 +240,7 @@ async function serverChanges(orderId: string): Promise<Change[]> {
 // an order on a café's behalf does not get the "order sent" notification).
 async function sendOrderEvent(event: KitchenEvent, order: any, callerId: string): Promise<number> {
   const cafe = order.kitchen_cafes?.name ?? "Café";
+  const round = order.production_date ? fmtProductionDay(order.production_date) : null;
   const urgent = order.kind === "urgent";
   const deliver = (ids: string[], msg: Message) => deliverTo(ids.filter((id) => id !== callerId), msg);
 
@@ -228,7 +248,7 @@ async function sendOrderEvent(event: KitchenEvent, order: any, callerId: string)
     case "order_sent":
       return deliver(await memberIds("stores_manager"), {
         title: "Nouvelle commande Cuisine",
-        body: `${cafe} a envoyé sa commande de la semaine.`,
+        body: round ? `${cafe} a envoyé sa commande pour ${round}.` : `${cafe} a envoyé sa commande.`,
       });
     case "urgent_created":
       return deliver(await memberIds("stores_manager"), {
@@ -268,40 +288,48 @@ async function sendOrderEvent(event: KitchenEvent, order: any, callerId: string)
   }
 }
 
+// Reminds cafés that have not ordered for a round whose reminder window is open.
+// kitchen_next_open_rounds is SECURITY DEFINER and only rejects a non-null auth.uid() that is not a
+// kitchen member; the service-role client has no uid, so the call is allowed here.
 async function handleCutoffReminder(): Promise<{ cafes: number; notified: number }> {
-  const [{ data: settings }, { data: weekRows }] = await Promise.all([
+  const [{ data: settings }, { data: rounds, error: roundsError }] = await Promise.all([
     db.from("kitchen_settings").select("reminder_hours_before").eq("id", 1).single(),
-    db.rpc("kitchen_current_week"),
+    db.rpc("kitchen_next_open_rounds", { p_count: 4 }),
   ]);
-  const week = weekRows?.[0];
-  if (!settings || !week) return { cafes: 0, notified: 0 };
+  if (roundsError) console.warn("[notify-kitchen] rounds lookup failed", roundsError.message);
+  if (!settings || !rounds?.length) return { cafes: 0, notified: 0 };
 
   const now = Date.now();
-  const cutoff = new Date(week.cutoff_at).getTime();
-  const windowStart = cutoff - settings.reminder_hours_before * 3_600_000;
-  if (!(windowStart <= now && now < cutoff)) return { cafes: 0, notified: 0 };
+  const due = (rounds as { production_date: string; cutoff_at: string }[]).filter((r) => {
+    const cutoff = new Date(r.cutoff_at).getTime();
+    return cutoff - settings.reminder_hours_before * 3_600_000 <= now && now < cutoff;
+  });
+  if (!due.length) return { cafes: 0, notified: 0 };
 
-  const [{ data: cafes }, { data: orders }, { data: already }] = await Promise.all([
-    db.from("kitchen_cafes").select("id, name").eq("is_active", true),
-    db.from("kitchen_orders").select("cafe_id").eq("week_start", week.week_start).eq("kind", "weekly")
-      .in("status", ["sent", "approved", "ready", "received"]),
-    db.from("kitchen_reminders_sent").select("cafe_id").eq("week_start", week.week_start),
-  ]);
-  const skip = new Set([...(orders ?? []), ...(already ?? [])].map((r: { cafe_id: string }) => r.cafe_id));
+  const { data: cafes } = await db.from("kitchen_cafes").select("id, name").eq("is_active", true);
 
   let cafesCount = 0, notified = 0;
-  for (const c of cafes ?? []) {
-    if (skip.has(c.id)) continue;
-    // Claim first: the primary key makes this once per café per week even if runs overlap.
-    const { data: claimed, error } = await db.from("kitchen_reminders_sent")
-      .upsert({ week_start: week.week_start, cafe_id: c.id }, { onConflict: "week_start,cafe_id", ignoreDuplicates: true })
-      .select("cafe_id");
-    if (error || !claimed || claimed.length === 0) continue;
-    cafesCount++;
-    notified += await deliverTo(await memberIds("coffee_manager", c.id), {
-      title: "Commande Cuisine à envoyer",
-      body: `${c.name} : la date limite est ${fmtDateTime(week.cutoff_at)}. Pensez à envoyer votre commande.`,
-    });
+  for (const r of due) {
+    const [{ data: orders }, { data: already }] = await Promise.all([
+      db.from("kitchen_orders").select("cafe_id").eq("production_date", r.production_date).eq("kind", "weekly")
+        .in("status", ["sent", "approved", "ready", "received"]),
+      db.from("kitchen_reminders_sent").select("cafe_id").eq("production_date", r.production_date),
+    ]);
+    const skip = new Set([...(orders ?? []), ...(already ?? [])].map((x: { cafe_id: string }) => x.cafe_id));
+
+    for (const c of cafes ?? []) {
+      if (skip.has(c.id)) continue;
+      // Claim first: the primary key makes this once per café per production date even if runs overlap.
+      const { data: claimed, error } = await db.from("kitchen_reminders_sent")
+        .upsert({ production_date: r.production_date, cafe_id: c.id }, { onConflict: "production_date,cafe_id", ignoreDuplicates: true })
+        .select("cafe_id");
+      if (error || !claimed || claimed.length === 0) continue;
+      cafesCount++;
+      notified += await deliverTo(await memberIds("coffee_manager", c.id), {
+        title: "Commande Cuisine à envoyer",
+        body: `${c.name} : commande pour la production du ${fmtProductionDay(r.production_date)} à envoyer avant ${fmtCutoff(r.cutoff_at)}.`,
+      });
+    }
   }
   return { cafes: cafesCount, notified };
 }
@@ -328,7 +356,7 @@ Deno.serve(async (req: Request) => {
 
     // Note: request-supplied `extra` is deliberately ignored; content is derived server-side.
     const { data: order } = await db.from("kitchen_orders")
-      .select("id, cafe_id, kind, status, urgent_reason, needed_by, ready_eta, decline_note, kitchen_cafes(name)")
+      .select("id, cafe_id, kind, status, production_date, urgent_reason, needed_by, ready_eta, decline_note, kitchen_cafes(name)")
       .eq("id", body.orderId).maybeSingle();
     if (!order) return json({ error: "order_not_found" }, 404);
 

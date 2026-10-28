@@ -1,16 +1,16 @@
-import { format, parseISO } from "date-fns";
 import type { Lang } from "@/i18n";
 import type { KitchenOrder } from "../types";
 import { effectiveUnits, type ProductionRow } from "./production";
 import { unitsToPieces } from "./format";
-
-const ddMM = (iso: string) => format(parseISO(iso), "dd/MM");
+import { formatProductionDay } from "./rounds";
 
 function orderHeader(order: KitchenOrder, lang: Lang): string {
   const kind =
     order.kind === "urgent"
       ? lang === "fr" ? "Commande urgente" : "Urgent order"
-      : lang === "fr" ? `Commande de la semaine du ${ddMM(order.weekStart)}` : `Order for week of ${ddMM(order.weekStart)}`;
+      : lang === "fr"
+        ? `Commande pour la production du ${formatProductionDay(order.productionDate, lang)}`
+        : `Order for production on ${formatProductionDay(order.productionDate, lang)}`;
   return `${order.cafeName}\n${kind}`;
 }
 
@@ -32,8 +32,10 @@ export function buildChangesShareText(
   return [header, "", ...changes.map((c) => `${c.productName}${lang === "fr" ? " :" : ":"} ${c.from} → ${c.to}`)].join("\n");
 }
 
-export function buildProductionShareText(weekStart: string, rows: ProductionRow[], lang: Lang): string {
-  const header = lang === "fr" ? `Production de la semaine du ${ddMM(weekStart)}` : `Production for week of ${ddMM(weekStart)}`;
+export function buildProductionShareText(productionDate: string, rows: ProductionRow[], lang: Lang): string {
+  const header = lang === "fr"
+    ? `Production du ${formatProductionDay(productionDate, lang)}`
+    : `Production for ${formatProductionDay(productionDate, lang)}`;
   const lines = rows.map((r) =>
     lang === "fr"
       ? `${r.name} — à produire : ${r.toProduceUnits} × ${r.unitLabel} (commandé ${r.orderedUnits}, stock ${r.stockUnits})`
@@ -44,7 +46,9 @@ export function buildProductionShareText(weekStart: string, rows: ProductionRow[
 
 export function buildPackingListText(order: KitchenOrder, lang: Lang): string {
   const header = lang === "fr" ? `Préparation — ${order.cafeName}` : `Packing list — ${order.cafeName}`;
-  const week = lang === "fr" ? `Semaine du ${ddMM(order.weekStart)}` : `Week of ${ddMM(order.weekStart)}`;
+  const week = lang === "fr"
+    ? `Production du ${formatProductionDay(order.productionDate, lang)}`
+    : `Production on ${formatProductionDay(order.productionDate, lang)}`;
   const lines = order.items.map((it) => {
     const eff = effectiveUnits(it);
     return `${it.productName} — ${eff} × ${it.unitLabel} (${unitsToPieces(eff, it.piecesPerUnit)} pcs)`;

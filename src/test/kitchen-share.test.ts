@@ -16,18 +16,19 @@ describe("share texts", () => {
     const o = order({ cafeName: "Artivistas", items: [item("p1", 2), item("p2", 1, 2)] });
     const fr = buildOrderShareText(o, "fr");
     expect(fr).toContain("Artivistas");
-    expect(fr).toContain("Commande de la semaine du 02/11");
+    expect(fr).toContain("Commande pour la production du mardi 3 nov.");
     expect(fr).toContain("Pandebono — 2 × Batch (100 pcs)");
     expect(fr).toContain("Cookies — 1 → 2 × Batch (48 pcs)");
-    expect(buildOrderShareText(o, "en")).toContain("Order for week of 02/11");
+    expect(buildOrderShareText(o, "en")).toContain("Order for production on Tuesday 3 Nov");
     expect(buildOrderShareText({ ...o, kind: "urgent" }, "fr")).toContain("Commande urgente");
     expect(buildOrderShareText({ ...o, kind: "urgent" }, "en")).toContain("Urgent order");
   });
 
   it("production text", () => {
     const rows = computeProduction([order({ items: [item("p1", 3)] })], products);
-    const t = buildProductionShareText("2026-11-02", rows, "fr");
-    expect(t).toContain("02/11");
+    const t = buildProductionShareText("2026-11-03", rows, "fr");
+    expect(t).toContain("Production du mardi 3 nov.");
+    expect(buildProductionShareText("2026-11-03", rows, "en")).toContain("Production for Tuesday 3 Nov");
     expect(t).toContain("Pandebono — à produire : 2 × Batch (commandé 3, stock 1)");
   });
 
@@ -36,5 +37,7 @@ describe("share texts", () => {
     const t = buildPackingListText(o, "en");
     expect(t).toContain("Pandebono — 2 × Batch (100 pcs)");
     expect(t).not.toContain("→");
+    expect(t).toContain("Production on Tuesday 3 Nov");
+    expect(buildPackingListText(o, "fr")).toContain("Production du mardi 3 nov.");
   });
 });

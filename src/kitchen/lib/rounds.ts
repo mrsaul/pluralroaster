@@ -49,3 +49,12 @@ export function formatRoundLabel(occ: Pick<RoundOccurrence, "productionDate">, l
     ? `Production du ${WEEKDAYS_FR[dow]} ${d} ${MONTHS_FR[m - 1]}`
     : `Production ${WEEKDAYS_EN[dow]} ${d} ${MONTHS_EN[m - 1]}`;
 }
+
+/** fr "mardi 3 nov." / en "Tuesday 3 Nov" (no year). */
+export function formatProductionDay(productionDate: string, lang: Lang): string {
+  const [y, m, d] = productionDate.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return lang === "fr"
+    ? `${WEEKDAYS_FR[dow]} ${d} ${MONTHS_FR[m - 1]}`
+    : `${WEEKDAYS_EN[dow]} ${d} ${MONTHS_EN[m - 1]}`;
+}
