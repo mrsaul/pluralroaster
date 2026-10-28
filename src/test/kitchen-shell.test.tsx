@@ -3,6 +3,17 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { ClipboardList, Factory, Package } from "lucide-react";
 import CuisineShell, { type MenuStrings, type ShellTab } from "@/kitchen/ui/CuisineShell";
 import { Button } from "@/components/ui/button";
+import KitchenApp from "@/kitchen/KitchenApp";
+import type { KitchenAccess } from "@/lib/landing";
+
+vi.mock("@/kitchen/kitchen/ProductionView", () => ({ default: () => <p>PRODUCTION</p> }));
+vi.mock("@/kitchen/kitchen/KitchenOrdersList", () => ({ default: () => <p>KORDERS</p> }));
+vi.mock("@/kitchen/kitchen/ProductsEditor", () => ({ default: () => <p>PRODUCTS</p> }));
+vi.mock("@/kitchen/kitchen/KitchenSettings", () => ({ default: () => <p>SETTINGS</p> }));
+vi.mock("@/kitchen/cafe/CafeHome", () => ({ default: () => <p>CAFEHOME</p> }));
+vi.mock("@/kitchen/cafe/CafeOrders", () => ({ default: () => <p>CAFEORDERS</p> }));
+vi.mock("@/kitchen/stores/StoresReview", () => ({ default: () => <p>STORES</p> }));
+vi.mock("@/kitchen/components/NotificationsToggle", () => ({ default: () => <button type="button">Notifs</button> }));
 
 const motionPrefs = vi.hoisted(() => ({ reduce: false }));
 vi.mock("framer-motion", async (importOriginal) => ({
@@ -211,5 +222,50 @@ describe("CuisineShell", () => {
     for (const cls of ["[&_button]:text-brand-paper", "[&_button:hover]:bg-brand-night-2", "[&_button:focus-visible]:bg-brand-night-2"]) {
       expect(wrapper).toHaveClass(cls);
     }
+  });
+});
+
+describe("KitchenApp wiring", () => {
+  const access = (role: KitchenAccess["role"]) => ({ role, cafeId: "c1", cafeName: "Plural Café" }) as KitchenAccess;
+
+  it("kitchen manager sees four tabs and Production first", () => {
+    render(<KitchenApp access={access("kitchen_manager")} onLogout={vi.fn()} />);
+    for (const n of ["Production", "Commandes", "Produits", "Réglages"]) expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Production" })).toBeInTheDocument();
+    expect(screen.getByText("PRODUCTION")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Produits" }));
+    expect(screen.getByText("PRODUCTS")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Produits" })).toBeInTheDocument();
+  });
+
+  it("café manager has Commander and Mes commandes", () => {
+    render(<KitchenApp access={access("coffee_manager")} onLogout={vi.fn()} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Commander" })).toBeInTheDocument();
+    expect(screen.getByText("CAFEHOME")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mes commandes" }));
+    expect(screen.getByText("CAFEORDERS")).toBeInTheDocument();
+  });
+
+  it("stores manager gets the Commandes des cafés title and no tabs", () => {
+    render(<KitchenApp access={access("stores_manager")} onLogout={vi.fn()} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Commandes des cafés" })).toBeInTheDocument();
+    expect(screen.getByText("STORES")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Production" })).toBeNull();
+  });
+
+  it("menu shows the role label, back-to-coffee and logout", () => {
+    const onLogout = vi.fn();
+    const onSwitch = vi.fn();
+    render(<KitchenApp access={access("kitchen_manager")} onLogout={onLogout} onSwitchToCoffee={onSwitch} />);
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    const menu = within(screen.getByRole("dialog", { name: "Menu" }));
+    expect(menu.getByText("Responsable cuisine")).toBeInTheDocument();
+    fireEvent.click(menu.getByRole("button", { name: "Se déconnecter" }));
+    expect(onLogout).toHaveBeenCalled();
+  });
+
+  it("unknown role keeps the placeholder", () => {
+    render(<KitchenApp access={{ role: "other", cafeId: null, cafeName: null } as unknown as KitchenAccess} onLogout={vi.fn()} />);
+    expect(screen.getByText("L'espace Cuisine arrive bientôt.")).toBeInTheDocument();
   });
 });

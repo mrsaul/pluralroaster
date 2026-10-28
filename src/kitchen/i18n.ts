@@ -13,6 +13,10 @@ const fr = {
   placeholder: "L'espace Cuisine arrive bientôt.",
   backToCoffee: "Retour au café",
   logout: "Se déconnecter",
+  menu: "Menu",
+  closeMenu: "Fermer le menu",
+  account: "Compte",
+  nav: "Navigation",
   notifEnable: "Activer les notifications",
   notifDisable: "Désactiver les notifications",
   cafeApp: {
@@ -70,6 +74,7 @@ const fr = {
     },
   },
   stores: {
+    title: "Commandes des cafés",
     prevRound: "Tournée précédente",
     nextRound: "Tournée suivante",
     nextRoundReset: "Prochaine",
@@ -213,6 +218,10 @@ const en: KitchenStrings = {
   placeholder: "The Kitchen space is coming soon.",
   backToCoffee: "Back to coffee",
   logout: "Sign out",
+  menu: "Menu",
+  closeMenu: "Close menu",
+  account: "Account",
+  nav: "Navigation",
   notifEnable: "Turn on notifications",
   notifDisable: "Turn off notifications",
   cafeApp: {
@@ -270,6 +279,7 @@ const en: KitchenStrings = {
     },
   },
   stores: {
+    title: "Café orders",
     prevRound: "Previous round",
     nextRound: "Next round",
     nextRoundReset: "Next",
