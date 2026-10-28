@@ -20,7 +20,7 @@ export default function ProductionView() {
   const share = useShareText();
   const now = useNow();
   const today = parisDate(now);
-  const { data: occurrences = [], isLoading: occLoading } = useRoundOccurrences(
+  const { data: occurrences = [], isLoading: occLoading, isError: occError } = useRoundOccurrences(
     format(addDays(parseISO(today), -28), "yyyy-MM-dd"),
     format(addDays(parseISO(today), 28), "yyyy-MM-dd"),
   );
@@ -37,7 +37,7 @@ export default function ProductionView() {
   const capacity = useMemo(() => computeCapacity(rows, products, available), [rows, products, available]);
   const piecesPer = useMemo(() => new Map(products.map((p) => [p.id, p.piecesPerUnit])), [products]);
 
-  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground">{occLoading ? k.loading : k.noRound}</p>;
+  if (!round || !productionDate) return <p className="p-4 text-sm text-muted-foreground" role={occError ? "alert" : undefined}>{occLoading ? k.loading : occError ? k.roundsLoadError : k.noRound}</p>;
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">

@@ -30,12 +30,15 @@ const mocks = vi.hoisted(() => ({
   setEta: vi.fn(),
   dates: [] as (string | undefined)[],
   loading: false,
+  error: false,
 }));
 
 vi.mock("@/kitchen/api", () => ({
   useKitchenProducts: () => ({ data: products }),
   useKitchenRounds: () => ({ data: ROUNDS }),
-  useRoundOccurrences: () => (mocks.loading ? { data: undefined, isLoading: true } : { data: OCCURRENCES, isLoading: false }),
+  useRoundOccurrences: () => (mocks.loading ? { data: undefined, isLoading: true, isError: false }
+    : mocks.error ? { data: undefined, isLoading: false, isError: true }
+    : { data: OCCURRENCES, isLoading: false, isError: false }),
   useKitchenSettings: () => ({ data: { reminderHoursBefore: 24 } }),
   useKitchenOrders: (f: { productionDate?: string }) => { mocks.dates.push(f.productionDate); return { data: mocks.orders }; },
   useUpdateProduct: () => ({ mutate: mocks.updateProduct, isPending: false }),
@@ -65,6 +68,7 @@ beforeEach(() => {
   Object.values(mocks).forEach((m) => typeof m === "function" && (m as ReturnType<typeof vi.fn>).mockReset());
   mocks.dates = [];
   mocks.loading = false;
+  mocks.error = false;
   mocks.now = new Date("2026-11-04T10:00:00Z");
   mocks.orders = [
     order({ cafeId: "c1", cafeName: "Artivistas", items: [item("p1", 1)] }),
@@ -98,6 +102,12 @@ describe("round loading state", () => {
       mocks.loading = true;
       render(<View />);
       expect(screen.getByText("Chargement…")).toBeInTheDocument();
+      expect(screen.queryByText(/Aucune tournée/)).not.toBeInTheDocument();
+    });
+    it(`${name} shows an error, not « Aucune tournée », when occurrences fail to load`, () => {
+      mocks.error = true;
+      render(<View />);
+      expect(screen.getByRole("alert")).toHaveTextContent("Impossible de charger les tournées. Réessayez plus tard.");
       expect(screen.queryByText(/Aucune tournée/)).not.toBeInTheDocument();
     });
   }
