@@ -14,27 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      delivery_dates: {
-        Row: {
-          id: string
-          date: string
-          is_default: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          date: string
-          is_default?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          date?: string
-          is_default?: boolean
-          created_at?: string
-        }
-        Relationships: []
-      }
       client_onboarding_legacy: {
         Row: {
           admin_notes: string | null
@@ -478,6 +457,27 @@ export type Database = {
           },
         ]
       }
+      delivery_dates: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          is_default: boolean
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          is_default?: boolean
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          is_default?: boolean
+        }
+        Relationships: []
+      }
       kitchen_cafes: {
         Row: {
           created_at: string
@@ -743,6 +743,32 @@ export type Database = {
         }
         Relationships: []
       }
+      kitchen_reminders_sent: {
+        Row: {
+          cafe_id: string
+          production_date: string
+          sent_at: string
+        }
+        Insert: {
+          cafe_id: string
+          production_date: string
+          sent_at?: string
+        }
+        Update: {
+          cafe_id?: string
+          production_date?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_reminders_sent_cafe_id_fkey"
+            columns: ["cafe_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_cafes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kitchen_rounds: {
         Row: {
           capacity_minutes: number
@@ -802,6 +828,7 @@ export type Database = {
           created_at: string
           grind_type: string | null
           id: string
+          kind: string
           order_id: string
           price_per_kg: number
           product_id: string | null
@@ -816,6 +843,7 @@ export type Database = {
           created_at?: string
           grind_type?: string | null
           id?: string
+          kind?: string
           order_id: string
           price_per_kg?: number
           product_id?: string | null
@@ -830,6 +858,7 @@ export type Database = {
           created_at?: string
           grind_type?: string | null
           id?: string
+          kind?: string
           order_id?: string
           price_per_kg?: number
           product_id?: string | null
@@ -1107,6 +1136,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_active: boolean
+          kind: string
           name: string
           origin: string | null
           price_per_kg: number
@@ -1134,6 +1164,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          kind?: string
           name: string
           origin?: string | null
           price_per_kg?: number
@@ -1161,6 +1192,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          kind?: string
           name?: string
           origin?: string | null
           price_per_kg?: number
@@ -1184,6 +1216,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          delivery_fee_override_cents: number | null
           email: string | null
           full_name: string | null
           id: string
@@ -1191,6 +1224,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delivery_fee_override_cents?: number | null
           email?: string | null
           full_name?: string | null
           id: string
@@ -1198,10 +1232,38 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delivery_fee_override_cents?: number | null
           email?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1513,13 +1575,11 @@ export type Database = {
       create_order_with_items:
         | {
             Args: {
-              p_confirmed_at?: string
-              p_delivery_address_id?: string
+              p_confirmed_at: string
               p_delivery_date: string
-              p_items?: Json
-              p_notes?: string
-              p_reordered_from?: string
-              p_status?: string
+              p_items: Json
+              p_notes: string
+              p_status: string
               p_total_kg: number
               p_total_price: number
               p_user_id: string
@@ -1529,9 +1589,13 @@ export type Database = {
         | {
             Args: {
               p_confirmed_at: string
+              p_delivery_address_id?: string
               p_delivery_date: string
+              p_discount_percent?: number
               p_items: Json
               p_notes: string
+              p_pricing_tier_name?: string
+              p_reordered_from?: string
               p_status: string
               p_total_kg: number
               p_total_price: number
@@ -1559,6 +1623,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      kitchen_active_round_on_or_after: {
+        Args: { p_date: string }
+        Returns: {
+          production_date: string
+          round_id: string
+        }[]
+      }
       kitchen_adjust_item: {
         Args: {
           p_adjusted_units: number
@@ -1582,6 +1653,7 @@ export type Database = {
         }
         Returns: string
       }
+      kitchen_cron_secret_ok: { Args: { p_secret: string }; Returns: boolean }
       kitchen_decline_order: {
         Args: { p_note: string; p_order_id: string }
         Returns: undefined
@@ -1596,15 +1668,6 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: undefined
       }
-      kitchen_now: { Args: never; Returns: string }
-      kitchen_require_role: {
-        Args: { p_roles: Database["public"]["Enums"]["kitchen_role"][] }
-        Returns: Database["public"]["Enums"]["kitchen_role"]
-      }
-      kitchen_role_of: {
-        Args: { uid: string }
-        Returns: Database["public"]["Enums"]["kitchen_role"]
-      }
       kitchen_next_open_rounds: {
         Args: { p_count?: number; p_now?: string }
         Returns: {
@@ -1614,6 +1677,20 @@ export type Database = {
           round_id: string
           round_name: string
         }[]
+      }
+      kitchen_now: { Args: never; Returns: string }
+      kitchen_order_cutoff: { Args: { p_order_id: string }; Returns: string }
+      kitchen_require_role: {
+        Args: { p_roles: Database["public"]["Enums"]["kitchen_role"][] }
+        Returns: Database["public"]["Enums"]["kitchen_role"]
+      }
+      kitchen_role_of: {
+        Args: { uid: string }
+        Returns: Database["public"]["Enums"]["kitchen_role"]
+      }
+      kitchen_round_cutoff: {
+        Args: { p_production_date: string; p_round_id: string }
+        Returns: string
       }
       kitchen_round_occurrences: {
         Args: { p_from: string; p_to: string }
@@ -1625,18 +1702,7 @@ export type Database = {
           round_name: string
         }[]
       }
-      kitchen_order_cutoff: { Args: { p_order_id: string }; Returns: string }
-      kitchen_round_cutoff: {
-        Args: { p_production_date: string; p_round_id: string }
-        Returns: string
-      }
-      kitchen_active_round_on_or_after: {
-        Args: { p_date: string }
-        Returns: {
-          production_date: string
-          round_id: string
-        }[]
-      }
+      kitchen_send_cutoff_reminders: { Args: never; Returns: undefined }
       kitchen_send_order: { Args: { p_order_id: string }; Returns: undefined }
       kitchen_set_item: {
         Args: { p_order_id: string; p_product_id: string; p_units: number }
@@ -1647,6 +1713,34 @@ export type Database = {
         Returns: undefined
       }
       kitchen_unlock_order: { Args: { p_order_id: string }; Returns: undefined }
+      update_company_contact: {
+        Args: { p_company_id: string; p_email: string; p_phone: string }
+        Returns: undefined
+      }
+      update_company_info: {
+        Args: {
+          p_company_id: string
+          p_legal_name: string
+          p_name: string
+          p_siret: string
+          p_vat_number: string
+        }
+        Returns: undefined
+      }
+      update_company_name: {
+        Args: { p_company_id: string; p_name: string }
+        Returns: undefined
+      }
+      update_stock_with_history: {
+        Args: {
+          p_new_qty: number
+          p_new_threshold: number
+          p_note: string
+          p_stock_id: string
+          p_updated_by: string
+        }
+        Returns: undefined
+      }
       user_save_onboarding_progress:
         | {
             Args: {
@@ -1738,12 +1832,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1767,11 +1861,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1792,11 +1886,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1817,11 +1911,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1834,11 +1928,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
