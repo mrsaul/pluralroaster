@@ -1,12 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import path from "path";
-
-// Vitest runs from the repo root, so resolve project files from cwd.
-const html = readFileSync(path.resolve(process.cwd(), "index.html"), "utf8");
-const manifest = JSON.parse(
-  readFileSync(path.resolve(process.cwd(), "public/manifest.json"), "utf8"),
-);
+import html from "../../index.html?raw";
+import manifest from "../../public/manifest.json";
 
 describe("PWA meta", () => {
   it("uses the standard iOS status bar", () => {
