@@ -13,6 +13,10 @@ describe("PWA meta", () => {
     expect(manifest.background_color).toBe("#FBF8F1");
   });
 
+  it("applies the PLURAL theme to every page", () => {
+    expect(html).toMatch(/<html[^>]*class="theme-plural"/);
+  });
+
   it("keeps viewport-fit=cover", () => {
     expect(html).toMatch(/viewport-fit=cover/);
   });

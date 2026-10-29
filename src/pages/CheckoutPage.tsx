@@ -219,8 +219,8 @@ export default function CheckoutPage({
           {/* Icon + message */}
           <div className="text-center space-y-3">
             <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center">
-                <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
+              <div className="w-16 h-16 rounded-full bg-brand-green-100 dark:bg-green-950/30 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-brand-green-600 dark:text-green-400" />
               </div>
             </div>
             <div>
@@ -440,8 +440,8 @@ export default function CheckoutPage({
             </div>
             {discountPercent > 0 && (
               <div className="flex justify-between px-4 py-2">
-                <span className="text-emerald-600 dark:text-emerald-400">Remise {discountPercent} %</span>
-                <span className="tabular-nums text-emerald-600 dark:text-emerald-400">−€{discountAmount.toFixed(2)}</span>
+                <span className="text-brand-green-600 dark:text-emerald-400">Remise {discountPercent} %</span>
+                <span className="tabular-nums text-brand-green-600 dark:text-emerald-400">−€{discountAmount.toFixed(2)}</span>
               </div>
             )}
             {vatLines.map(({ rate, amount }) => (

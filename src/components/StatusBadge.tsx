@@ -1,15 +1,17 @@
 import { cn } from "@/lib/utils";
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-secondary text-secondary-foreground",
-  confirmed: "bg-primary/10 text-primary",
-  fulfilled: "bg-muted text-muted-foreground",
-  synced: "bg-success/10 text-success",
-  received: "bg-success/10 text-success",
-  approved: "bg-info/10 text-info",
-  packaging: "bg-warning/10 text-warning",
-  ready_for_delivery: "bg-primary/10 text-primary",
-  delivered: "bg-muted text-muted-foreground",
+const FALLBACK_STYLE = "bg-brand-line text-brand-ink";
+
+export const STATUS_STYLES: Record<string, string> = {
+  pending: "bg-brand-sand text-brand-ink",
+  confirmed: "bg-brand-blue text-brand-ink",
+  fulfilled: "bg-brand-line text-brand-ink",
+  synced: "bg-brand-green-600 text-brand-paper",
+  received: "bg-brand-green-600 text-brand-paper",
+  approved: "bg-brand-blue text-brand-ink",
+  packaging: "bg-brand-orange text-brand-ink",
+  ready_for_delivery: "bg-brand-salmon text-brand-ink",
+  delivered: "bg-brand-line text-brand-ink",
 };
 
 interface StatusBadgeProps {
@@ -19,7 +21,12 @@ interface StatusBadgeProps {
 
 export function StatusBadge({ status, sellsyId }: StatusBadgeProps) {
   return (
-    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium", STATUS_STYLES[status])}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold",
+        STATUS_STYLES[status] ?? FALLBACK_STYLE,
+      )}
+    >
       {status === "synced" && sellsyId ? (
         <span className="font-mono tabular-nums">{sellsyId}</span>
       ) : (

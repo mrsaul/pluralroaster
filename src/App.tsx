@@ -18,8 +18,8 @@ const queryClient = new QueryClient({
 
 /** Shown while the initial JS chunk for a route is being fetched. */
 const RouteFallback = () => (
-  <div className="min-h-screen bg-[#FAF6F0] flex items-center justify-center">
-    <p className="text-sm text-[#9E9E93]">PluralRoaster</p>
+  <div className="min-h-screen bg-brand-paper flex items-center justify-center">
+    <p className="text-sm text-brand-ink-500">PluralRoaster</p>
   </div>
 );
 

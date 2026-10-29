@@ -226,10 +226,10 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
         {/* ── Google Sheets Export Panel ─────────────────────────────────────── */}
         <div className="rounded-lg border border-border bg-card p-4 space-y-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <Sheet className="w-5 h-5 text-green-600 shrink-0" />
+            <Sheet className="w-5 h-5 text-brand-green-600 shrink-0" />
             <p className="text-sm font-semibold text-foreground">Export Google Sheets</p>
             {sheetUrl && (
-              <Button variant="ghost" size="sm" className="ml-auto gap-1.5 text-green-600 hover:text-green-700 text-xs" asChild>
+              <Button variant="ghost" size="sm" className="ml-auto gap-1.5 text-brand-green-600 hover:text-brand-green-600 text-xs" asChild>
                 <a href={sheetUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="w-3.5 h-3.5" /> Ouvrir le Google Sheet ↗
                 </a>
@@ -273,7 +273,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                 <li>Collez l'URL ci-dessous et cliquez sur <strong>Exporter le mois</strong></li>
               </ol>
               {!serviceAccountEmail && (
-                <p className="text-xs text-amber-600 flex items-center gap-1">
+                <p className="text-xs text-brand-orange-700 flex items-center gap-1">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   Essayez d'exporter une fois pour voir l'email du compte de service.
                 </p>
@@ -285,7 +285,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                 className="text-sm"
               />
               {sheetIdInput && !parseSheetId(sheetIdInput) && <p className="text-xs text-destructive">URL invalide</p>}
-              {parseSheetId(sheetIdInput) && <p className="text-xs text-green-600">✓ ID détecté : {parseSheetId(sheetIdInput)}</p>}
+              {parseSheetId(sheetIdInput) && <p className="text-xs text-brand-green-600">✓ ID détecté : {parseSheetId(sheetIdInput)}</p>}
             </div>
           )}
 

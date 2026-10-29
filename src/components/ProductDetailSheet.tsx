@@ -15,10 +15,10 @@ const ROAST_GRADIENT: Record<string, string> = {
   espresso: "from-stone-700 to-stone-900",
 };
 const ROAST_TEXT: Record<string, string> = {
-  light:    "text-amber-800",
-  medium:   "text-amber-900",
-  dark:     "text-amber-100",
-  espresso: "text-stone-100",
+  light:    "text-brand-ink",
+  medium:   "text-brand-ink",
+  dark:     "text-brand-paper",
+  espresso: "text-brand-paper",
 };
 
 const BAG_TAG = "sachet-3kg";
@@ -352,7 +352,7 @@ export function ProductDetailSheet({
               className={cn(
                 "w-full h-14 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 transition-all duration-300",
                 added
-                  ? "bg-green-500 text-white"
+                  ? "bg-brand-green-600 text-brand-paper"
                   : "bg-primary text-primary-foreground hover:opacity-90 active:opacity-80",
               )}
             >

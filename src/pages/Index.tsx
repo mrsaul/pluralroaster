@@ -543,8 +543,8 @@ const Index = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#FAF6F0] flex items-center justify-center">
-        <p className="text-sm text-[#9E9E93]">PluralRoaster</p>
+      <div className="min-h-screen bg-brand-paper flex items-center justify-center">
+        <p className="text-sm text-brand-ink-500">PluralRoaster</p>
       </div>
     );
   }
@@ -761,8 +761,8 @@ const Index = () => {
       // Safety net: view is somehow unmapped — redirect to home rather than rendering null.
       setView("home");
       return (
-        <div className="min-h-screen bg-[#FAF6F0] flex items-center justify-center">
-          <p className="text-sm text-[#9E9E93]">PluralRoaster</p>
+        <div className="min-h-screen bg-brand-paper flex items-center justify-center">
+          <p className="text-sm text-brand-ink-500">PluralRoaster</p>
         </div>
       );
   }

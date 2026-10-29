@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
 
 const ROAST_COLORS: Record<string, string> = {
-  light: "bg-amber-200 border-amber-300",
-  medium: "bg-amber-500 border-amber-600",
-  dark: "bg-amber-800 border-amber-900",
+  light: "bg-brand-sand border-brand-orange-200",
+  medium: "bg-brand-orange border-brand-orange-700",
+  dark: "bg-brand-orange-700 border-brand-ink",
   espresso: "bg-foreground border-foreground",
 };
 

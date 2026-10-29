@@ -265,7 +265,7 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
               >
                 <Link2 className={cn("h-4 w-4 shrink-0", dataSourceMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
                 <div>
-                  <p className={cn("text-sm font-medium", dataSourceMode === "sellsy" ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
+                  <p className={cn("text-sm font-medium", dataSourceMode === "sellsy" ? "text-primary font-semibold" : "text-foreground")}>Synchronisé avec Sellsy</p>
                   <p className="text-[11px] text-muted-foreground">Lié à Sellsy</p>
                 </div>
               </button>

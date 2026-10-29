@@ -331,7 +331,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => void handleResend()}
-                  className="text-primary font-medium hover:underline transition-colors"
+                  className="text-primary font-medium underline transition-colors"
                 >
                   Renvoyer le code
                 </button>

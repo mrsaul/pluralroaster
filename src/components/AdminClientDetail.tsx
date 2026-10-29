@@ -353,9 +353,9 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                     const isExpanded = expandedOrderId === order.id;
                     const orderRef = `#${order.id.slice(0, 8).toUpperCase()}`;
                     const statusColor =
-                      order.status === "confirmed" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                      order.status === "received" ? "bg-green-100 text-green-700 border-green-200" :
-                      order.status === "cancelled" ? "bg-red-100 text-red-700 border-red-200" :
+                      order.status === "confirmed" ? "bg-brand-blue-100 text-brand-blue-700 border-brand-blue" :
+                      order.status === "received" ? "bg-brand-green-100 text-brand-green-600 border-brand-green/40" :
+                      order.status === "cancelled" ? "bg-brand-coral-100 text-brand-red-700 border-brand-coral" :
                       "bg-muted text-muted-foreground border-border";
                     return (
                       <div key={order.id} className="rounded-lg border border-border overflow-hidden">
@@ -538,7 +538,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                 >
                   <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
                   <div>
-                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
+                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary font-semibold" : "text-foreground")}>Synchronisé avec Sellsy</p>
                     <p className="text-[11px] text-muted-foreground">Read-only data</p>
                   </div>
                 </button>

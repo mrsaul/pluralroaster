@@ -49,21 +49,21 @@ export class AppErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#FAF6F0] flex flex-col items-center justify-center gap-6 p-6">
+        <div className="min-h-screen bg-brand-paper flex flex-col items-center justify-center gap-6 p-6">
           <div className="flex flex-col items-center gap-1 text-center">
-            <p className="text-base font-medium text-[#1A1A18]">PluralRoaster</p>
-            <p className="text-sm text-[#6B6B63] max-w-xs">
+            <p className="text-base font-medium text-brand-ink">PluralRoaster</p>
+            <p className="text-sm text-brand-ink-500 max-w-xs">
               Quelque chose ne s'est pas chargé correctement.
             </p>
           </div>
           <button
             onClick={this.handleReload}
-            className="h-10 px-5 rounded-lg bg-[#1A1A18] text-[#FAF6F0] text-sm font-medium transition-opacity hover:opacity-80 active:opacity-60"
+            className="h-10 px-5 rounded-lg bg-brand-ink text-brand-paper text-sm font-medium transition-opacity hover:opacity-80 active:opacity-60"
           >
             Recharger la page
           </button>
           {this.state.message ? (
-            <p className="text-xs text-[#9E9E93] max-w-xs text-center font-mono break-all">
+            <p className="text-xs text-brand-ink-500 max-w-xs text-center font-mono break-all">
               {this.state.message}
             </p>
           ) : null}
