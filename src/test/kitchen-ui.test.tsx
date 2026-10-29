@@ -5,6 +5,7 @@ import { QuantityStepper } from "@/components/QuantityStepper";
 import CapacityBar from "@/kitchen/stores/CapacityBar";
 import { useCuisineTheme } from "@/kitchen/ui/useCuisineTheme";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { contrastRatio } from "@/kitchen/ui/contrast";
 import { BrandShape } from "@/kitchen/ui/BrandShape";
@@ -36,9 +37,10 @@ describe("useCuisineTheme", () => {
 describe("shared shadcn components under the PLURAL theme", () => {
   it("button gets pill shape app-wide and bigger touch sizes only in Cuisine", () => {
     const cls = buttonVariants({});
-    expect(cls).toContain("plural:rounded-full");
+    expect(cls).toContain("rounded-full");
+    expect(cls).not.toContain("rounded-md");
+    expect(cls).not.toContain("plural:");
     expect(cls).toContain("cuisine:h-12");
-    expect(cls).toContain("rounded-md"); // fallback when no theme class is set
   });
 
   it("bottom sheet shows a grabber", () => {
@@ -50,6 +52,14 @@ describe("shared shadcn components under the PLURAL theme", () => {
       </Sheet>,
     );
     expect(document.querySelector("[data-grabber]")).not.toBeNull();
+  });
+});
+
+describe("caller classes win over the baked-in look", () => {
+  it("outline button keeps a caller's destructive colours", () => {
+    const cls = cn(buttonVariants({ variant: "outline" }), "text-destructive border-destructive");
+    expect(cls).toContain("text-destructive");
+    expect(cls).not.toContain("text-secondary-foreground");
   });
 });
 
@@ -90,15 +100,16 @@ describe("QuantityStepper", () => {
     render(<QuantityStepper value={1} step={1} onChange={() => {}} />);
     for (const name of ["Diminuer la quantité", "Augmenter la quantité"]) {
       const cls = screen.getByRole("button", { name }).className;
-      expect(cls).toContain("plural:rounded-full");
-      expect(cls).toContain("rounded-lg");
+      expect(cls).toContain("rounded-full");
+      expect(cls).not.toContain("rounded-lg");
+      expect(cls).toContain("cuisine:h-10");
     }
   });
 
   it("keeps both buttons visible against the pill on sticky hover", () => {
     render(<QuantityStepper value={0} step={1} onChange={() => {}} />);
     for (const name of ["Diminuer la quantité", "Augmenter la quantité"]) {
-      expect(screen.getByRole("button", { name }).className).toContain("plural:hover:bg-card");
+      expect(screen.getByRole("button", { name }).className).toContain("hover:bg-card");
     }
   });
 });

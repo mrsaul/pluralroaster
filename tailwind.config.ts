@@ -15,7 +15,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"Inter"', 'system-ui', 'sans-serif'],
         mono: ['"Geist Mono"', 'monospace'],
       },
       colors: {
@@ -23,7 +23,7 @@ export default {
           coral: { DEFAULT: "#F0605C", 100: "#FDE4E3" },
           red: { 700: "#B8322E" },
           blue: { DEFAULT: "#7E9CD0", 100: "#E8EEF8", 600: "#5A7BB8", 700: "#3F5F9A" },
-          orange: { DEFAULT: "#F0951F", 100: "#FCE9CC", 200: "#F8CA88", 700: "#A35A00" },
+          orange: { DEFAULT: "#F0951F", 100: "#FCE9CC", 200: "#F8CA88", 700: "#8F4F00" },
           sand: { DEFAULT: "#F1DDA9", 100: "#FCF6E7" },
           salmon: { DEFAULT: "#EFA89E", 100: "#FCECE9" },
           green: { DEFAULT: "#509040", 100: "#DDEAD7", 600: "#3D7330" },
@@ -114,8 +114,6 @@ export default {
   },
   plugins: [
     require("tailwindcss-animate"),
-    // plural: = PLURAL look on every screen (class set on <html> in index.html).
-    plugin(({ addVariant }) => addVariant("plural", ".theme-plural &")),
     // cuisine: = extras only inside the Cuisine module (bigger touch sizes, 26px cards).
     plugin(({ addVariant }) => addVariant("cuisine", ".theme-cuisine &")),
   ],

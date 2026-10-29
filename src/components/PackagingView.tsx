@@ -355,7 +355,7 @@ function OrderCard({
                 disabled={!canMarkReady}
                 className={cn(
                   "w-full gap-2 h-12 text-base font-semibold",
-                  canMarkReady && "bg-brand-green-600 hover:bg-brand-green-600/90 text-brand-paper",
+                  canMarkReady && "bg-brand-green-600 hover:opacity-90 text-brand-paper",
                 )}
                 title={!canMarkReady ? "Cochez toutes les lignes pour marquer comme prêt" : undefined}
               >

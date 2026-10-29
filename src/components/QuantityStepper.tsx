@@ -24,17 +24,17 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
       : "—";
 
   return (
-    <div className={cn("flex items-center gap-1 plural:rounded-full plural:bg-muted plural:p-1", className)}>
+    <div className={cn("flex items-center gap-1 rounded-full bg-muted p-1", className)}>
       <motion.button
         whileTap={{ scale: 0.92 }}
         onClick={decrement}
         disabled={disabled}
-        className="w-9 h-9 rounded-lg cuisine:h-10 cuisine:w-10 plural:rounded-full border border-border bg-secondary disabled:opacity-40 flex items-center justify-center text-foreground transition-colors duration-150 hover:bg-muted plural:hover:bg-card"
+        className="w-9 h-9 rounded-full cuisine:h-10 cuisine:w-10 border border-border bg-secondary disabled:opacity-40 flex items-center justify-center text-foreground transition-colors duration-150 hover:bg-card"
         aria-label="Diminuer la quantité"
       >
         <Minus className="w-4 h-4" />
       </motion.button>
-      <span className="w-16 text-center font-mono plural:font-sans text-sm tabular-nums font-medium text-foreground">
+      <span className="w-16 text-center font-sans text-sm tabular-nums font-medium text-foreground">
         {label}
       </span>
       <motion.button
@@ -42,10 +42,10 @@ export function QuantityStepper({ value, onChange, step = 3, min = 0, max = 999,
         onClick={increment}
         disabled={disabled}
         className={cn(
-          "w-9 h-9 rounded-lg cuisine:h-10 cuisine:w-10 plural:rounded-full flex items-center justify-center transition-colors duration-150 disabled:opacity-40",
+          "w-9 h-9 rounded-full cuisine:h-10 cuisine:w-10 flex items-center justify-center transition-colors duration-150 disabled:opacity-40",
           value > 0
             ? "bg-primary text-primary-foreground"
-            : "border border-border bg-secondary text-foreground hover:bg-muted plural:hover:bg-card"
+            : "border border-border bg-secondary text-foreground hover:bg-card"
         )}
         aria-label="Augmenter la quantité"
       >

@@ -1415,7 +1415,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <button
                     type="button"
                     onClick={() => setShowCreateOrder(true)}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-fuchsia-800 text-white hover:bg-fuchsia-700 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                     aria-label="Nouvelle commande"
                   >
                     <Plus className="w-4 h-4" />
@@ -1493,7 +1493,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
                   {/* Desktop action buttons — on mobile these live in the sticky header */}
                   <div className="hidden lg:flex gap-2">
-                    <Button size="sm" className="gap-2 bg-fuchsia-800 opacity-65" onClick={() => setShowCreateOrder(true)}>
+                    <Button size="sm" className="gap-2" onClick={() => setShowCreateOrder(true)}>
                       <Plus className="w-4 h-4" /> New Order
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => void loadOrders()} className="gap-2">
@@ -2233,9 +2233,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       {isMobile ? (
         <Sheet open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
           <SheetContent side="bottom" className="max-h-[calc(100dvh-env(safe-area-inset-top)-3rem)] overflow-y-auto rounded-t-2xl p-0">
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
             <div className="px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1">
             <SheetHeaderPrimitive className="pr-10 mb-4 text-left">
               <SheetTitlePrimitive className="flex items-center gap-3 text-left">

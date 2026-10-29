@@ -264,7 +264,7 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
               >
                 <Link2 className={cn("h-4 w-4 shrink-0", dataMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
                 <div>
-                  <p className={cn("text-sm font-medium", dataMode === "sellsy" ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
+                  <p className={cn("text-sm font-medium", dataMode === "sellsy" ? "text-primary font-semibold" : "text-foreground")}>Synchronisé avec Sellsy</p>
                   <p className="text-[11px] text-muted-foreground">Read-only data</p>
                 </div>
               </button>

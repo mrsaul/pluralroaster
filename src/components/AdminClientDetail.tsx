@@ -538,7 +538,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                 >
                   <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
                   <div>
-                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Synchronisé avec Sellsy</p>
+                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary font-semibold" : "text-foreground")}>Synchronisé avec Sellsy</p>
                     <p className="text-[11px] text-muted-foreground">Read-only data</p>
                   </div>
                 </button>
