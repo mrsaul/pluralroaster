@@ -622,7 +622,7 @@ const Index = () => {
         setView(role === "admin" ? "admin" : "home");
         return fallback;
       }
-      return (
+      return withSpaceSwitch(
         <Suspense fallback={fallback}>
           <KitchenApp
             access={kitchenAccess}

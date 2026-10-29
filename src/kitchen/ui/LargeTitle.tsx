@@ -11,6 +11,8 @@ interface LargeTitleProps {
   title: string;
   /** Icon buttons shown in the frosted top-right pill (no pill when absent). */
   actions?: ReactNode;
+  /** Leave room at the top right for the floating Coffee/Cuisine switch. */
+  reserveTopRight?: boolean;
 }
 
 function useScrolledPast(offset: number): boolean {
@@ -25,7 +27,7 @@ function useScrolledPast(offset: number): boolean {
 }
 
 /** iOS-style large title with a frosted compact bar that fades in on scroll. */
-export function LargeTitle({ title, actions }: LargeTitleProps) {
+export function LargeTitle({ title, actions, reserveTopRight = false }: LargeTitleProps) {
   const compact = useScrolledPast(COMPACT_AFTER);
   const reduceMotion = useReducedMotion();
   return (
@@ -42,10 +44,21 @@ export function LargeTitle({ title, actions }: LargeTitleProps) {
         }`}
       >
         <div className="mx-auto max-w-xl px-4">
-          <p className="truncate px-12 py-3 text-center text-[16px] font-bold">{title}</p>
+          <p
+            className={`truncate py-3 text-[16px] font-bold ${
+              reserveTopRight ? "pr-40 text-left" : "px-12 text-center"
+            }`}
+          >
+            {title}
+          </p>
         </div>
       </motion.div>
-      <header className="mx-auto flex max-w-xl items-end justify-between gap-3 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)]">
+      <header
+        data-testid="large-title"
+        className={`mx-auto flex max-w-xl items-end justify-between gap-3 px-4 pb-3 ${
+          reserveTopRight ? "pt-[calc(env(safe-area-inset-top)+56px)]" : "pt-[calc(env(safe-area-inset-top)+12px)]"
+        }`}
+      >
         <h1 className="min-w-0 text-[30px] font-extrabold leading-tight tracking-[-0.025em]">{title}</h1>
         {actions ? (
           <div className="flex shrink-0 items-center gap-1 rounded-full border border-brand-line bg-white/80 p-1 shadow-sm backdrop-blur-[18px] backdrop-saturate-150">

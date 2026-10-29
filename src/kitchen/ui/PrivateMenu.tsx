@@ -91,7 +91,7 @@ function MenuPanel({
       animate={{ opacity: 1, y: 0 }}
       exit={reduceMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, y: 12 }}
       transition={{ duration: reduceMotion ? 0 : 0.24, ease: EASE }}
-      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain bg-brand-night text-brand-paper"
+      className="fixed inset-0 z-[70] overflow-y-auto overflow-x-hidden overscroll-contain bg-brand-night text-brand-paper"
     >
       <BrandShape kind="semi" color="coral" size={220} className="pointer-events-none absolute -right-20 -top-14" />
       <div className="relative mx-auto flex max-w-lg flex-col gap-8 px-5 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-[calc(env(safe-area-inset-top)+40px)]">
