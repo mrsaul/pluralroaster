@@ -113,6 +113,9 @@ export default {
   },
   plugins: [
     require("tailwindcss-animate"),
+    // plural: = PLURAL look on every screen (class set on <html> in index.html).
+    plugin(({ addVariant }) => addVariant("plural", ".theme-plural &")),
+    // cuisine: = extras only inside the Cuisine module (bigger touch sizes, 26px cards).
     plugin(({ addVariant }) => addVariant("cuisine", ".theme-cuisine &")),
   ],
 } satisfies Config;

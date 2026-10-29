@@ -35,7 +35,7 @@ const sheetVariants = cva(
       side: {
         top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
-          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom cuisine:rounded-t-[28px] cuisine:max-h-[calc(100dvh-2rem)]",
+          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom plural:rounded-t-[28px] cuisine:max-h-[calc(100dvh-2rem)]",
         left: "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
           "inset-y-0 right-0 h-full w-3/4  border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
@@ -57,10 +57,10 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
       <SheetOverlay />
       <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
         {side === "bottom" && (
-          <div data-grabber aria-hidden className="hidden cuisine:block mx-auto mb-2 h-1.5 w-10 rounded-full bg-border" />
+          <div data-grabber aria-hidden className="hidden plural:block mx-auto mb-2 h-1.5 w-10 rounded-full bg-border" />
         )}
         {children}
-        <SheetPrimitive.Close className="absolute right-2 top-2 flex items-center justify-center w-10 h-10 rounded-xl cuisine:rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none">
+        <SheetPrimitive.Close className="absolute right-2 top-2 flex items-center justify-center w-10 h-10 rounded-xl plural:rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none">
           <X className="h-5 w-5" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

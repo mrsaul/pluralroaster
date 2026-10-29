@@ -33,11 +33,12 @@ describe("useCuisineTheme", () => {
   });
 });
 
-describe("shared shadcn components under cuisine:", () => {
-  it("button gets pill classes only under the cuisine variant", () => {
+describe("shared shadcn components under the PLURAL theme", () => {
+  it("button gets pill shape app-wide and bigger touch sizes only in Cuisine", () => {
     const cls = buttonVariants({});
-    expect(cls).toContain("cuisine:rounded-full");
-    expect(cls).toContain("rounded-md"); // coffee/admin unchanged
+    expect(cls).toContain("plural:rounded-full");
+    expect(cls).toContain("cuisine:h-12");
+    expect(cls).toContain("rounded-md"); // fallback when no theme class is set
   });
 
   it("bottom sheet shows a grabber", () => {
@@ -89,7 +90,7 @@ describe("QuantityStepper", () => {
     render(<QuantityStepper value={1} step={1} onChange={() => {}} />);
     for (const name of ["Diminuer la quantité", "Augmenter la quantité"]) {
       const cls = screen.getByRole("button", { name }).className;
-      expect(cls).toContain("cuisine:rounded-full");
+      expect(cls).toContain("plural:rounded-full");
       expect(cls).toContain("rounded-lg");
     }
   });
@@ -97,7 +98,7 @@ describe("QuantityStepper", () => {
   it("keeps both buttons visible against the pill on sticky hover", () => {
     render(<QuantityStepper value={0} step={1} onChange={() => {}} />);
     for (const name of ["Diminuer la quantité", "Augmenter la quantité"]) {
-      expect(screen.getByRole("button", { name }).className).toContain("cuisine:hover:bg-card");
+      expect(screen.getByRole("button", { name }).className).toContain("plural:hover:bg-card");
     }
   });
 });

@@ -95,8 +95,8 @@
     --sidebar-ring: 24 95% 46%;
   }
 
-  /* Cuisine ("Papier discret") theme: class sits on <html> so portals are themed too. */
-  .theme-cuisine {
+  /* PLURAL ("Papier discret") theme for every screen: class sits on <html> (index.html) so portals are themed too. */
+  .theme-plural {
     --background: 42 55.6% 96.5%;
     --foreground: 36 9.8% 10%;
     --card: 0 0% 100%;
@@ -116,7 +116,7 @@
     --border: 40 27.3% 87.1%;
     --input: 40 27.3% 87.1%;
     --ring: 218.9 39.8% 53.7%;
-    --radius: 1.625rem;
+    --radius: 1rem;
 
     /* Brand tokens */
     --brand-coral: 1.6 83.1% 65.1%;
@@ -131,14 +131,19 @@
     --brand-green-600: 108.4 41.1% 32%;
   }
 
-  .theme-cuisine body {
+  /* Cuisine module only (class added while KitchenApp is mounted): rounder 26px cards. */
+  .theme-cuisine {
+    --radius: 1.625rem;
+  }
+
+  .theme-plural body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .theme-cuisine *,
-    .theme-cuisine *::before,
-    .theme-cuisine *::after {
+    .theme-plural *,
+    .theme-plural *::before,
+    .theme-plural *::after {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
     }
