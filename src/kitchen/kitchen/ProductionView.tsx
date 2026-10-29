@@ -12,6 +12,7 @@ import { kitchenDefaultRound, parisDate } from "../lib/rounds";
 import { useNow } from "../cafe/useNow";
 import CapacityBar from "../stores/CapacityBar";
 import RoundPicker from "../components/RoundPicker";
+import { SectionHeading, SECTION_SHAPES } from "../ui/SectionHeading";
 import { useShareText } from "../components/useShareText";
 
 export default function ProductionView() {
@@ -47,30 +48,33 @@ export default function ProductionView() {
         <p className="mt-4 text-sm text-muted-foreground">{k.noApproved}</p>
       ) : (
         <>
-          <ul className="mt-4 flex flex-col gap-2">
+          <SectionHeading shape={SECTION_SHAPES.toProduce.shape} color={SECTION_SHAPES.toProduce.color} title={k.toProduce} />
+          <ul className="mt-2 divide-y divide-brand-line rounded-[26px] border border-brand-line bg-card px-4">
             {rows.map((r) => {
               const ppu = piecesPer.get(r.productId) ?? 1;
               return (
-                <li key={r.productId} className="rounded-xl border border-border bg-card p-3">
-                  <p className="font-medium">{r.name}</p>
-                  <p className="text-xs text-muted-foreground">{r.byCafe.map((c) => `${c.cafeName} ${c.units}`).join(" · ")}</p>
-                  <dl className="mt-2 grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <dt className="text-xs text-muted-foreground">{k.ordered}</dt>
-                      <dd>{r.orderedUnits} × {r.unitLabel}<span className="block text-xs text-muted-foreground">{unitsToPieces(r.orderedUnits, ppu)} {k.pcs}</span></dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">{k.stock}</dt>
-                      <dd>{r.stockUnits}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">{k.toProduce}</dt>
-                      <dd data-testid={`to-produce-${r.productId}`} className="font-bold">
-                        {r.toProduceUnits} × {r.unitLabel}
-                        <span className="block text-xs font-normal text-muted-foreground">{unitsToPieces(r.toProduceUnits, ppu)} {k.pcs}</span>
-                      </dd>
-                    </div>
-                  </dl>
+                <li key={r.productId} className="flex items-start justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-bold text-brand-ink">{r.name}</p>
+                    <p className="break-words text-xs text-muted-foreground">{r.byCafe.map((c) => `${c.cafeName} ${c.units}`).join(" · ")}</p>
+                    <dl className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <div className="flex gap-1">
+                        <dt>{k.ordered}</dt>
+                        <dd>{r.orderedUnits} × {r.unitLabel} ({unitsToPieces(r.orderedUnits, ppu)} {k.pcs})</dd>
+                      </div>
+                      <div className="flex gap-1">
+                        <dt>{k.stock}</dt>
+                        <dd>{r.stockUnits}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div data-testid={`to-produce-${r.productId}`} className="max-w-[40%] shrink-0 text-right">
+                    <p className="break-words text-brand-ink">
+                      <span className="text-[26px] font-bold leading-none tabular-nums">{r.toProduceUnits}</span>
+                      <span className="block text-xs font-semibold">× {r.unitLabel}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{unitsToPieces(r.toProduceUnits, ppu)} {k.pcs}</p>
+                  </div>
                 </li>
               );
             })}

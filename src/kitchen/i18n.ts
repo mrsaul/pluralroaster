@@ -13,6 +13,10 @@ const fr = {
   placeholder: "L'espace Cuisine arrive bientôt.",
   backToCoffee: "Retour au café",
   logout: "Se déconnecter",
+  menu: "Menu",
+  closeMenu: "Fermer le menu",
+  account: "Compte",
+  nav: "Navigation",
   notifEnable: "Activer les notifications",
   notifDisable: "Désactiver les notifications",
   cafeApp: {
@@ -70,6 +74,7 @@ const fr = {
     },
   },
   stores: {
+    title: "Commandes des cafés",
     prevRound: "Tournée précédente",
     nextRound: "Tournée suivante",
     nextRoundReset: "Prochaine",
@@ -160,7 +165,6 @@ const fr = {
     errPieces: "Les pièces par unité doivent être au moins 1.",
     errStock: "Le stock ne peut pas être négatif.",
     errMinutes: "Le temps de production ne peut pas être négatif.",
-    settingsTitle: "Réglages de la cuisine",
     roundsTitle: "Tournées de production",
     addRound: "Ajouter une tournée",
     roundName: "Nom de la tournée",
@@ -213,6 +217,10 @@ const en: KitchenStrings = {
   placeholder: "The Kitchen space is coming soon.",
   backToCoffee: "Back to coffee",
   logout: "Sign out",
+  menu: "Menu",
+  closeMenu: "Close menu",
+  account: "Account",
+  nav: "Navigation",
   notifEnable: "Turn on notifications",
   notifDisable: "Turn off notifications",
   cafeApp: {
@@ -270,6 +278,7 @@ const en: KitchenStrings = {
     },
   },
   stores: {
+    title: "Café orders",
     prevRound: "Previous round",
     nextRound: "Next round",
     nextRoundReset: "Next",
@@ -360,7 +369,6 @@ const en: KitchenStrings = {
     errPieces: "Pieces per unit must be at least 1.",
     errStock: "Stock cannot be negative.",
     errMinutes: "Production time cannot be negative.",
-    settingsTitle: "Kitchen settings",
     roundsTitle: "Production rounds",
     addRound: "Add a round",
     roundName: "Round name",

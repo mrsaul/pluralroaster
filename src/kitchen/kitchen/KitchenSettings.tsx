@@ -5,7 +5,7 @@ import { kitchenErrorMessage, useKitchenSettings, useUpdateSettings } from "../a
 import { useKitchenT } from "../i18n";
 import RoundsEditor from "./RoundsEditor";
 
-const inputCls = "h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground";
+const inputCls = "h-12 rounded-full border border-brand-line bg-card px-4 text-sm text-foreground";
 
 export default function KitchenSettings() {
   const t = useKitchenT();
@@ -33,14 +33,13 @@ export default function KitchenSettings() {
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 pb-16 pt-4">
-      <h2 className="text-lg font-semibold">{k.settingsTitle}</h2>
       <RoundsEditor />
-      <section className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-sm">{k.reminderHours}
+      <section className="flex flex-col gap-3 rounded-[26px] border border-brand-line bg-card p-4">
+        <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">{k.reminderHours}
           <input className={inputCls} type="number" inputMode="numeric" min={0} max={48} value={reminder} onChange={(e) => setReminder(e.target.value)} />
         </label>
-        {error && <p role="alert" className="text-sm font-medium text-destructive">{error}</p>}
-        <Button className="h-12" disabled={update.isPending} onClick={save}>{k.saveReminder}</Button>
+        {error && <p role="alert" className="rounded-[18px] bg-brand-coral-100 px-3 py-2 text-sm font-semibold text-brand-ink">{error}</p>}
+        <Button disabled={update.isPending} onClick={save}>{k.saveReminder}</Button>
       </section>
     </div>
   );

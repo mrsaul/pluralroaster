@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 export default {
   darkMode: ["class"],
@@ -18,6 +19,18 @@ export default {
         mono: ['"Geist Mono"', 'monospace'],
       },
       colors: {
+        brand: {
+          coral: { DEFAULT: "#F0605C", 100: "#FDE4E3" },
+          blue: { DEFAULT: "#7E9CD0", 600: "#5A7BB8" },
+          orange: { DEFAULT: "#F0951F", 200: "#F8CA88" },
+          sand: "#F1DDA9",
+          salmon: "#EFA89E",
+          green: { DEFAULT: "#509040", 600: "#3D7330" },
+          ink: { DEFAULT: "#1C1A17", 500: "#6B645B" },
+          paper: "#FBF8F1",
+          line: "#E7E1D5",
+          night: { DEFAULT: "#0F0E0C", 2: "#2A2723" },
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -98,5 +111,8 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    plugin(({ addVariant }) => addVariant("cuisine", ".theme-cuisine &")),
+  ],
 } satisfies Config;

@@ -152,6 +152,14 @@ describe("KitchenOrdersList", () => {
   });
 });
 
+describe("KitchenOrdersList long names", () => {
+  it("long names wrap instead of overflowing", () => {
+    mocks.orders = [order({ id: "l", cafeId: "c1", cafeName: "Nouveau café de la Villette – comptoir", items: [item("p1", 3)] })];
+    render(<KitchenOrdersList />);
+    expect(screen.getByTestId("order-cafe").className).toMatch(/break-words|min-w-0/);
+  });
+});
+
 describe("ProductsEditor", () => {
   it("never goes below 0 stock", () => {
     render(<ProductsEditor />);

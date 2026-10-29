@@ -59,13 +59,13 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId: fixedCafe
         </SheetHeader>
         <div className="mt-4 flex flex-col gap-4">
           {!fixedCafeId && cafes && (
-            <label className="flex flex-col gap-1 text-sm font-medium">
+            <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
               {c.urgentCafe}
               <select
                 aria-label={c.urgentCafe}
                 value={pickedCafe}
                 onChange={(e) => setPickedCafe(e.target.value)}
-                className="h-12 rounded-md border border-input bg-background px-3 text-base"
+                className="h-12 rounded-full border border-brand-line bg-card px-4 text-base"
               >
                 <option value="">{c.urgentPickCafe}</option>
                 {cafes.map((cafe) => <option key={cafe.id} value={cafe.id}>{cafe.name}</option>)}
@@ -75,7 +75,7 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId: fixedCafe
           <ul className="flex flex-col gap-2">
             {products.filter((p) => p.isVisible).map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3">
-                <span className="min-w-0 text-sm">
+                <span className="min-w-0 break-words text-sm">
                   {p.name} <span className="text-muted-foreground">· {p.unitLabel}</span>
                 </span>
                 <QuantityStepper
@@ -87,7 +87,7 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId: fixedCafe
               </li>
             ))}
           </ul>
-          <label className="flex flex-col gap-1 text-sm font-medium">
+          <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
             {c.urgentReason}
             <Textarea
               value={reason}
@@ -96,16 +96,16 @@ export default function UrgentOrderSheet({ open, onOpenChange, cafeId: fixedCafe
               rows={3}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm font-medium">
+          <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
             {c.urgentNeededByField}
             <input
               type="datetime-local"
               value={neededBy}
               onChange={(e) => setNeededBy(e.target.value)}
-              className="h-12 rounded-md border border-input bg-background px-3 text-base"
+              className="h-12 rounded-full border border-brand-line bg-card px-4 text-base"
             />
           </label>
-          <Button className="h-12" disabled={!valid || create.isPending} onClick={submit}>
+          <Button className="w-full" disabled={!valid || create.isPending} onClick={submit}>
             {c.urgentSubmit}
           </Button>
         </div>

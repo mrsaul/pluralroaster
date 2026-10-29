@@ -35,9 +35,9 @@ function validate(d: Draft, k: KitchenStrings["kitchen"]): { value: Omit<Kitchen
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="flex flex-col gap-1 text-xs text-muted-foreground">{label}{children}</label>;
+  return <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">{label}{children}</label>;
 }
-const inputCls = "h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground";
+const inputCls = "h-12 rounded-full border border-brand-line bg-card px-4 text-sm text-foreground";
 
 function ProductForm({ initial, submitLabel, testId, onSubmit, busy, resetOnSuccess }: {
   initial: Draft; submitLabel: string; testId: string; busy: boolean; resetOnSuccess?: boolean;
@@ -78,11 +78,11 @@ function ProductForm({ initial, submitLabel, testId, onSubmit, busy, resetOnSucc
         </div>
       </Field>
       {errors.length > 0 && (
-        <div role="alert" className="text-sm font-medium text-destructive">
+        <div role="alert" className="rounded-[18px] bg-brand-coral-100 px-3 py-2 text-sm font-semibold text-brand-ink">
           {errors.map((e) => <p key={e}>{e}</p>)}
         </div>
       )}
-      <Button className="h-11" disabled={busy} onClick={submit}>{submitLabel}</Button>
+      <Button disabled={busy} onClick={submit}>{submitLabel}</Button>
     </div>
   );
 }
@@ -98,9 +98,9 @@ export default function ProductsEditor() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
-      <Button variant="outline" className="mb-3 h-11 w-full" onClick={() => setAdding((a) => !a)}>{k.newProduct}</Button>
+      <Button variant="outline" className="mb-3 w-full" onClick={() => setAdding((a) => !a)}>{k.newProduct}</Button>
       {adding && (
-        <div className="mb-4 rounded-xl border border-border bg-card p-3">
+        <div className="mb-4 rounded-[26px] border border-brand-line bg-card p-4">
           <ProductForm
             testId="product-new"
             initial={toDraft({ name: "", unitLabel: "", piecesPerUnit: 1, stockUnits: 0, productionMinutes: 0, isVisible: true })}
@@ -116,9 +116,9 @@ export default function ProductsEditor() {
       )}
       <ul className="flex flex-col gap-3">
         {products.map((p) => (
-          <li key={p.id} className="rounded-xl border border-border bg-card p-3">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="font-medium">{p.name}</span>
+          <li key={p.id} className="rounded-[26px] border border-brand-line bg-card p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="min-w-0 break-words font-bold text-brand-ink">{p.name}</span>
               <label className="flex items-center gap-2 text-sm">
                 {p.isVisible ? k.visible : k.hidden}
                 <Switch

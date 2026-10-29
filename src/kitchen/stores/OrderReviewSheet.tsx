@@ -196,19 +196,19 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
           <SheetTitle>{s.sheetTitle(order.cafeName)}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 flex flex-col gap-4">
-          {lockError && <p role="alert" className="rounded-md bg-amber-50 p-3 text-sm text-amber-950">{lockError} ({s.readOnly})</p>}
+          {lockError && <p role="alert" className="rounded-[18px] bg-brand-coral-100 p-3 text-sm text-brand-ink">{lockError} ({s.readOnly})</p>}
           {order.urgentReason && <p className="text-sm text-muted-foreground">{order.urgentReason}</p>}
           <CapacityBar neededMinutes={current.neededMinutes} availableMinutes={availableMinutes} previewMinutes={order.status === "approved" ? undefined : preview.neededMinutes} />
 
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col divide-y divide-brand-line">
             {lineIds.map((id) => {
               const p = byId.get(id);
               const it = order.items.find((i) => i.productId === id);
               const v = qty[id] ?? (it ? effectiveUnits(it) : 0);
               return (
-                <li key={id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-2">
+                <li key={id} className="flex items-center justify-between gap-3 py-3">
                   <div className="min-w-0 text-sm">
-                    <p className="font-medium">
+                    <p className="min-w-0 break-words font-semibold">
                       {it?.productName ?? p?.name}
                       {p && !p.isVisible && <span className="ml-1 text-xs text-muted-foreground">({s.hidden})</span>}
                     </p>
@@ -224,17 +224,17 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
 
           {!readOnly && (
             <div>
-              <Button variant="outline" className="h-11" onClick={() => setAdding((a) => !a)}>{s.addProduct}</Button>
+              <Button variant="outline" onClick={() => setAdding((a) => !a)}>{s.addProduct}</Button>
               {adding && (
                 <ul className="mt-2 flex flex-col gap-1">
                   {addable.map((p) => (
                     <li key={p.id}>
                       <button
                         type="button"
-                        className="w-full rounded-md border border-border px-3 py-2 text-left text-sm"
+                        className="w-full break-words rounded-full bg-secondary px-4 py-3 text-left text-sm text-secondary-foreground"
                         onClick={() => { setExtra((e) => [...e, p.id]); change(p.id, 1); setAdding(false); }}
                       >
-                        {p.name}{!p.isVisible && <span className="ml-1 text-xs text-muted-foreground">({s.hidden})</span>}
+                        {p.name}{!p.isVisible && <span className="ml-1 text-xs font-normal italic text-brand-ink">({s.hidden})</span>}
                       </button>
                     </li>
                   ))}
@@ -244,30 +244,30 @@ export default function OrderReviewSheet({ order, products, availableMinutes, on
           )}
 
           {changes && (
-            <div role="status" className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
-              <p className="text-sm font-medium">{s.approvedChanges}</p>
+            <div role="status" className="flex flex-col gap-2 rounded-[26px] border border-border bg-card p-4">
+              <p className="text-sm font-semibold">{s.approvedChanges}</p>
               <ul className="text-sm">
                 {changes.map((c) => <li key={c.product_name}>{c.product_name}: {c.from} → {c.to}</li>)}
               </ul>
-              <Button className="h-12" onClick={() => void share(changes)}><Share2 className="mr-2 h-4 w-4" />{s.shareChanges}</Button>
-              <Button variant="outline" className="h-11" onClick={onClose}>{s.close}</Button>
+              <Button onClick={() => void share(changes)}><Share2 className="mr-2 h-4 w-4" />{s.shareChanges}</Button>
+              <Button variant="outline" onClick={onClose}>{s.close}</Button>
             </div>
           )}
 
           {!changes && !lockError && (
             <div className="flex flex-col gap-2">
-              {isDraft && <Button className="h-12" disabled={send.isPending} onClick={() => void doSend()}>{s.send}</Button>}
+              {isDraft && <Button disabled={send.isPending} onClick={() => void doSend()}>{s.send}</Button>}
               {order.status === "sent" && (
-                <Button className="h-12" disabled={approve.isPending} onClick={() => void doApprove()}>{s.approve}</Button>
+                <Button disabled={approve.isPending} onClick={() => void doApprove()}>{s.approve}</Button>
               )}
               {order.kind === "urgent" && order.status === "sent" && (
                 declining ? (
                   <>
                     <Textarea aria-label={s.declineNote} placeholder={s.declineNote} value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
-                    <Button variant="destructive" className="h-12" disabled={note.trim() === "" || decline.isPending} onClick={doDecline}>{s.declineConfirm}</Button>
+                    <Button variant="destructive" disabled={note.trim() === "" || decline.isPending} onClick={doDecline}>{s.declineConfirm}</Button>
                   </>
                 ) : (
-                  <Button variant="outline" className="h-12" onClick={() => setDeclining(true)}>{s.decline}</Button>
+                  <Button variant="destructive" onClick={() => setDeclining(true)}>{s.decline}</Button>
                 )
               )}
             </div>

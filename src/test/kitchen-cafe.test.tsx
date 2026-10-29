@@ -278,3 +278,35 @@ describe("UrgentOrderSheet needed-by", () => {
     expect(screen.getByRole("button", { name: "Envoyer la demande" })).toBeDisabled();
   });
 });
+
+describe("Cuisine look", () => {
+  it("cart pill floats above the tab bar", () => {
+    render(<CafeHome cafeId="c1" cafeName="A" />);
+    const bar = screen.getByTestId("cafe-cart-bar");
+    expect(bar.getAttribute("style") ?? bar.className).toMatch(/5\.25rem/);
+  });
+
+  it("declined status is ink on coral, not destructive text", () => {
+    mocks.orders = [order({ cafeId: "c1", kind: "urgent", status: "declined", declineNote: "Plus de farine", items: [item("p1", 1)] })];
+    render(<CafeOrders cafeId="c1" />);
+    const pill = screen.getByText("Refusée");
+    expect(pill.className).not.toMatch(/text-destructive/);
+    expect(pill.style.backgroundColor).toBe("rgb(240, 96, 92)");
+    expect(screen.getByText("Refusée : Plus de farine").className).not.toMatch(/text-destructive/);
+  });
+
+  it("marks the current step with a status pill", () => {
+    mocks.orders = [order({ cafeId: "c1", status: "approved", items: [item("p1", 1)] })];
+    render(<CafeOrders cafeId="c1" />);
+    const current = screen.getByRole("list", { name: "status" }).querySelector('[aria-current="step"]')!;
+    expect(current.textContent).toContain("Approuvée");
+    expect((current.querySelector("span") as HTMLElement).style.backgroundColor).toBe("rgb(126, 156, 208)");
+  });
+
+  it("hidden lines show an orange pill", () => {
+    const hiddenLine = { ...item("p1", 1), productId: "p4", productName: "Secret scone", piecesPerUnit: 10, units: 3 };
+    mocks.orders = [order({ id: "oh", cafeId: "c1", status: "draft", items: [hiddenLine] })];
+    render(<CafeHome cafeId="c1" cafeName="A" />);
+    expect(screen.getByText("Plus disponible").style.backgroundColor).toBe("rgb(240, 149, 31)");
+  });
+});
