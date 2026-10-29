@@ -124,12 +124,12 @@ export function SwipeableCartRow({
         aria-hidden
         className={cn(
           "absolute inset-y-0 left-0 flex flex-col items-center justify-center gap-0.5",
-          "w-[76px] bg-orange-500 cursor-pointer select-none",
+          "w-[76px] bg-brand-orange cursor-pointer select-none",
         )}
         onClick={isSnappedEdit ? openEdit : undefined}
       >
-        <Pencil className="w-5 h-5 text-white" />
-        <span className="text-[11px] font-semibold text-white">Modifier</span>
+        <Pencil className="w-5 h-5 text-brand-ink" />
+        <span className="text-[11px] font-semibold text-brand-ink">Modifier</span>
       </div>
 
       {/* ── Remove action (right, revealed by swipe-left) ── */}
@@ -137,12 +137,12 @@ export function SwipeableCartRow({
         aria-hidden
         className={cn(
           "absolute inset-y-0 right-0 flex flex-col items-center justify-center gap-0.5",
-          "w-[76px] bg-red-500 cursor-pointer select-none",
+          "w-[76px] bg-brand-coral cursor-pointer select-none",
         )}
         onClick={isSnappedRemove ? onRemove : undefined}
       >
-        <Trash2 className="w-5 h-5 text-white" />
-        <span className="text-[11px] font-semibold text-white">Retirer</span>
+        <Trash2 className="w-5 h-5 text-brand-ink" />
+        <span className="text-[11px] font-semibold text-brand-ink">Retirer</span>
       </div>
 
       {/* ── Foreground row ── */}
@@ -186,7 +186,7 @@ export function SwipeableCartRow({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); openEdit(); }}
-                className="p-1.5 rounded-lg text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors"
+                className="p-1.5 rounded-lg text-brand-orange-700 hover:bg-brand-sand-100 dark:hover:bg-orange-950/30 transition-colors"
                 title="Modifier"
               >
                 <Pencil className="w-3.5 h-3.5" />
@@ -194,7 +194,7 @@ export function SwipeableCartRow({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onRemove(); }}
-                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                className="p-1.5 rounded-lg text-brand-red-700 hover:bg-brand-coral-100 dark:hover:bg-red-950/30 transition-colors"
                 title="Retirer"
               >
                 <Trash2 className="w-3.5 h-3.5" />

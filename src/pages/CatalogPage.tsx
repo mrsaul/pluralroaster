@@ -70,10 +70,10 @@ const ROAST_GRADIENT: Record<string, string> = {
 };
 
 const ROAST_TEXT: Record<string, string> = {
-  light:    "text-amber-800",
-  medium:   "text-amber-900",
-  dark:     "text-amber-100",
-  espresso: "text-stone-100",
+  light:    "text-brand-ink",
+  medium:   "text-brand-ink",
+  dark:     "text-brand-paper",
+  espresso: "text-brand-paper",
 };
 
 const ROAST_OPTIONS = ["light", "medium", "dark", "espresso"] as const;
@@ -616,7 +616,7 @@ export default function CatalogPage({
 
         {/* Offline banner */}
         {isOfflineCache && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 mb-2">
+          <div className="rounded-xl border border-brand-sand bg-brand-sand-100 px-3 py-2.5 flex items-center gap-2 text-sm text-brand-orange-700 dark:text-amber-400 mb-2">
             <span className="shrink-0">📶</span>
             <span>Catalogue hors-ligne — données mises en cache. Connectez-vous pour voir les dernières mises à jour.</span>
           </div>

@@ -287,13 +287,13 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
             <DialogTitle className="flex items-center gap-2">
               {displayName}
               {dirty && (
-                <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-amber-400 text-amber-600 bg-amber-50">
+                <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-brand-sand text-brand-orange-700 bg-brand-sand-100">
                   <CloudOff className="h-3 w-3" />
                   Modifications non enregistrées
                 </Badge>
               )}
               {!dirty && draftSavedAt && (
-                <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-green-400 text-green-600 bg-green-50">
+                <Badge variant="outline" className="ml-2 gap-1 text-[11px] border-brand-green/40 text-brand-green-600 bg-brand-green-100">
                   <Save className="h-3 w-3" />
                   Tout est enregistré
                 </Badge>
@@ -568,7 +568,7 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-brand-orange-700" />
               Modifications non enregistrées
             </AlertDialogTitle>
             <AlertDialogDescription>

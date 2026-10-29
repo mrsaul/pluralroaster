@@ -353,9 +353,9 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                     const isExpanded = expandedOrderId === order.id;
                     const orderRef = `#${order.id.slice(0, 8).toUpperCase()}`;
                     const statusColor =
-                      order.status === "confirmed" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                      order.status === "received" ? "bg-green-100 text-green-700 border-green-200" :
-                      order.status === "cancelled" ? "bg-red-100 text-red-700 border-red-200" :
+                      order.status === "confirmed" ? "bg-brand-blue-100 text-brand-blue-700 border-brand-blue" :
+                      order.status === "received" ? "bg-brand-green-100 text-brand-green-600 border-brand-green/40" :
+                      order.status === "cancelled" ? "bg-brand-coral-100 text-brand-red-700 border-brand-coral" :
                       "bg-muted text-muted-foreground border-border";
                     return (
                       <div key={order.id} className="rounded-lg border border-border overflow-hidden">

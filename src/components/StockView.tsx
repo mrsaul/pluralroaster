@@ -74,7 +74,7 @@ function HistoryEntry({ row }: { row: StockHistoryRow }) {
           <span className={cn(
             "text-sm font-semibold tabular-nums",
             positive
-              ? "text-green-600 dark:text-green-400"
+              ? "text-brand-green-600 dark:text-green-400"
               : row.delta_kg < 0
                 ? "text-destructive"
                 : "text-muted-foreground"
@@ -86,7 +86,7 @@ function HistoryEntry({ row }: { row: StockHistoryRow }) {
             className={cn(
               "text-[10px]",
               row.change_type === "order_delivered"
-                ? "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400"
+                ? "bg-brand-blue-100 text-brand-blue-700 border-brand-blue dark:bg-blue-950/30 dark:text-blue-400"
                 : ""
             )}
           >
@@ -294,7 +294,7 @@ export function StockView() {
                 {" · "}
                 <button
                   onClick={() => setFilter(f => f === "low" ? "all" : "low")}
-                  className="font-medium text-amber-600 hover:underline transition-colors"
+                  className="font-medium text-brand-orange-700 hover:underline transition-colors"
                 >
                   {lowCount} low stock
                 </button>
@@ -383,14 +383,14 @@ export function StockView() {
                       key={item.product_id}
                       className={cn(
                         "hover:bg-muted/30",
-                        item.is_low && "bg-amber-50/40 dark:bg-amber-950/10"
+                        item.is_low && "bg-brand-sand-100 dark:bg-amber-950/10"
                       )}
                     >
                       {/* Coffee reference — no truncation, wraps naturally */}
                       <TableCell className="font-medium text-foreground">
                         <div className="flex items-center gap-2">
                           {item.is_low && (
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-brand-orange-700 shrink-0" />
                           )}
                           {item.product_name}
                         </div>
@@ -404,7 +404,7 @@ export function StockView() {
                           <span className={cn(
                             "text-lg font-semibold tabular-nums",
                             item.is_low
-                              ? "text-amber-600 dark:text-amber-400"
+                              ? "text-brand-orange-700 dark:text-amber-400"
                               : "text-foreground"
                           )}>
                             {item.quantity_kg!.toFixed(2)}
@@ -422,21 +422,21 @@ export function StockView() {
                         {isUntracked ? (
                           <Badge
                             variant="secondary"
-                            className="text-[10px] bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400"
+                            className="text-[10px] bg-brand-sand-100 text-brand-orange-700 border-brand-sand dark:bg-amber-950/30 dark:text-amber-400"
                           >
                             Non suivi
                           </Badge>
                         ) : item.is_low ? (
                           <Badge
                             variant="secondary"
-                            className="text-[10px] bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400"
+                            className="text-[10px] bg-brand-sand-100 text-brand-orange-700 border-brand-sand dark:bg-amber-950/30 dark:text-amber-400"
                           >
                             Stock bas
                           </Badge>
                         ) : (
                           <Badge
                             variant="secondary"
-                            className="text-[10px] bg-green-100 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400"
+                            className="text-[10px] bg-brand-green-100 text-brand-green-600 border-brand-green/40 dark:bg-green-950/30 dark:text-green-400"
                           >
                             En stock
                           </Badge>

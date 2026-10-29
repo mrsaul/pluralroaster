@@ -28,29 +28,29 @@ export function frenchStatus(status: string): string {
 
 export function statusColor(status: string): string {
   if (status === "received" || status === "pending") {
-    return "bg-yellow-100 text-yellow-800";
+    return "bg-brand-sand-100 text-brand-orange-700";
   }
   if (status === "confirmed" || status === "approved") {
-    return "bg-blue-100 text-blue-800";
+    return "bg-brand-blue-100 text-brand-blue-700";
   }
   if (
     status === "in_production" ||
     status === "packaging" ||
     status === "ready_for_packaging"
   ) {
-    return "bg-orange-100 text-orange-800";
+    return "bg-brand-sand-100 text-brand-orange-700";
   }
   if (status === "ready_for_delivery" || status === "shipped") {
-    return "bg-purple-100 text-purple-800";
+    return "bg-brand-salmon-100 text-brand-ink";
   }
   if (
     status === "delivered" ||
     status === "fulfilled" ||
     status === "synced"
   ) {
-    return "bg-green-100 text-green-800";
+    return "bg-brand-green-100 text-brand-green-600";
   }
-  return "bg-gray-100 text-gray-700";
+  return "bg-secondary text-brand-ink";
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────

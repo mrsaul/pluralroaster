@@ -73,9 +73,9 @@ const GRIND_ICON: Record<string, React.ReactNode> = {
 
 function getSizeChipClass(label: string | null, sizeKg: number | null): string {
   const kg = sizeKg ?? (label === "1000g" || label === "Standard" ? 1 : label === "250g" ? 0.25 : null);
-  if (kg === 0.25) return "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300";
-  if (kg === 1) return "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300";
-  return "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300";
+  if (kg === 0.25) return "bg-brand-green-100 border-brand-green/40 text-brand-green-600 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300";
+  if (kg === 1) return "bg-brand-blue-100 border-brand-blue text-brand-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300";
+  return "bg-brand-sand-100 border-brand-sand text-brand-orange-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300";
 }
 
 function getPackagingState(order: PackagingOrder, packedLineIds: Set<string>): PackagingState {
@@ -93,9 +93,9 @@ const STATE_LABEL: Record<PackagingState, string> = {
 };
 
 const STATE_CLASS: Record<PackagingState, string> = {
-  todo: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300",
-  in_progress: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300",
-  ready: "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300",
+  todo: "bg-brand-sand-100 border-brand-sand text-brand-orange-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300",
+  in_progress: "bg-brand-blue-100 border-brand-blue text-brand-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300",
+  ready: "bg-brand-green-100 border-brand-green/40 text-brand-green-600 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300",
 };
 
 function formatDayLabel(dateStr: string): string {
@@ -158,7 +158,7 @@ function LineRow({
         aria-label={isPacked ? "Marquer comme non conditionné" : "Marquer comme conditionné"}
       >
         {isPacked
-          ? <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+          ? <CheckCircle2 className="w-6 h-6 text-brand-green-600" />
           : <div className="w-6 h-6 rounded-full border-2 border-border" />}
       </button>
 
@@ -197,7 +197,7 @@ function LineRow({
             </span>
           )}
           {missingVariant && (
-            <span className="inline-flex items-center gap-1 rounded border border-dashed border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:border-amber-700 dark:text-amber-400">
+            <span className="inline-flex items-center gap-1 rounded border border-dashed border-brand-sand bg-brand-sand-100 px-2 py-0.5 text-xs font-medium text-brand-orange-700 dark:bg-amber-950 dark:border-amber-700 dark:text-amber-400">
               <AlertTriangle className="w-3 h-3" />
               Variante Sellsy non liée
             </span>
@@ -243,8 +243,8 @@ function OrderCard({
 
   const borderClass = cn(
     "bg-card border rounded-xl overflow-hidden transition-all",
-    state === "ready" && "border-emerald-200 dark:border-emerald-800 opacity-75",
-    state === "in_progress" && "border-blue-200 dark:border-blue-800",
+    state === "ready" && "border-brand-green/40 dark:border-emerald-800 opacity-75",
+    state === "in_progress" && "border-brand-blue dark:border-blue-800",
     state === "todo" && priority === "urgent" && "border-destructive/40",
     state === "todo" && priority !== "urgent" && "border-border",
   );
@@ -340,9 +340,9 @@ function OrderCard({
 
           {/* Notes */}
           {order.notes && (
-            <div className="mx-4 mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 dark:bg-amber-950 dark:border-amber-800">
-              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Note</p>
-              <p className="text-sm text-amber-800 dark:text-amber-300">{order.notes}</p>
+            <div className="mx-4 mb-4 rounded-lg bg-brand-sand-100 border border-brand-sand p-3 dark:bg-amber-950 dark:border-amber-800">
+              <p className="text-xs font-semibold text-brand-orange-700 dark:text-amber-400 mb-1">Note</p>
+              <p className="text-sm text-brand-orange-700 dark:text-amber-300">{order.notes}</p>
             </div>
           )}
 
@@ -355,7 +355,7 @@ function OrderCard({
                 disabled={!canMarkReady}
                 className={cn(
                   "w-full gap-2 h-12 text-base font-semibold",
-                  canMarkReady && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                  canMarkReady && "bg-brand-green-600 hover:bg-brand-green-600/90 text-brand-paper",
                 )}
                 title={!canMarkReady ? "Cochez toutes les lignes pour marquer comme prêt" : undefined}
               >
@@ -427,7 +427,7 @@ function DaySection({
             className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
           >
             {showDone ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+            <CheckCircle2 className="w-3 h-3 text-brand-green-600" />
             {doneOrders.length} commande{doneOrders.length !== 1 ? "s" : ""} prête{doneOrders.length !== 1 ? "s" : ""}
           </button>
           {showDone && doneOrders.map(order => (
@@ -542,7 +542,7 @@ function BatchView({ orders, packedLineIds, onToggleLine }: {
                     className="flex-shrink-0 w-10 h-10 -m-1 flex items-center justify-center rounded-lg hover:bg-muted/40 transition-colors"
                   >
                     {packedLineIds.has(item.id)
-                      ? <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      ? <CheckCircle2 className="w-5 h-5 text-brand-green-600" />
                       : <div className="w-5 h-5 rounded-full border-2 border-border" />}
                   </button>
                   <span className={cn(
@@ -644,7 +644,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
           <p className="text-xs text-muted-foreground mb-1.5">Prêtes</p>
-          <p className="text-2xl font-bold tabular-nums text-emerald-600">{readyCount}</p>
+          <p className="text-2xl font-bold tabular-nums text-brand-green-600">{readyCount}</p>
         </div>
       </div>
 

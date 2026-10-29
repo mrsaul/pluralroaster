@@ -71,8 +71,8 @@ export default function OrderReceiptPage() {
 
   if (missing) {
     return (
-      <div className="min-h-screen bg-[#FAF6F0] flex items-center justify-center">
-        <p className="text-sm text-[#9E9E93]">
+      <div className="min-h-screen bg-brand-paper flex items-center justify-center">
+        <p className="text-sm text-brand-ink-500">
           Commande introuvable. Veuillez revenir depuis l'application.
         </p>
       </div>

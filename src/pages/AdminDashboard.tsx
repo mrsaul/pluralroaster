@@ -1395,10 +1395,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">{receivedCount}</span>
                   )}
                   {activeSection === "roaster" && roasterBadge > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-orange-500 text-white text-[10px] font-bold px-1">{roasterBadge}</span>
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand-orange text-brand-ink text-[10px] font-bold px-1">{roasterBadge}</span>
                   )}
                   {activeSection === "packaging" && packagingBadge > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-white text-[10px] font-bold px-1">{packagingBadge}</span>
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand-blue text-brand-ink text-[10px] font-bold px-1">{packagingBadge}</span>
                   )}
                 </div>
               </div>
@@ -1650,7 +1650,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 <span className="flex items-center gap-1.5">
                                   {order.id.slice(0, 8)}
                                   {newOrderIds.has(order.id) && (
-                                    <span className="inline-flex items-center rounded-full bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
+                                    <span className="inline-flex items-center rounded-full bg-brand-green/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-green-600 dark:text-green-400">
                                       Nouveau
                                     </span>
                                   )}
@@ -1658,7 +1658,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                     const deliveryItem = order.items.find((i) => i.kind === 'service');
                                     const hasZeroDelivery = deliveryItem != null && Number(deliveryItem.price_per_kg) === 0;
                                     return hasZeroDelivery ? (
-                                      <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                      <span className="text-xs text-brand-orange-700 bg-brand-sand-100 border border-brand-sand rounded px-1.5 py-0.5">
                                         ⚠ Livraison 0 €
                                       </span>
                                     ) : null;
@@ -1731,7 +1731,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   <button
                                     type="button"
                                     title="Supprimer la commande"
-                                    className="p-1.5 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                    className="p-1.5 rounded-md text-muted-foreground hover:text-brand-red-700 hover:bg-brand-coral-100 dark:hover:bg-red-950/30 transition-colors"
                                     onClick={() => setOrderToDelete(order)}
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1775,7 +1775,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       {packagingSheetUrl && (
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-green-600 hover:text-green-700" asChild>
+                        <Button variant="ghost" size="sm" className="gap-1.5 text-brand-green-600 hover:text-brand-green-600" asChild>
                           <a href={packagingSheetUrl} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="w-3.5 h-3.5" />
                             Ouvrir la feuille
@@ -1813,7 +1813,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         )}
                       </div>
                       {parsePackagingSheetId(packagingSheetIdInput) && (
-                        <p className="text-xs text-green-600 mt-1.5">✓ Sheet ID detected: {parsePackagingSheetId(packagingSheetIdInput)}</p>
+                        <p className="text-xs text-brand-green-600 mt-1.5">✓ Sheet ID detected: {parsePackagingSheetId(packagingSheetIdInput)}</p>
                       )}
                     </div>
                   )}
@@ -1871,7 +1871,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowAddClient(true)}>
                         <Plus className="h-4 w-4" /> Add New Client
                       </Button>
-                      <Button size="sm" className="gap-2 bg-amber-600 opacity-95" onClick={() => void runClientSync()} disabled={runningClientSync}>
+                      <Button size="sm" className="gap-2 bg-brand-orange text-brand-ink hover:bg-brand-orange opacity-95" onClick={() => void runClientSync()} disabled={runningClientSync}>
                         <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
                         {runningClientSync ? "synchronisation…" : "Synchroniser les clients depuis Sellsy"}
                       </Button>
@@ -1932,26 +1932,26 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   });
                   if (duplicatePairs.length === 0) return null;
                   return (
-                    <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
+                    <div className="mb-4 rounded-lg border border-brand-sand bg-brand-sand-100 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                        <AlertTriangle className="h-4 w-4 text-brand-orange-700 shrink-0" />
+                        <p className="text-sm font-medium text-brand-orange-700 dark:text-amber-300">
                           {duplicatePairs.length} compte{duplicatePairs.length > 1 ? "s" : ""} en double détecté{duplicatePairs.length > 1 ? "s" : ""}
                         </p>
                       </div>
                       <div className="space-y-2">
                         {duplicatePairs.map(({ keep, drop }) => (
-                          <div key={`${keep.id}::${drop.id}`} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-white dark:bg-card p-3">
+                          <div key={`${keep.id}::${drop.id}`} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-brand-sand dark:border-amber-800/50 bg-white dark:bg-card p-3">
                             <div className="flex-1 min-w-0 text-sm">
                               <span className="font-semibold text-foreground">{drop.company_name}</span>
                               <span className="text-muted-foreground"> ({drop.email}) → </span>
                               <span className="font-semibold text-foreground">{keep.company_name}</span>
-                              {keep.sellsy_client_id && <span className="ml-1 text-xs text-green-600 font-mono">Sellsy #{keep.sellsy_client_id}</span>}
+                              {keep.sellsy_client_id && <span className="ml-1 text-xs text-brand-green-600 font-mono">Sellsy #{keep.sellsy_client_id}</span>}
                             </div>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="gap-1.5 shrink-0 border-amber-400 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                              className="gap-1.5 shrink-0 border-brand-sand text-brand-orange-700 hover:bg-brand-sand-100 dark:text-amber-300 dark:hover:bg-amber-900/30"
                               disabled={mergingClientId === drop.id}
                               onClick={() => void mergeClient(keep.id, drop.id)}
                             >

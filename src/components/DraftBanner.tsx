@@ -28,10 +28,10 @@ export function DraftBanner({ savedAt, onDiscard }: DraftBannerProps) {
   })();
 
   return (
-    <Alert className="flex items-center justify-between gap-3 py-2.5 px-3 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+    <Alert className="flex items-center justify-between gap-3 py-2.5 px-3 border-brand-sand bg-brand-sand-100 dark:border-amber-800 dark:bg-amber-950/30">
       <div className="flex items-center gap-2 min-w-0">
-        <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-        <AlertDescription className="text-xs text-amber-800 dark:text-amber-300 leading-none">
+        <Clock className="h-3.5 w-3.5 text-brand-orange-700 dark:text-amber-400 shrink-0" />
+        <AlertDescription className="text-xs text-brand-orange-700 dark:text-amber-300 leading-none">
           Brouillon enregistré le {formattedDate}.
         </AlertDescription>
       </div>
@@ -40,7 +40,7 @@ export function DraftBanner({ savedAt, onDiscard }: DraftBannerProps) {
         variant="ghost"
         size="sm"
         onClick={onDiscard}
-        className="h-auto py-1 px-2 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100 dark:text-amber-400 dark:hover:text-amber-200 dark:hover:bg-amber-900/50 shrink-0"
+        className="h-auto py-1 px-2 text-xs text-brand-orange-700 hover:text-brand-orange-700 hover:bg-brand-sand-100 dark:text-amber-400 dark:hover:text-amber-200 dark:hover:bg-amber-900/50 shrink-0"
       >
         Supprimer
       </Button>
