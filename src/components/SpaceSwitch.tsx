@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useT } from "@/i18n";
 import { canSwitchSpaces, type AppRole, type KitchenAccess, type Space } from "@/lib/landing";
 
@@ -29,6 +30,21 @@ export function SpaceSwitch({ current, onChange }: { current: Space; onChange: (
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Own row at the top of the page for the Coffee/Cuisine switch, in normal flow,
+ * so it never floats over a page header's buttons. Clears the iPhone status bar.
+ */
+export function SpaceSwitchBar({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-testid="space-switch-bar"
+      className="flex justify-end bg-background px-3 pb-1 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]"
+    >
+      {children}
     </div>
   );
 }

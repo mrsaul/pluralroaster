@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { renderSpaceSwitchIfAllowed } from "@/components/SpaceSwitch";
+import { renderSpaceSwitchIfAllowed, SpaceSwitchBar } from "@/components/SpaceSwitch";
 import type { KitchenAccess } from "@/lib/landing";
 
 const noop = () => {};
@@ -30,5 +30,19 @@ describe("renderSpaceSwitchIfAllowed", () => {
     render(<>{renderSpaceSwitchIfAllowed("user", storesMgr, "coffee", onChange)}</>);
     fireEvent.click(screen.getByText("Cuisine"));
     expect(onChange).toHaveBeenCalledWith("kitchen");
+  });
+});
+
+describe("SpaceSwitchBar", () => {
+  it("puts the switch in its own row in the page flow, never floating over headers", () => {
+    render(<SpaceSwitchBar>{renderSpaceSwitchIfAllowed("user", storesMgr, "coffee", noop)}</SpaceSwitchBar>);
+    const bar = screen.getByTestId("space-switch-bar");
+    expect(bar.className).not.toMatch(/\b(fixed|absolute|sticky)\b/);
+    expect(bar).toContainElement(screen.getByRole("group"));
+  });
+
+  it("clears the iPhone status bar", () => {
+    render(<SpaceSwitchBar><span>x</span></SpaceSwitchBar>);
+    expect(screen.getByTestId("space-switch-bar").className).toContain("pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]");
   });
 });

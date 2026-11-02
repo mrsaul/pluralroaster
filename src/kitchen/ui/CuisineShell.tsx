@@ -70,7 +70,7 @@ export default function CuisineShell({
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen bg-background text-foreground">
         <div ref={backgroundRef} data-testid="cuisine-background">
-          <LargeTitle title={title} actions={topActions} reserveTopRight={!!onSwitchToCoffee} />
+          <LargeTitle title={title} actions={topActions} />
           <motion.div
             key={activeTab ?? "single"}
             data-testid="cuisine-content"
