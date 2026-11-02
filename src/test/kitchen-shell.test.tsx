@@ -125,13 +125,8 @@ describe("CuisineShell", () => {
     expect(onSwitchToCoffee).toHaveBeenCalled();
   });
 
-  it("pushes the large title below the Coffee/Cuisine switch when switching is allowed", () => {
+  it("keeps the large title at the top whether or not switching is allowed (the switch has its own row above)", () => {
     renderShell({ onSwitchToCoffee: vi.fn() });
-    expect(screen.getByTestId("large-title").className).toContain("pt-[calc(env(safe-area-inset-top)+56px)]");
-  });
-
-  it("keeps the title at the top when there is no switch", () => {
-    renderShell();
     expect(screen.getByTestId("large-title").className).toContain("pt-[calc(env(safe-area-inset-top)+12px)]");
   });
 

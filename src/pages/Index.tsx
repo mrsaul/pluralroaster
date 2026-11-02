@@ -6,7 +6,7 @@ import {
   resolveLanding, canSwitchSpaces, loadLastSpace, saveLastSpace, toKitchenAccess, showsSpaceSwitch,
   type AppRole, type KitchenAccess, type Space,
 } from "@/lib/landing";
-import { renderSpaceSwitchIfAllowed } from "@/components/SpaceSwitch";
+import { renderSpaceSwitchIfAllowed, SpaceSwitchBar } from "@/components/SpaceSwitch";
 
 const LoginPage = lazy(() => import("./LoginPage"));
 const CatalogPage = lazy(() => import("./CatalogPage"));
@@ -604,13 +604,8 @@ const Index = () => {
     if (!spaceSwitch) return page;
     return (
       <>
+        <SpaceSwitchBar>{spaceSwitch}</SpaceSwitchBar>
         {page}
-        <div
-          className="fixed right-3 z-[60]"
-          style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)" }}
-        >
-          {spaceSwitch}
-        </div>
       </>
     );
   };
