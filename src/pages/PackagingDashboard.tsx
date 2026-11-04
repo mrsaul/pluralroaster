@@ -20,7 +20,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, user_id, company_id, client_name, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
+          id, user_id, company_id, client_name, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled, notes,
           order_items ( product_name, product_sku, quantity, price_per_kg, size_label, size_kg ),
           companies ( name )
         `)
@@ -76,6 +76,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
             is_roasted: Boolean(o.is_roasted),
             is_packed: Boolean(o.is_packed),
             is_labeled: Boolean(o.is_labeled),
+            notes: o.notes ?? null,
             items: (o.order_items ?? []).map((i: any) => ({
               product_name: i.product_name,
               product_sku: i.product_sku ?? null,

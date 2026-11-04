@@ -17,7 +17,7 @@ import {
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
    Menu, User, Settings, Warehouse, ExternalLink,
-   GitMerge, AlertTriangle, Pencil, BarChart2, TrendingUp,
+   GitMerge, AlertTriangle, Pencil, BarChart2, TrendingUp, MessageSquare,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -1576,6 +1576,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               {format(parseISO(order.delivery_date), "d MMM", { locale: fr })}
                             </span>
                           </div>
+                          {order.notes && (
+                            <p className="mt-2 flex items-start gap-1.5 text-xs text-brand-orange-700 dark:text-amber-300">
+                              <MessageSquare className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                              <span className="line-clamp-2 whitespace-pre-line">{order.notes}</span>
+                            </p>
+                          )}
                           {order.status === "received" && (
                             <div className="mt-3 pt-3 border-t border-border">
                               <Button
@@ -1666,7 +1672,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 </span>
                               </TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "d MMM, HH:mm", { locale: fr })}</TableCell>
-                              <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || (order.user_id ? order.user_id.slice(0, 8) + "…" : "—")}</TableCell>
+                              <TableCell className="text-foreground text-sm">
+                                <span className="flex items-center gap-1.5">
+                                  {order.client_name || order.user_email || (order.user_id ? order.user_id.slice(0, 8) + "…" : "—")}
+                                  {order.notes && (
+                                    <span title={order.notes} className="text-brand-orange-700 dark:text-amber-300">
+                                      <MessageSquare className="w-3.5 h-3.5" aria-label="Note du client" />
+                                    </span>
+                                  )}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-muted-foreground">
                                 {order.items.length > 0
                                   ? order.items.map((i) => `${i.product_name} ×${i.quantity}`).join(", ").slice(0, 40) + (order.items.length > 2 ? "…" : "")
@@ -2290,6 +2305,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               </div>
 
+              {selectedOrder.notes && (
+                <div className="rounded-lg border border-brand-sand bg-brand-sand-100 p-3 dark:bg-amber-950 dark:border-amber-800">
+                  <p className="text-xs font-semibold text-brand-orange-700 dark:text-amber-400 mb-1">Note du client</p>
+                  <p className="text-sm text-brand-orange-700 dark:text-amber-300 whitespace-pre-line">{selectedOrder.notes}</p>
+                </div>
+              )}
+
               {/* Checklist */}
               <div className="rounded-lg bg-muted/40 p-3 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Checklist de préparation</p>
@@ -2578,6 +2600,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </Select>
                   </div>
                 </div>
+
+                {selectedOrder.notes && (
+                  <div className="rounded-lg border border-brand-sand bg-brand-sand-100 p-3 dark:bg-amber-950 dark:border-amber-800">
+                    <p className="text-xs font-semibold text-brand-orange-700 dark:text-amber-400 mb-1">Note du client</p>
+                    <p className="text-sm text-brand-orange-700 dark:text-amber-300 whitespace-pre-line">{selectedOrder.notes}</p>
+                  </div>
+                )}
 
                 {/* Checklist */}
                 <div className="rounded-lg bg-muted/40 p-3 space-y-2">

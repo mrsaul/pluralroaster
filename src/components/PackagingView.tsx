@@ -308,6 +308,13 @@ function OrderCard({
           </div>
         </div>
 
+        {order.notes && (
+          <div className="mt-3 rounded-lg bg-brand-sand-100 border border-brand-sand p-3 dark:bg-amber-950 dark:border-amber-800">
+            <p className="text-xs font-semibold text-brand-orange-700 dark:text-amber-400 mb-1">Note du client</p>
+            <p className="text-sm text-brand-orange-700 dark:text-amber-300 whitespace-pre-line">{order.notes}</p>
+          </div>
+        )}
+
         {/* Primary action button — visible in header when collapsed */}
         {!expanded && state !== "ready" && (
           <Button
@@ -337,14 +344,6 @@ function OrderCard({
             ))}
           </div>
 
-
-          {/* Notes */}
-          {order.notes && (
-            <div className="mx-4 mb-4 rounded-lg bg-brand-sand-100 border border-brand-sand p-3 dark:bg-amber-950 dark:border-amber-800">
-              <p className="text-xs font-semibold text-brand-orange-700 dark:text-amber-400 mb-1">Note</p>
-              <p className="text-sm text-brand-orange-700 dark:text-amber-300">{order.notes}</p>
-            </div>
-          )}
 
           {/* Primary action */}
           <div className="px-4 pb-4">
