@@ -72,6 +72,8 @@ export default function OrderHistoryPage({
         deliveryDate: draftDeliveryDate ?? new Date().toISOString(),
         status: "pending",
         createdAt: new Date().toISOString(),
+        discountPercent: 0,
+        delivery: null,
       }
     : null;
 

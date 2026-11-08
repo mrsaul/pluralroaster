@@ -54,6 +54,10 @@ export interface Order {
   notes?: string | null;
   reorderedFrom?: string | null;
   deliveryAddressId?: string | null;
+  /** Tier discount applied to coffee (0 when none). */
+  discountPercent: number;
+  /** Stored delivery service row; null for legacy orders without one. */
+  delivery: { fullPriceHT: number; discountPercent: number } | null;
 }
 
 export const MOCK_PRODUCTS: Product[] = [
@@ -80,6 +84,8 @@ export const MOCK_ORDERS: Order[] = [
     status: "synced",
     sellsyId: "SY-29481",
     createdAt: "2026-03-14",
+    discountPercent: 0,
+    delivery: null,
   },
   {
     id: "ORD-002",
@@ -92,6 +98,8 @@ export const MOCK_ORDERS: Order[] = [
     status: "fulfilled",
     sellsyId: "SY-29455",
     createdAt: "2026-03-10",
+    discountPercent: 0,
+    delivery: null,
   },
 ];
 

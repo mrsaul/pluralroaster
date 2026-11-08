@@ -22,6 +22,7 @@ const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
 const KitchenApp = lazy(() => import("@/kitchen/KitchenApp"));
 import { supabase } from "@/integrations/supabase/client";
 import { computeOrderBreakdown, cartToCoffeeLines } from "@/lib/pricing";
+import { mapPersistedOrder, type PersistedOrderRow } from "@/lib/persistedOrder";
 import { OTP_FLOW_KEY } from "./LoginPage";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -91,69 +92,6 @@ function loadDraftDate(): string | null {
 
 // ── Data types ────────────────────────────────────────────────────────────────
 
-type PersistedOrderRow = {
-  id: string;
-  delivery_date: string;
-  total_kg: number;
-  total_price: number;
-  status: Order["status"];
-  sellsy_id: string | null;
-  created_at: string;
-  notes: string | null;
-  reordered_from: string | null;
-  delivery_address_id: string | null;
-  order_items: {
-    quantity: number;
-    price_per_kg: number;
-    product_name: string;
-    product_sku: string | null;
-    product_id: string;
-    products: {
-      id: string;
-      name: string;
-      origin: string | null;
-      sku: string | null;
-      price_per_kg: number;
-      roast_level: string | null;
-      is_active: boolean;
-      sellsy_tax_rate: number | null;
-    } | null;
-  }[];
-};
-
-const normalizeRoastLevel = (roastLevel: string | null): Product["roastLevel"] => {
-  if (roastLevel === "light" || roastLevel === "medium" || roastLevel === "dark" || roastLevel === "espresso") {
-    return roastLevel;
-  }
-
-  return "medium";
-};
-
-const mapPersistedOrder = (order: PersistedOrderRow): Order => ({
-  id: order.id,
-  deliveryDate: order.delivery_date,
-  totalKg: Number(order.total_kg),
-  totalPrice: Number(order.total_price),
-  status: order.status,
-  sellsyId: order.sellsy_id ?? undefined,
-  createdAt: order.created_at,
-  notes: order.notes ?? null,
-  reorderedFrom: order.reordered_from ?? null,
-  deliveryAddressId: order.delivery_address_id ?? null,
-  items: (order.order_items ?? []).map((item) => ({
-    quantity: Number(item.quantity),
-    product: {
-      id: item.products?.id ?? item.product_id,
-      name: item.products?.name ?? item.product_name,
-      origin: item.products?.origin ?? null,
-      sku: item.products?.sku ?? item.product_sku ?? item.product_id,
-      pricePerKg: Number(item.products?.price_per_kg ?? item.price_per_kg),
-      roastLevel: normalizeRoastLevel(item.products?.roast_level ?? null),
-      available: item.products?.is_active ?? true,
-      vatRate: item.products?.sellsy_tax_rate ?? undefined,
-    },
-  })),
-});
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -209,7 +147,11 @@ const Index = () => {
         notes,
         reordered_from,
         delivery_address_id,
+        discount_percent,
         order_items (
+          kind,
+          list_price,
+          line_discount_percent,
           quantity,
           price_per_kg,
           product_name,

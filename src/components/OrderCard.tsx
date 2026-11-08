@@ -7,6 +7,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Order } from "@/lib/store";
+import { PriceBreakdown } from "@/components/PriceBreakdown";
+import { orderToBreakdown } from "@/lib/pricing";
 
 // ── Status timeline ───────────────────────────────────────────────────────────
 
@@ -178,13 +180,8 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                 </div>
               </div>
 
-              {/* Total */}
-              <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
-                <span className="text-muted-foreground">{order.totalKg.toFixed(0)} kg total</span>
-                <span className="font-semibold tabular-nums text-foreground">
-                  €{order.totalPrice.toFixed(2)}
-                </span>
-              </div>
+              {/* Price breakdown */}
+              <PriceBreakdown breakdown={orderToBreakdown(order)} />
 
               {/* Reorder button */}
               <div className="flex justify-center pt-1">
