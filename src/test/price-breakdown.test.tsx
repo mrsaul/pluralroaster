@@ -62,4 +62,14 @@ describe("PriceBreakdown", () => {
     expect(screen.queryByText("Livraison à vélo")).toBeNull();
     expect(screen.queryByText("Votre livraison")).toBeNull();
   });
+
+  it("shows the stored delivery contribution percent", () => {
+    const b = computeOrderBreakdown({
+      coffeeLines: [line],
+      discountPercent: 10,
+      delivery: { kind: "stored", fullPriceHT: 24, discountPercent: 30 },
+    });
+    render(<PriceBreakdown breakdown={b} />);
+    expect(screen.getByText("Plural paie 30 %")).toBeInTheDocument();
+  });
 });

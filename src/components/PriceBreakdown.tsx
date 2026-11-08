@@ -70,7 +70,7 @@ export function PriceBreakdown({
           <Row label={t.breakdown.loberz(delivery.bandLabel)} value={eur(delivery.fullPriceHT)} />
           <Row
             green
-            label={delivery.free ? t.breakdown.freeDelivery : t.breakdown.pluralPays}
+            label={delivery.free ? t.breakdown.freeDelivery : t.breakdown.pluralPays(String(delivery.discountPercent))}
             value={`−${eur(delivery.discountHT)}`}
           />
           <Row strong label={t.breakdown.yourDelivery} value={eur(delivery.netHT)} />
