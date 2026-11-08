@@ -12,6 +12,11 @@ export function round2(n: number): number {
   return Number(Math.round(Number(`${s}e2`)) + "e-2");
 }
 
+/** Tier-discounted coffee unit price per kg: one definition for invoice, export and email. */
+export function discountedUnit(pricePerKg: number, discountPercent: number): number {
+  return round2(Number(pricePerKg) * (1 - discountPercent / 100));
+}
+
 export type VatItem = {
   /** order_items.kind; 'service' = Loberz delivery row (price_per_kg is already net). */
   kind?: string | null;
@@ -36,7 +41,7 @@ export function lineVatRate(item: VatItem): number {
 /** Discounted unit price of a coffee line (service rows are never discounted). */
 export function lineUnitNet(item: VatItem, discountPercent: number): number {
   const price = Number(item.price_per_kg);
-  return isServiceItem(item) ? price : round2(price * (1 - discountPercent / 100));
+  return isServiceItem(item) ? price : discountedUnit(price, discountPercent);
 }
 
 /** Net line total HT, rounded like the Sellsy invoice. */

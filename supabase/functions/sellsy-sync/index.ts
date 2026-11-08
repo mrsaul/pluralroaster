@@ -14,6 +14,7 @@
 // Default (no mode field): creates a Sellsy order (legacy, rarely used)
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { discountedUnit } from "../_shared/order-vat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1595,7 +1596,7 @@ async function handleCreateInvoice(
     .select(`
       id, user_id, company_id, created_at, total_price, discount_percent,
       order_items (
-        id, product_name, quantity, price_per_kg, list_price, line_discount_percent, size_label,
+        id, kind, product_name, quantity, price_per_kg, list_price, line_discount_percent, size_label,
         products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name, kind )
       )
     `)
@@ -1755,7 +1756,7 @@ async function handleCreateInvoice(
       const baseUnitAmount = Number(item.price_per_kg ?? 0);
       const discountedUnitAmount =
         orderDiscountPct > 0
-          ? Math.round(baseUnitAmount * (1 - orderDiscountPct / 100) * 100) / 100
+          ? discountedUnit(baseUnitAmount, orderDiscountPct)
           : baseUnitAmount;
 
       const row: JsonRecord = {
@@ -1779,11 +1780,17 @@ async function handleCreateInvoice(
     }
 
     // Free-form line item (product not in Sellsy catalog)
-    console.log(`[invoice] single row: "${item.product_name}" qty=${item.quantity} unit=${item.price_per_kg}`);
+    // Coffee gets the tier discount (same rounding as the app); service rows never do.
+    const singleBase = Number(item.price_per_kg ?? 0);
+    const singleIsService = item.kind === "service" || product.kind === "service";
+    const singleUnit = !singleIsService && orderDiscountPct > 0
+      ? discountedUnit(singleBase, orderDiscountPct)
+      : singleBase;
+    console.log(`[invoice] single row: "${item.product_name}" qty=${item.quantity} unit=${singleUnit}`);
     return {
       type: "single",
       description: String(item.product_name ?? "Product"),
-      unit_amount: String(item.price_per_kg ?? 0),
+      unit_amount: String(singleUnit),
       quantity: String(item.quantity ?? 1),
     };
   });

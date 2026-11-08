@@ -3,8 +3,9 @@ import {
   round2,
   lineNetHT,
   computeOrderVat,
+  discountedUnit,
 } from "../../supabase/functions/_shared/order-vat";
-import { storedOrderBreakdown } from "@/lib/pricing";
+import { computeOrderBreakdown, storedOrderBreakdown } from "@/lib/pricing";
 
 describe("order-vat shared module", () => {
   it("round2 is decimal half-up", () => {
@@ -53,5 +54,18 @@ describe("order-vat shared module", () => {
     expect(mine.totalHT).toBe(app.totalHT);
     expect(mine.vatLines).toEqual(app.vatLines);
     expect(mine.totalTTC).toBe(app.totalTTC);
+  });
+
+  it("discounted unit uses decimal half-up and equals pricing.ts", () => {
+    expect(discountedUnit(21.5, 15)).toBe(18.28);
+    expect(discountedUnit(10.45, 10)).toBe(9.41);
+    for (const [price, d] of [[21.5, 15], [10.45, 10]] as const) {
+      const app = computeOrderBreakdown({
+        coffeeLines: [{ pricePerKg: price, quantityKg: 1, vatRate: 5.5 }],
+        discountPercent: d,
+        delivery: { kind: "none" },
+      });
+      expect(app.coffee.netHT).toBe(discountedUnit(price, d));
+    }
   });
 });
