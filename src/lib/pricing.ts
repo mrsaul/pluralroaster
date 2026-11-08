@@ -156,7 +156,7 @@ export function cartToCoffeeLines(items: CartItem[]): PricedCoffeeLine[] {
 /** Breakdown of a past order from its stored tier discount and delivery row (none for legacy orders). */
 export function orderToBreakdown(order: Order): OrderBreakdown {
   return computeOrderBreakdown({
-    coffeeLines: cartToCoffeeLines(order.items),
+    coffeeLines: order.coffeeLines,
     discountPercent: order.discountPercent,
     delivery: order.delivery ? { kind: "stored", ...order.delivery } : { kind: "none" },
   });

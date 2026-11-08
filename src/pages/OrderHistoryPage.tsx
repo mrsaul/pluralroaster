@@ -73,6 +73,7 @@ export default function OrderHistoryPage({
         status: "pending",
         createdAt: new Date().toISOString(),
         discountPercent: 0,
+        coffeeLines: [],
         delivery: null,
       }
     : null;

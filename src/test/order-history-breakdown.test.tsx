@@ -26,6 +26,7 @@ const baseOrder: Order = {
   status: "delivered",
   createdAt: "2026-03-14",
   discountPercent: 10,
+  coffeeLines: [{ pricePerKg: 28, quantityKg: 30, vatRate: 5.5 }],
   delivery: null,
 };
 
@@ -86,6 +87,20 @@ describe("mapPersistedOrder", () => {
     );
     expect(o.delivery).toEqual({ fullPriceHT: 25, discountPercent: 0 });
     expect(o.items).toHaveLength(1);
+  });
+
+  it("treats an explicit null list_price like a legacy row", () => {
+    const o = mapPersistedOrder(
+      row([coffeeRow, { ...coffeeRow, kind: "service", product_id: "svc", quantity: 1, price_per_kg: 25, list_price: null, line_discount_percent: null }]),
+    );
+    expect(o.delivery).toEqual({ fullPriceHT: 25, discountPercent: 0 });
+  });
+
+  it("prices the breakdown from stored lines, not the live catalog", () => {
+    const cat = { id: "p1", name: "X", origin: null, sku: "X", price_per_kg: 30, roast_level: null, is_active: true, sellsy_tax_rate: 5.5 };
+    const o = mapPersistedOrder(row([{ ...coffeeRow, price_per_kg: 28, quantity: 10, products: cat }]));
+    expect(o.items[0].product.pricePerKg).toBe(30);
+    expect(orderToBreakdown(o).coffee.regularHT).toBe(280);
   });
 
   it("has delivery null when there is no service row", () => {

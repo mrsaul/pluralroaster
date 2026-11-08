@@ -1,4 +1,5 @@
 import type { Order, Product } from "@/lib/store";
+import { DEFAULT_COFFEE_VAT_RATE } from "@/lib/orderUtils";
 
 export type PersistedOrderRow = {
   id: string;
@@ -61,6 +62,11 @@ export const mapPersistedOrder = (order: PersistedOrderRow): Order => {
     deliveryAddressId: order.delivery_address_id ?? null,
     discountPercent: Number(order.discount_percent ?? 0),
     // Rows saved before list_price existed: price_per_kg is the amount charged, shown as a plain charge.
+    coffeeLines: coffeeRows.map((item) => ({
+      pricePerKg: Number(item.price_per_kg),
+      quantityKg: Number(item.quantity),
+      vatRate: item.products?.sellsy_tax_rate ?? DEFAULT_COFFEE_VAT_RATE,
+    })),
     delivery: serviceRow
       ? {
           fullPriceHT: Number(serviceRow.list_price ?? serviceRow.price_per_kg),

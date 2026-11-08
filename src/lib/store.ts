@@ -1,3 +1,4 @@
+import type { PricedCoffeeLine } from "@/lib/pricing";
 import { useState, useCallback, useMemo, useEffect } from "react";
 
 export interface ProductVariant {
@@ -56,6 +57,8 @@ export interface Order {
   deliveryAddressId?: string | null;
   /** Tier discount applied to coffee (0 when none). */
   discountPercent: number;
+  /** Coffee lines as charged (stored prices), used for the past-order breakdown; items keep catalog prices for reorder. */
+  coffeeLines: PricedCoffeeLine[];
   /** Stored delivery service row; null for legacy orders without one. */
   delivery: { fullPriceHT: number; discountPercent: number } | null;
 }
@@ -85,6 +88,7 @@ export const MOCK_ORDERS: Order[] = [
     sellsyId: "SY-29481",
     createdAt: "2026-03-14",
     discountPercent: 0,
+    coffeeLines: [],
     delivery: null,
   },
   {
@@ -99,6 +103,7 @@ export const MOCK_ORDERS: Order[] = [
     sellsyId: "SY-29455",
     createdAt: "2026-03-10",
     discountPercent: 0,
+    coffeeLines: [],
     delivery: null,
   },
 ];
