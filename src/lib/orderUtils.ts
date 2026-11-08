@@ -45,8 +45,13 @@ export function computeVatLines(lines: { ht: number; rate: number }[], discountP
     .map(([rate, ht]) => ({ rate, amount: Math.round(ht * (1 - discountPercent / 100) * rate) / 100 }));
 }
 
+/** French-style number for kg and percents: 2.25 → "2,25", 12.5 → "12,5". */
+export function formatFrNumber(n: number): string {
+  return n.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+}
+
 export function formatVatRate(rate: number): string {
-  return rate.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+  return formatFrNumber(rate);
 }
 
 // ── Size display helpers ──────────────────────────────────────────────────────

@@ -1,7 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { OrderCard } from "@/components/OrderCard";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
+import { OrderDetailView } from "@/components/OrderDetailView";
+import { OrderHistoryTab } from "@/components/OrderHistoryTab";
+import OrderReceiptPage from "@/pages/OrderReceiptPage";
+import type { OrderReceiptData } from "@/lib/orderUtils";
 import { computeOrderBreakdown, orderToBreakdown } from "@/lib/pricing";
 import { mapPersistedOrder, type PersistedOrderRow } from "@/lib/persistedOrder";
 import type { Order, Product } from "@/lib/store";
@@ -142,5 +146,83 @@ describe("PriceBreakdown with zero delivery contribution", () => {
     expect(screen.queryByText(/Plural paie/)).not.toBeInTheDocument();
     expect(screen.queryByText("Livraison offerte")).not.toBeInTheDocument();
     expect(screen.getByText("Votre livraison")).toBeInTheDocument();
+  });
+});
+
+describe("OrderDetailView récapitulatif", () => {
+  it("shows the stored-price breakdown with delivery, not 'Incluse'", () => {
+    render(
+      <OrderDetailView
+        order={{ ...baseOrder, delivery: { fullPriceHT: 24, discountPercent: 50 } }}
+        onBack={() => {}}
+        onReorder={() => {}}
+      />,
+    );
+    expect(screen.queryByText("Incluse")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sous-total")).not.toBeInTheDocument();
+    expect(screen.getByText("Votre prix café")).toBeInTheDocument();
+    expect(screen.getByText("Plural paie 50 %")).toBeInTheDocument();
+    expect(screen.getByText("Total HT")).toBeInTheDocument();
+    expect(screen.getByText("€768.00")).toBeInTheDocument();
+    expect(screen.getByText("€811.98")).toBeInTheDocument();
+  });
+});
+
+describe("OrderHistoryTab card total", () => {
+  it("labels the headline amount TTC", () => {
+    render(
+      <OrderHistoryTab
+        orders={[{ ...baseOrder, delivery: { fullPriceHT: 24, discountPercent: 50 } }]}
+        onReorder={() => {}}
+        onViewDetail={() => {}}
+      />,
+    );
+    expect(screen.getByText("€811.98 TTC")).toBeInTheDocument();
+  });
+});
+
+describe("OrderReceiptPage breakdown", () => {
+  beforeEach(() => {
+    vi.spyOn(window, "print").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const receipt = (breakdown: ReturnType<typeof computeOrderBreakdown>): OrderReceiptData => ({
+    orderId: "a1b2c3d4-0000", placedAt: "2026-11-08T10:00:00Z", deliveryDate: "2026-11-12", notes: null,
+    items: [{ name: "ZAÏA", sizeLabel: null, sizeKg: null, quantity: 2.25, unitPrice: null, pricePerKg: 27.07 }],
+    totalHT: breakdown.totalHT, vatLines: breakdown.vatLines, totalTTC: breakdown.totalTTC, breakdown,
+  });
+
+  it("uses the layout B copy with French decimals", async () => {
+    const b = computeOrderBreakdown({
+      coffeeLines: [{ pricePerKg: 27.07, quantityKg: 2.25, vatRate: 5.5 }],
+      discountPercent: 12.5,
+      delivery: { kind: "auto", free: false },
+    });
+    localStorage.setItem("plural_order_receipt", JSON.stringify(receipt(b)));
+    render(<OrderReceiptPage />);
+    expect(await screen.findByText("2,25 kg · prix public")).toBeInTheDocument();
+    expect(screen.getByText("Votre remise −12,5 %")).toBeInTheDocument();
+    expect(screen.getByText("Votre prix café")).toBeInTheDocument();
+    expect(screen.getByText("Loberz · jusqu'à 10 kg")).toBeInTheDocument();
+    expect(screen.getByText("Plural paie 50 %")).toBeInTheDocument();
+    expect(screen.getByText("Votre livraison")).toBeInTheDocument();
+    expect(screen.queryByText(/Prix public|Café HT|Livraison HT|Tarif Loberz|Prise en charge/)).toBeNull();
+  });
+
+  it("hides the contribution row when the stored delivery percent is 0", async () => {
+    const b = computeOrderBreakdown({
+      coffeeLines: [{ pricePerKg: 28, quantityKg: 30, vatRate: 5.5 }],
+      discountPercent: 0,
+      delivery: { kind: "stored", fullPriceHT: 25, discountPercent: 0 },
+    });
+    localStorage.setItem("plural_order_receipt", JSON.stringify(receipt(b)));
+    render(<OrderReceiptPage />);
+    expect(await screen.findByText("Votre livraison")).toBeInTheDocument();
+    expect(screen.queryByText(/Plural paie/)).toBeNull();
+    expect(screen.queryByText("Livraison offerte")).toBeNull();
   });
 });

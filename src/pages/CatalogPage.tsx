@@ -3,6 +3,7 @@ import { useT } from "@/i18n";
 import { CartBar } from "@/components/CartBar";
 import { ProductDetailSheet } from "@/components/ProductDetailSheet";
 import { resolveVariantLabel } from "@/lib/orderUtils";
+import { orderToBreakdown } from "@/lib/pricing";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MOCK_PRODUCTS, type Product, type ProductVariant, type Order } from "@/lib/store";
@@ -504,7 +505,7 @@ export default function CatalogPage({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">
-                        {t.catalog.productCount(lastOrder.items.length)} · €{lastOrder.totalPrice.toFixed(2)}
+                        {t.catalog.productCount(lastOrder.items.length)} · €{orderToBreakdown(lastOrder).totalTTC.toFixed(2)} TTC
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {format(new Date(lastOrder.createdAt), "d MMM yyyy")}

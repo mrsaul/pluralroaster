@@ -5,6 +5,7 @@ import { fr } from "date-fns/locale/fr";
 import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Order } from "@/lib/store";
+import { orderToBreakdown } from "@/lib/pricing";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -165,7 +166,7 @@ function OrderCard({ order, onViewDetail, onReorder }: OrderCardProps) {
             {order.items.length} article{order.items.length > 1 ? "s" : ""}
           </span>
           <span className="text-sm font-semibold">
-            €{order.totalPrice.toFixed(2)}
+            €{orderToBreakdown(order).totalTTC.toFixed(2)} TTC
           </span>
         </div>
         <div className="flex gap-2">

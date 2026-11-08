@@ -156,3 +156,26 @@ describe("buildPlainTextSummary breakdown", () => {
     expect(text).toContain("Total TTC : 811,98 €");
   });
 });
+
+const coffeeNet = (pricePerKg: number, quantityKg: number, discountPercent: number) =>
+  computeOrderBreakdown({
+    coffeeLines: [{ pricePerKg, quantityKg, vatRate: 5.5 }],
+    discountPercent,
+    delivery: { kind: "none" },
+  }).coffee.netHT;
+
+describe("float-safe line rounding", () => {
+  it("rounds float products sitting just below a half-cent tie up", () => {
+    // 18.79 × 7.5 = 140.925 exactly, but the float product is 140.92499999999998
+    expect(round2(18.79 * 7.5)).toBe(140.93);
+    expect(coffeeNet(22.1, 7.5, 15)).toBe(140.93);
+    // 5.10 € 250 g bag = 20.40 €/kg, 5 % tier → 19.38; × 2.75 kg = 53.295
+    expect(coffeeNet(20.4, 2.75, 5)).toBe(53.3);
+  });
+});
+
+describe("no-tier lines", () => {
+  it("does not round the unit when there is no discount (3 kg bag at €65)", () => {
+    expect(coffeeNet(65 / 3, 3, 0)).toBe(65);
+  });
+});

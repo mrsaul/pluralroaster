@@ -4,17 +4,24 @@
 export const DEFAULT_COFFEE_VAT_RATE = 5.5;
 export const DELIVERY_VAT_RATE = 20;
 
-/** Decimal half-up rounding to 2 places, matching Sellsy and src/lib/pricing.ts. */
+/**
+ * Decimal half-up rounding to 2 places, matching Sellsy and src/lib/pricing.ts.
+ * toPrecision(12) first drops float-product noise (18.79 × 7.5 = 140.92499999999998 → 140.925).
+ */
 export function round2(n: number): number {
   if (!Number.isFinite(n)) return n;
-  const s = String(n);
+  const s = String(Number(n.toPrecision(12)));
   if (s.includes("e")) return Math.round(n * 100) / 100;
   return Number(Math.round(Number(`${s}e2`)) + "e-2");
 }
 
-/** Tier-discounted coffee unit price per kg: one definition for invoice, export and email. */
+/**
+ * Tier-discounted coffee unit price per kg: one definition for invoice, export and email.
+ * No tier: the raw price, unrounded, as sellsy-sync sends it.
+ */
 export function discountedUnit(pricePerKg: number, discountPercent: number): number {
-  return round2(Number(pricePerKg) * (1 - discountPercent / 100));
+  const price = Number(pricePerKg);
+  return discountPercent > 0 ? round2(price * (1 - discountPercent / 100)) : price;
 }
 
 export type VatItem = {

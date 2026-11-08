@@ -72,4 +72,16 @@ describe("PriceBreakdown", () => {
     render(<PriceBreakdown breakdown={b} />);
     expect(screen.getByText("Plural paie 30 %")).toBeInTheDocument();
   });
+
+  it("formats kg and percents French-style", () => {
+    const b = computeOrderBreakdown({
+      coffeeLines: [{ pricePerKg: 27.07, quantityKg: 2.25, vatRate: 5.5 }],
+      discountPercent: 12.5,
+      delivery: { kind: "stored", fullPriceHT: 20, discountPercent: 37.5 },
+    });
+    render(<PriceBreakdown breakdown={b} />);
+    expect(screen.getByText("2,25 kg · prix public")).toBeInTheDocument();
+    expect(screen.getByText("Votre remise −12,5 %")).toBeInTheDocument();
+    expect(screen.getByText("Plural paie 37,5 %")).toBeInTheDocument();
+  });
 });

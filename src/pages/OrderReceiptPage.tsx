@@ -5,11 +5,13 @@ import { Printer } from "lucide-react";
 import {
   type OrderReceiptData,
   formatDeliveryDate,
+  formatFrNumber,
   formatVatRate,
   inferGrind,
   GRIND_LABEL,
 } from "@/lib/orderUtils";
 import type { OrderBreakdown } from "@/lib/pricing";
+import { fr as frStrings } from "@/i18n";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -33,49 +35,55 @@ function fmtEur(n: number): string {
 const rowStyle = { display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" } as const;
 const headingStyle = { fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9E9E93", padding: "8px 0 2px" } as const;
 
+/** Layout B rows, same French copy as PriceBreakdown. */
 function BreakdownRows({ breakdown: b }: { breakdown: OrderBreakdown }) {
+  const t = frStrings.breakdown;
+  const netStyle = { ...rowStyle, fontWeight: 600, color: "#1A1A18" } as const;
+  const greenStyle = { ...rowStyle, color: "#3a8a5a" } as const;
   return (
     <>
-      <div style={headingStyle}>Café</div>
+      <div style={headingStyle}>{t.coffee}</div>
       <div style={rowStyle}>
-        <span>Prix public ({b.coffee.kg} kg)</span>
+        <span>{t.publicPrice(formatFrNumber(b.coffee.kg))}</span>
         <span>{fmtEur(b.coffee.regularHT)}</span>
       </div>
       {b.coffee.discountPercent > 0 && (
-        <div style={{ ...rowStyle, color: "#3a8a5a" }}>
-          <span>Remise {b.coffee.discountPercent} %</span>
+        <div style={greenStyle}>
+          <span>{t.yourDiscount(formatFrNumber(b.coffee.discountPercent))}</span>
           <span>−{fmtEur(b.coffee.discountHT)}</span>
         </div>
       )}
-      <div style={rowStyle}>
-        <span>Café HT</span>
+      <div style={netStyle}>
+        <span>{t.yourCoffee}</span>
         <span>{fmtEur(b.coffee.netHT)}</span>
       </div>
       {b.delivery && (
         <>
-          <div style={headingStyle}>Livraison à vélo</div>
+          <div style={headingStyle}>{t.delivery}</div>
           <div style={rowStyle}>
-            <span>Tarif Loberz ({b.delivery.bandLabel})</span>
+            <span>{t.loberz(b.delivery.bandLabel)}</span>
             <span>{fmtEur(b.delivery.fullPriceHT)}</span>
           </div>
-          <div style={{ ...rowStyle, color: "#3a8a5a" }}>
-            <span>{b.delivery.free ? "Offerte par Plural" : `Prise en charge Plural ${b.delivery.discountPercent} %`}</span>
-            <span>−{fmtEur(b.delivery.discountHT)}</span>
-          </div>
-          <div style={rowStyle}>
-            <span>Livraison HT</span>
+          {b.delivery.discountPercent > 0 && (
+            <div style={greenStyle}>
+              <span>{b.delivery.free ? t.freeDelivery : t.pluralPays(formatFrNumber(b.delivery.discountPercent))}</span>
+              <span>−{fmtEur(b.delivery.discountHT)}</span>
+            </div>
+          )}
+          <div style={netStyle}>
+            <span>{t.yourDelivery}</span>
             <span>{fmtEur(b.delivery.netHT)}</span>
           </div>
         </>
       )}
-      <div style={headingStyle}>Total</div>
+      <div style={headingStyle}>{t.total}</div>
       <div style={rowStyle}>
-        <span>Total HT</span>
+        <span>{t.totalHT}</span>
         <span>{fmtEur(b.totalHT)}</span>
       </div>
       {b.vatLines.map(({ rate, amount }) => (
         <div key={rate} style={rowStyle}>
-          <span>TVA {formatVatRate(rate)} %</span>
+          <span>{t.vat(formatVatRate(rate))}</span>
           <span>{fmtEur(amount)}</span>
         </div>
       ))}
@@ -380,7 +388,7 @@ export default function OrderReceiptPage() {
                 </>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 5px", fontSize: 14, fontWeight: 700, color: "#1A1A18", borderTop: "2px solid #1A1A18", marginTop: 3 }}>
-                <span>Total TTC</span>
+                <span>{frStrings.breakdown.totalTTC}</span>
                 <span>{fmtEur(data.totalTTC)}</span>
               </div>
             </div>

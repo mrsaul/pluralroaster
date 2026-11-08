@@ -14,10 +14,11 @@ export const PLURAL_DELIVERY_CONTRIBUTION_PERCENT = 50;
 /**
  * Decimal half-up rounding to 2 places, matching Sellsy.
  * Math.round(n * 100) / 100 gets 27.075 and 1.005 wrong because of binary floats.
+ * toPrecision(12) first drops float-product noise (18.79 × 7.5 = 140.92499999999998 → 140.925).
  */
 export function round2(n: number): number {
   if (!Number.isFinite(n)) return n;
-  const s = String(n);
+  const s = String(Number(n.toPrecision(12)));
   // Exponent notation (very small/large values) can't take the "e2" shift.
   if (s.includes("e")) return Math.round(n * 100) / 100;
   return Number(Math.round(Number(`${s}e2`)) + "e-2");
@@ -109,7 +110,8 @@ export function computeOrderBreakdown(input: {
   for (const line of coffeeLines) {
     kg += line.quantityKg;
     regularHT += round2(line.pricePerKg * line.quantityKg);
-    const unit = round2(line.pricePerKg * (1 - discountPercent / 100));
+    // No tier: the raw price, like sellsy-sync sends it (21.666… €/kg × 3 kg = 65.00, not 65.01).
+    const unit = discountPercent > 0 ? round2(line.pricePerKg * (1 - discountPercent / 100)) : line.pricePerKg;
     const net = round2(unit * line.quantityKg);
     coffeeNetHT += net;
     baseByRate.set(line.vatRate, (baseByRate.get(line.vatRate) ?? 0) + net);

@@ -69,3 +69,53 @@ describe("order-vat shared module", () => {
     }
   });
 });
+
+describe("decimal-safe rounding vs an exact integer-cents oracle", () => {
+  // Half-up of a/b for non-negative bigints.
+  const halfUp = (a: bigint, b: bigint) => (2n * a + b) / (2n * b);
+
+  /** Exact Sellsy line net in cents: unit = halfUp(P × (100 − t) / 100), line = halfUp(unit × k / 4). */
+  const oracleCents = (priceCents: number, tier: number, quarters: number) => {
+    const unit = halfUp(BigInt(priceCents) * BigInt(100 - tier), 100n);
+    return Number(halfUp(unit * BigInt(quarters), 4n));
+  };
+
+  it("app and shared module agree with the oracle on generated lines", () => {
+    let seed = 20261108;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const tiers = [0, 5, 10, 15];
+    const failures: string[] = [];
+    for (let i = 0; i < 5000; i++) {
+      const priceCents = 1 + rand(10000); // €0.01–100.00
+      const quarters = 1 + rand(400); // 0.25–100 kg
+      const tier = tiers[rand(4)];
+      const price = priceCents / 100;
+      const kg = quarters / 4;
+      const expected = oracleCents(priceCents, tier, quarters) / 100;
+      const shared = lineNetHT({ kind: "coffee", quantity: kg, price_per_kg: price }, tier);
+      const app = computeOrderBreakdown({
+        coffeeLines: [{ pricePerKg: price, quantityKg: kg, vatRate: 5.5 }],
+        discountPercent: tier,
+        delivery: { kind: "none" },
+      }).coffee.netHT;
+      if (shared !== expected || app !== expected) {
+        failures.push(`${price} €/kg × ${kg} kg @ ${tier} %: expected ${expected}, shared ${shared}, app ${app}`);
+      }
+    }
+    expect(failures.slice(0, 5)).toEqual([]);
+  });
+
+  it("known half-cent cases", () => {
+    expect(round2(18.79 * 7.5)).toBe(140.93);
+    expect(lineNetHT({ kind: "coffee", quantity: 7.5, price_per_kg: 22.1 }, 15)).toBe(140.93);
+    expect(lineNetHT({ kind: "coffee", quantity: 2.75, price_per_kg: 20.4 }, 5)).toBe(53.3);
+  });
+
+  it("no-tier line keeps the raw unit (3 kg bag at €65)", () => {
+    expect(discountedUnit(65 / 3, 0)).toBe(65 / 3);
+    expect(lineNetHT({ kind: "coffee", quantity: 3, price_per_kg: 65 / 3 }, 0)).toBe(65);
+  });
+});

@@ -5,7 +5,6 @@
 -- p_delivery = { "full_price": number, "discount_percent": number, "net": number }
 -- The legacy 8-arg overload is left untouched.
 
-BEGIN;
 
 ALTER TABLE public.order_items
   ADD COLUMN IF NOT EXISTS list_price numeric,
@@ -125,7 +124,6 @@ GRANT EXECUTE ON FUNCTION public.create_order_with_items(
   uuid, uuid, numeric, text, jsonb
 ) TO authenticated, service_role;
 
-COMMIT;
 
 -- Verification (run manually after applying):
 -- select pg_get_function_identity_arguments(oid) from pg_proc

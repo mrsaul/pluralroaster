@@ -64,7 +64,8 @@ export function useLang(): LangContextValue {
 
 // ── Translations ──────────────────────────────────────────────────────────────
 
-const fr = {
+/** French strings; also used directly by the French-only PDF receipt. */
+export const fr = {
   // ── Login / Auth ──────────────────────────────────────────────────────────
   login: {
     subtitleSignIn:       "Connectez-vous pour gérer vos commandes.",

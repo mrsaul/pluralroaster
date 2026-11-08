@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { frenchStatus, statusColor } from "@/components/OrderHistoryTab";
 import type { Order } from "@/lib/store";
 import { resolveVariantLabel } from "@/lib/orderUtils";
+import { orderToBreakdown } from "@/lib/pricing";
+import { PriceBreakdown } from "@/components/PriceBreakdown";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,12 +20,6 @@ interface OrderDetailViewProps {
 
 export function OrderDetailView({ order, onBack, onReorder }: OrderDetailViewProps) {
   const ref = `#${order.id.slice(0, 8).toUpperCase()}`;
-
-  const subtotal = order.items.reduce(
-    (sum, item) =>
-      sum + (item.unitPrice ?? item.product.pricePerKg) * item.quantity,
-    0
-  );
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -104,21 +100,10 @@ export function OrderDetailView({ order, onBack, onReorder }: OrderDetailViewPro
           </ul>
         </section>
 
-        {/* Récapitulatif */}
-        <section className="rounded-xl border border-border bg-card p-4 space-y-2">
+        {/* Récapitulatif: stored prices, delivery and TVA, same as the Sellsy invoice */}
+        <section className="space-y-2">
           <h2 className="text-sm font-semibold text-foreground">Récapitulatif</h2>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Sous-total</span>
-            <span>€{subtotal.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Livraison</span>
-            <span className="italic text-muted-foreground">Incluse</span>
-          </div>
-          <div className="flex justify-between text-sm border-t border-border pt-2 mt-1">
-            <span className="font-semibold text-base">Total</span>
-            <span className="font-bold text-base">€{order.totalPrice.toFixed(2)}</span>
-          </div>
+          <PriceBreakdown breakdown={orderToBreakdown(order)} />
         </section>
 
         {/* Livraison */}
