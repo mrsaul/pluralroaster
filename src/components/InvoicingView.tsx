@@ -369,7 +369,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                   <TableHead>N° commande</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Date de livraison</TableHead>
-                  <TableHead className="text-right">Total (€)</TableHead>
+                  <TableHead className="text-right">Total HT (€)</TableHead>
                   <TableHead>Statut commande</TableHead>
                   <TableHead>Statut facture</TableHead>
                   <TableHead>Sellsy ID</TableHead>
@@ -540,7 +540,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
 
               <div className="flex items-center justify-between border-t border-border pt-3">
                 <span className="text-sm text-muted-foreground">{detailOrder.total_kg.toFixed(0)} kg total</span>
-                <span className="text-lg font-semibold tabular-nums text-foreground">€{detailOrder.total_price.toFixed(2)}</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">€{detailOrder.total_price.toFixed(2)} HT</span>
               </div>
 
               {/* Missing Sellsy ID warning */}

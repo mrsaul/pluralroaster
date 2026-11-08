@@ -19,6 +19,9 @@ import { useToast } from "@/components/ui/use-toast";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 import { useBeforeUnload } from "@/hooks/useBeforeUnload";
+import { DEFAULT_COFFEE_VAT_RATE } from "@/lib/orderUtils";
+import { LOBERZ_PRODUCT_NAME, LOBERZ_SKU, computeOrderBreakdown, deliveryRowFor } from "@/lib/pricing";
+import { PriceBreakdown } from "@/components/PriceBreakdown";
 
 export type SimpleClient = {
   /** Company UUID — always unique, used as the Select identifier */
@@ -31,6 +34,8 @@ export type SimpleClient = {
   custom_company_name: string | null;
   client_data_mode: string;
   pricing_tier_id: string | null;
+  /** companies.free_delivery: Loberz delivery 100 % paid by Plural (else 50 %). */
+  free_delivery: boolean;
 };
 
 export type SimpleProduct = {
@@ -42,6 +47,10 @@ export type SimpleProduct = {
   custom_price_per_kg: number | null;
   data_source_mode: string;
   is_active: boolean;
+  /** 'service' for the Loberz delivery product — never offered as a line item. */
+  kind?: string | null;
+  /** Product's sellsy_tax_rate; null → default coffee VAT rate. */
+  vat_rate?: number | null;
 };
 
 type LineItem = {
@@ -54,7 +63,6 @@ type LineItem = {
 type ClientTier = {
   name: string;
   product_discount_percent: number;
-  delivery_discount_percent: number;
 };
 
 // ── Draft-persisted form type ─────────────────────────────────────────────────
@@ -134,12 +142,19 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     [setForm],
   );
 
-  // Computed totals
-  const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
-  const totalKg = useMemo(() => lineItems.reduce((s, i) => s + i.quantity, 0), [lineItems]);
-  const subtotal = useMemo(() => lineItems.reduce((s, i) => s + i.quantity * i.price_per_kg, 0), [lineItems]);
-  const discountAmount = clientTier ? subtotal * clientTier.product_discount_percent / 100 : 0;
-  const totalPrice = subtotal - discountAmount;
+  // Same breakdown as a client order: tier discount on coffee, Loberz delivery on top
+  const activeProducts = useMemo(() => products.filter((p) => p.is_active && p.kind !== "service"), [products]);
+  const selectedClient = clients.find((c) => c.company_id === selectedCompanyId);
+  const freeDelivery = selectedClient?.free_delivery === true;
+  const breakdown = useMemo(() => computeOrderBreakdown({
+    coffeeLines: lineItems.map((i) => ({
+      pricePerKg: i.price_per_kg,
+      quantityKg: i.quantity,
+      vatRate: i.product.vat_rate ?? DEFAULT_COFFEE_VAT_RATE,
+    })),
+    discountPercent: clientTier?.product_discount_percent ?? 0,
+    delivery: { kind: "auto", free: freeDelivery },
+  }), [lineItems, clientTier, freeDelivery]);
 
   const addProduct = useCallback((product: SimpleProduct) => {
     if (lineItems.some((i) => i.product.id === product.id)) return;
@@ -173,7 +188,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     if (client?.pricing_tier_id) {
       const { data } = await supabase
         .from("pricing_tiers")
-        .select("name, product_discount_percent, delivery_discount_percent")
+        .select("name, product_discount_percent")
         .eq("id", client.pricing_tier_id)
         .single();
       if (data) setForm(p => ({ ...p, clientTier: data as ClientTier }));
@@ -186,21 +201,31 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     if (lineItems.length === 0) { toast({ title: "Ajoutez au moins un produit", variant: "destructive" }); return; }
 
     // Resolve the auth user_id for the selected company (may be null for Sellsy-only clients)
-    const selectedClient = clients.find((c) => c.company_id === selectedCompanyId);
     const orderUserId = selectedClient?.user_id ?? null;
+    const deliveryRow = deliveryRowFor(breakdown);
 
     setSaving(true);
     try {
+      // Look up the Loberz product before creating anything, so a missing product leaves no orphan order
+      let loberzId: string | null = null;
+      if (deliveryRow) {
+        const { data: loberz, error: loberzErr } = await supabase
+          .from("products").select("id").eq("sku", LOBERZ_SKU).limit(1).maybeSingle();
+        if (loberzErr) throw loberzErr;
+        if (!loberz) throw new Error(`Produit de livraison (sku ${LOBERZ_SKU}) introuvable`);
+        loberzId = loberz.id;
+      }
+
+      // orders.delivery_discount_percent is no longer written (DB default 0): delivery lives in the Loberz row
       const { data: order, error: orderErr } = await supabase.from("orders").insert({
         user_id: orderUserId,
         company_id: selectedCompanyId,
         delivery_date: format(deliveryDate, "yyyy-MM-dd"),
-        total_kg: totalKg,
-        total_price: totalPrice,
+        total_kg: breakdown.coffee.kg,
+        total_price: breakdown.totalHT,
         status: "received",
         invoicing_status: "not_sent",
         discount_percent: clientTier?.product_discount_percent ?? 0,
-        delivery_discount_percent: clientTier?.delivery_discount_percent ?? 0,
         pricing_tier_name: clientTier?.name ?? null,
       } as any).select("id").single();
 
@@ -246,7 +271,19 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
         };
       });
 
-      const { error: itemsErr } = await supabase.from("order_items").insert(items);
+      const deliveryItem = deliveryRow && loberzId
+        ? [{
+            order_id: order.id,
+            product_id: loberzId,
+            product_name: LOBERZ_PRODUCT_NAME,
+            product_sku: LOBERZ_SKU,
+            quantity: 1,
+            kind: "service",
+            ...deliveryRow,
+          }]
+        : [];
+
+      const { error: itemsErr } = await supabase.from("order_items").insert([...items, ...deliveryItem]);
       if (itemsErr) throw itemsErr;
 
       // Log status history
@@ -268,7 +305,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     } finally {
       setSaving(false);
     }
-  }, [selectedCompanyId, clients, deliveryDate, lineItems, totalKg, totalPrice, clientTier, toast, clearDraft, onOpenChange, onCreated]);
+  }, [selectedCompanyId, selectedClient, deliveryDate, lineItems, breakdown, clientTier, toast, clearDraft, onOpenChange, onCreated]);
 
   const getClientLabel = (c: SimpleClient) => {
     const name = c.client_data_mode === "custom" && c.custom_company_name
@@ -310,9 +347,6 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
               <div className="mt-1.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
                 <span className="font-medium text-foreground">{clientTier.name}</span>
                 {clientTier.product_discount_percent > 0 && <span>{clientTier.product_discount_percent}% off products</span>}
-                {clientTier.delivery_discount_percent > 0 && (
-                  <span>· {clientTier.delivery_discount_percent === 100 ? "Livraison offerte" : `-${clientTier.delivery_discount_percent} % sur la livraison`}</span>
-                )}
               </div>
             )}
           </div>
@@ -445,31 +479,8 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
             />
           </div>
 
-          {/* Totals */}
-          {lineItems.length > 0 && (
-            <div className="border-t border-border pt-2 space-y-1">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{totalKg} kg</span>
-                <span className="tabular-nums">Subtotal €{subtotal.toFixed(2)}</span>
-              </div>
-              {clientTier && clientTier.product_discount_percent > 0 && (
-                <div className="flex items-center justify-between text-xs text-primary">
-                  <span>{clientTier.name} −{clientTier.product_discount_percent}%</span>
-                  <span className="tabular-nums">−€{discountAmount.toFixed(2)}</span>
-                </div>
-              )}
-              {clientTier && clientTier.delivery_discount_percent > 0 && (
-                <div className="flex items-center justify-between text-xs text-primary">
-                  <span>Livraison</span>
-                  <span>{clientTier.delivery_discount_percent === 100 ? "Offerte" : `-${clientTier.delivery_discount_percent} % sur la livraison`}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">Total</span>
-                <span className="text-base font-semibold tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
-              </div>
-            </div>
-          )}
+          {/* Totals — what is stored: total_price = total HT incl. delivery */}
+          {lineItems.length > 0 && <PriceBreakdown breakdown={breakdown} />}
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-1">

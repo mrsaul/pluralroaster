@@ -39,6 +39,13 @@ import {
   normalizeOrderStatus, type OrderStatus,
 } from "@/lib/orderStatuses";
 import { normalizeSize } from "@/lib/orderUtils";
+import {
+  LOBERZ_PRODUCT_NAME,
+  LOBERZ_SKU,
+  recalcOrderFromItems,
+  storedOrderBreakdown,
+} from "@/lib/pricing";
+import { PriceBreakdown } from "@/components/PriceBreakdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +87,7 @@ type AdminProductRow = {
   custom_name: string | null;
   custom_price_per_kg: number | null;
   kind: string | null;
+  sellsy_tax_rate: number | null;
 };
 
 type ProductParseError = {
@@ -111,6 +119,10 @@ type AdminOrderItem = {
   grind_type: string | null;
   product_variant_id: string | null;
   kind: string | null;
+  list_price: number | null;
+  line_discount_percent: number | null;
+  /** Product's sellsy_tax_rate (coffee VAT); null → default coffee rate. */
+  vat_rate: number | null;
 };
 
 type AdminOrder = {
@@ -121,7 +133,11 @@ type AdminOrder = {
   client_name: string | null;
   delivery_date: string;
   total_kg: number;
+  /** Total HT incl. delivery (coffee net after tier discount + Loberz net). */
   total_price: number;
+  /** Tier discount on coffee (percent). */
+  discount_percent: number;
+  free_delivery: boolean;
   status: OrderStatus;
   sellsy_id: string | null;
   created_at: string;
@@ -140,6 +156,28 @@ interface AdminDashboardProps {
 }
 
 /* ─── Helpers ─── */
+
+const ADMIN_ORDER_ITEM_COLUMNS =
+  "id, product_id, product_name, product_sku, quantity, price_per_kg, size_label, size_kg, grind_type, product_variant_id, kind, list_price, line_discount_percent, products ( sellsy_tax_rate )";
+
+function mapAdminOrderItem(i: any): AdminOrderItem {
+  return {
+    id: i.id,
+    product_id: i.product_id,
+    product_name: i.product_name,
+    product_sku: i.product_sku,
+    quantity: Number(i.quantity),
+    price_per_kg: Number(i.price_per_kg),
+    size_label: i.size_label ?? null,
+    size_kg: i.size_kg != null ? Number(i.size_kg) : null,
+    grind_type: i.grind_type ?? null,
+    product_variant_id: i.product_variant_id ?? null,
+    kind: i.kind ?? null,
+    list_price: i.list_price != null ? Number(i.list_price) : null,
+    line_discount_percent: i.line_discount_percent != null ? Number(i.line_discount_percent) : null,
+    vat_rate: i.products?.sellsy_tax_rate != null ? Number(i.products.sellsy_tax_rate) : null,
+  };
+}
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -402,9 +440,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .from("orders")
         .select(`
           id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes, client_name,
-          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg, size_label, size_kg, grind_type, product_variant_id, kind ),
-          companies ( name, email )
+          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes, client_name, discount_percent,
+          order_items ( ${ADMIN_ORDER_ITEM_COLUMNS} ),
+          companies ( name, email, free_delivery )
         `)
         .order("created_at", { ascending: false });
 
@@ -416,7 +454,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         userIds.length > 0
           ? supabase
               .from("contacts")
-              .select("user_id, first_name, last_name, companies(name)")
+              .select("user_id, first_name, last_name, companies(name, free_delivery)")
               .in("user_id", userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
@@ -424,12 +462,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           : Promise.resolve({ data: [] }),
       ]);
 
-      const contactMap = new Map<string, { companyName: string | null; contactName: string | null }>();
+      const contactMap = new Map<string, { companyName: string | null; contactName: string | null; freeDelivery: boolean }>();
       for (const c of (contacts ?? []) as any[]) {
         if (!c.user_id || contactMap.has(c.user_id)) continue;
         const companyName = (c.companies as any)?.name ?? null;
         const contactName = [c.first_name, c.last_name].filter(Boolean).join(" ") || null;
-        contactMap.set(c.user_id, { companyName, contactName });
+        contactMap.set(c.user_id, { companyName, contactName, freeDelivery: (c.companies as any)?.free_delivery === true });
       }
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
@@ -456,6 +494,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           delivery_date: o.delivery_date,
           total_kg: Number(o.total_kg),
           total_price: Number(o.total_price),
+          discount_percent: Number(o.discount_percent ?? 0),
+          // Same resolution as recalcOrder: the order's company, else the client's contact company
+          free_delivery: o.companies ? o.companies.free_delivery === true : contact?.freeDelivery === true,
           status: normalizeOrderStatus(o.status),
           sellsy_id: o.sellsy_id,
           created_at: o.created_at,
@@ -465,19 +506,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           is_labeled: Boolean(o.is_labeled),
           invoicing_status: (o.invoicing_status as InvoicingStatus) ?? "not_sent",
           last_invoice_sync: o.last_invoice_sync ?? null,
-          items: (o.order_items ?? []).map((i: any) => ({
-            id: i.id,
-            product_id: i.product_id,
-            product_name: i.product_name,
-            product_sku: i.product_sku,
-            quantity: Number(i.quantity),
-            price_per_kg: Number(i.price_per_kg),
-            size_label: i.size_label ?? null,
-            size_kg: i.size_kg != null ? Number(i.size_kg) : null,
-            grind_type: i.grind_type ?? null,
-            product_variant_id: i.product_variant_id ?? null,
-            kind: i.kind ?? null,
-          })),
+          items: (o.order_items ?? []).map(mapAdminOrderItem),
         };
       });
 
@@ -665,67 +694,129 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   }, [sendInvoiceToSellsy]);
 
   /* ── Order item editing (only for "received" orders) ── */
-  const recalcOrderTotals = useCallback(async (orderId: string) => {
-    const { data: items } = await supabase
-      .from("order_items")
-      .select("quantity, price_per_kg")
-      .eq("order_id", orderId);
-    const totalKg = (items ?? []).reduce((s, i) => s + Number(i.quantity), 0);
-    const totalPrice = (items ?? []).reduce((s, i) => s + Number(i.quantity) * Number(i.price_per_kg), 0);
-    await supabase.from("orders").update({ total_kg: totalKg, total_price: totalPrice }).eq("id", orderId);
-    return { totalKg, totalPrice };
+  /*
+   * Recompute an edited order like a new one: tier discount on coffee, Loberz row from the
+   * coffee weight (created for legacy orders, removed when no coffee is left), total_kg =
+   * coffee kg, total_price = total HT incl. delivery. Returns the stored items after the write.
+   */
+  const recalcOrder = useCallback(async (orderId: string): Promise<{ items: AdminOrderItem[]; totalKg: number; totalPrice: number }> => {
+    const { data: order, error: orderError } = await (supabase as any)
+      .from("orders")
+      .select("discount_percent, company_id, user_id, companies ( free_delivery )")
+      .eq("id", orderId)
+      .single();
+    if (orderError) throw orderError;
+
+    // Same resolution as loadOrders: the order's company, else the client's contact company
+    let free = order.companies?.free_delivery === true;
+    if (!order.companies && order.user_id) {
+      const { data: contact, error: contactError } = await (supabase as any)
+        .from("contacts")
+        .select("companies ( free_delivery )")
+        .eq("user_id", order.user_id)
+        .limit(1)
+        .maybeSingle();
+      if (contactError) throw contactError;
+      free = contact?.companies?.free_delivery === true;
+    }
+
+    const loadItems = async (): Promise<AdminOrderItem[]> => {
+      const { data, error } = await (supabase as any)
+        .from("order_items")
+        .select(ADMIN_ORDER_ITEM_COLUMNS)
+        .eq("order_id", orderId);
+      if (error) throw error;
+      return ((data ?? []) as any[]).map(mapAdminOrderItem);
+    };
+
+    const items = await loadItems();
+    const { deliveryRow, totalKg, totalPrice } = recalcOrderFromItems({
+      items,
+      discountPercent: Number(order.discount_percent ?? 0),
+      free,
+    });
+
+    const serviceRows = items.filter((i) => i.kind === "service");
+    const [keepRow, ...extraRows] = deliveryRow ? serviceRows : [];
+    const rowsToDelete = deliveryRow ? extraRows : serviceRows;
+
+    if (deliveryRow && keepRow) {
+      const { error } = await supabase.from("order_items").update(deliveryRow).eq("id", keepRow.id);
+      if (error) throw error;
+    } else if (deliveryRow) {
+      const { data: loberz, error: loberzError } = await supabase
+        .from("products").select("id").eq("sku", LOBERZ_SKU).limit(1).maybeSingle();
+      if (loberzError) throw loberzError;
+      if (!loberz) throw new Error(`Produit de livraison (sku ${LOBERZ_SKU}) introuvable`);
+      const { error } = await supabase.from("order_items").insert({
+        order_id: orderId,
+        product_id: loberz.id,
+        product_name: LOBERZ_PRODUCT_NAME,
+        product_sku: LOBERZ_SKU,
+        quantity: 1,
+        kind: "service",
+        ...deliveryRow,
+      });
+      if (error) throw error;
+    }
+    if (rowsToDelete.length > 0) {
+      const { error } = await supabase.from("order_items").delete().in("id", rowsToDelete.map((r) => r.id));
+      if (error) throw error;
+    }
+
+    const { error: totalsError } = await supabase
+      .from("orders").update({ total_kg: totalKg, total_price: totalPrice }).eq("id", orderId);
+    if (totalsError) throw totalsError;
+
+    return { items: await loadItems(), totalKg, totalPrice };
   }, []);
+
+  /** Recalculate after an item write and mirror the stored order locally; toasts on failure. */
+  const recalcAndApply = useCallback(async (orderId: string): Promise<boolean> => {
+    try {
+      const { items, totalKg, totalPrice } = await recalcOrder(orderId);
+      const apply = <T extends AdminOrder>(o: T): T => ({ ...o, items, total_kg: totalKg, total_price: totalPrice });
+      setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? apply(o) : o)));
+      setSelectedOrder((prev) => (prev && prev.id === orderId ? apply(prev) : prev));
+      return true;
+    } catch (err) {
+      toast({
+        title: "Échec du recalcul de la commande",
+        description: err instanceof Error ? err.message : (err as any)?.message ?? String(err),
+        variant: "destructive",
+      });
+      // The item write succeeded: reload so the list shows what is actually stored
+      void loadOrders();
+      return false;
+    }
+  }, [loadOrders, recalcOrder, toast]);
 
   const removeOrderItem = useCallback(async (orderId: string, itemId: string) => {
     const { error } = await supabase.from("order_items").delete().eq("id", itemId);
     if (error) { toast({ title: "Échec de la suppression", description: error.message, variant: "destructive" }); return; }
-    const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
-    setAdminOrders((prev) => prev.map((o) => {
-      if (o.id !== orderId) return o;
-      return { ...o, total_kg: totalKg, total_price: totalPrice, items: o.items.filter((i) => i.id !== itemId) };
-    }));
-    setSelectedOrder((prev) => {
-      if (!prev || prev.id !== orderId) return prev;
-      return { ...prev, total_kg: totalKg, total_price: totalPrice, items: prev.items.filter((i) => i.id !== itemId) };
-    });
-    toast({ title: "Article retiré" });
-  }, [recalcOrderTotals, toast]);
+    if (await recalcAndApply(orderId)) toast({ title: "Article retiré" });
+  }, [recalcAndApply, toast]);
 
   const updateOrderItemQty = useCallback(async (orderId: string, itemId: string, newQty: number) => {
     if (newQty <= 0) { await removeOrderItem(orderId, itemId); return; }
     const { error } = await supabase.from("order_items").update({ quantity: newQty }).eq("id", itemId);
     if (error) { toast({ title: "Échec de la mise à jour", description: error.message, variant: "destructive" }); return; }
-    const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
-    setAdminOrders((prev) => prev.map((o) => {
-      if (o.id !== orderId) return o;
-      return { ...o, total_kg: totalKg, total_price: totalPrice, items: o.items.map((i) => i.id === itemId ? { ...i, quantity: newQty } : i) };
-    }));
-    setSelectedOrder((prev) => {
-      if (!prev || prev.id !== orderId) return prev;
-      return { ...prev, total_kg: totalKg, total_price: totalPrice, items: prev.items.map((i) => i.id === itemId ? { ...i, quantity: newQty } : i) };
-    });
-  }, [recalcOrderTotals, removeOrderItem, toast]);
+    await recalcAndApply(orderId);
+  }, [recalcAndApply, removeOrderItem, toast]);
 
   const addProductToOrder = useCallback(async (orderId: string, product: AdminProductRow) => {
-    const { data: inserted, error } = await supabase.from("order_items").insert({
+    const productName = product.custom_name || product.name;
+    const { error } = await supabase.from("order_items").insert({
       order_id: orderId,
       product_id: product.id,
-      product_name: product.custom_name || product.name,
+      product_name: productName,
       product_sku: product.sku,
       price_per_kg: product.custom_price_per_kg ?? product.price_per_kg,
       quantity: 1,
-    }).select("id, product_id, product_name, product_sku, quantity, price_per_kg, kind").single();
-    if (error || !inserted) { toast({ title: "Échec de l'ajout", description: error?.message, variant: "destructive" }); return; }
-    const { totalKg, totalPrice } = await recalcOrderTotals(orderId);
-    const newItem: AdminOrderItem = {
-      id: inserted.id, product_id: inserted.product_id, product_name: inserted.product_name,
-      product_sku: inserted.product_sku, quantity: Number(inserted.quantity), price_per_kg: Number(inserted.price_per_kg),
-      kind: inserted.kind ?? null,
-    };
-    setAdminOrders((prev) => prev.map((o) => o.id !== orderId ? o : { ...o, total_kg: totalKg, total_price: totalPrice, items: [...o.items, newItem] }));
-    setSelectedOrder((prev) => !prev || prev.id !== orderId ? prev : { ...prev, total_kg: totalKg, total_price: totalPrice, items: [...prev.items, newItem] });
-    toast({ title: `${newItem.product_name} added` });
-  }, [recalcOrderTotals, toast]);
+    });
+    if (error) { toast({ title: "Échec de l'ajout", description: error.message, variant: "destructive" }); return; }
+    if (await recalcAndApply(orderId)) toast({ title: `${productName} added` });
+  }, [recalcAndApply, toast]);
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
@@ -778,7 +869,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .select(`
           id, name, email, phone,
           client_data_mode, onboarding_status, sellsy_client_id,
-          pricing_tier_id, last_synced_at, created_at, updated_at,
+          pricing_tier_id, free_delivery, last_synced_at, created_at, updated_at,
           contacts(user_id, last_name, first_name, email, phone, is_primary),
           company_addresses(label, address_line1)
         `)
@@ -805,6 +896,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           delivery_address: deliveryAddr?.address_line1 ?? null,
           pricing_tier: null,
           pricing_tier_id: company.pricing_tier_id ?? null,
+          free_delivery: company.free_delivery === true,
           sellsy_client_id: company.sellsy_client_id ?? null,
           onboarding_status: company.onboarding_status ?? null,
           client_data_mode: company.client_data_mode ?? "custom",
@@ -937,7 +1029,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg, kind")
+        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg, kind, sellsy_tax_rate")
         .order("name", { ascending: true });
       if (error) throw new Error(error.message);
       setProducts((data as AdminProductRow[]) ?? []);
@@ -1617,7 +1709,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           <TableHead>Articles</TableHead>
                           <TableHead className="text-right">Poids</TableHead>
                           <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort("total_price")}>
-                            Total {sortField === "total_price" && (sortAsc ? "↑" : "↓")}
+                            Total HT {sortField === "total_price" && (sortAsc ? "↑" : "↓")}
                           </TableHead>
                           <TableHead className="cursor-pointer select-none" onClick={() => handleSort("delivery_date")}>
                             Delivery {sortField === "delivery_date" && (sortAsc ? "↑" : "↓")}
@@ -1662,7 +1754,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   )}
                                   {(() => {
                                     const deliveryItem = order.items.find((i) => i.kind === 'service');
-                                    const hasZeroDelivery = deliveryItem != null && Number(deliveryItem.price_per_kg) === 0;
+                                    // Free-delivery rows are 0 € on purpose (line_discount_percent 100)
+                                    const hasZeroDelivery = deliveryItem != null && Number(deliveryItem.price_per_kg) === 0 && deliveryItem.line_discount_percent !== 100;
                                     return hasZeroDelivery ? (
                                       <span className="text-xs text-brand-orange-700 bg-brand-sand-100 border border-brand-sand rounded px-1.5 py-0.5">
                                         ⚠ Livraison 0 €
@@ -2265,6 +2358,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             const isEditable = selectedOrder.status === "received";
             const canEdit = !["delivered"].includes(selectedOrder.status);
             const hasSellsyWarning = canEdit && !isEditable && selectedOrder.sellsy_id;
+            // The Loberz service row is shown in the breakdown, not in the item list
+            const detailItems = selectedOrder.items.filter((i) => i.kind !== "service");
+            const hasDeliveryRow = selectedOrder.items.some((i) => i.kind === "service");
+            const breakdown = storedOrderBreakdown(selectedOrder.items, selectedOrder.discount_percent);
             return (
             <div className="space-y-5">
               {/* Info grid */}
@@ -2312,6 +2409,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               )}
 
+              {/* Price breakdown */}
+              {detailItems.length > 0 && !hasDeliveryRow && (
+                <div className="rounded-lg border border-brand-sand bg-brand-sand-100 px-3 py-2 text-sm font-medium text-brand-orange-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300">
+                  ⚠ Livraison à ajouter dans Sellsy
+                </div>
+              )}
+              {detailItems.length > 0 && <PriceBreakdown breakdown={breakdown} />}
+
               {/* Checklist */}
               <div className="rounded-lg bg-muted/40 p-3 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Checklist de préparation</p>
@@ -2349,9 +2454,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
               {/* Items — mobile cards */}
               <div className="lg:hidden space-y-2">
-                {selectedOrder.items.length === 0 ? (
+                {detailItems.length === 0 ? (
                   <p className="text-center text-muted-foreground py-4 text-sm">Aucun article</p>
-                ) : selectedOrder.items.map((item) => {
+                ) : detailItems.map((item) => {
                   const size = normalizeSize(item.size_label, item.size_kg);
                   const bags = size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
                   return (
@@ -2417,10 +2522,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedOrder.items.length === 0 ? (
+                    {detailItems.length === 0 ? (
                       <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">Aucun article</TableCell></TableRow>
                     ) : (
-                      selectedOrder.items.map((item) => {
+                      detailItems.map((item) => {
                         const size = normalizeSize(item.size_label, item.size_kg);
                         return (
                           <TableRow key={item.id}>
@@ -2487,7 +2592,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <button onClick={() => setShowAddProduct(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
                       </div>
                       <div className="grid gap-1 max-h-48 overflow-y-auto">
-                        {products.filter((p) => p.is_active && !selectedOrder.items.some((i) => i.product_id === p.id)).map((p) => (
+                        {products.filter((p) => p.is_active && p.kind !== "service" && !selectedOrder.items.some((i) => i.product_id === p.id)).map((p) => (
                           <button
                             key={p.id}
                             className="flex items-center justify-between rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
@@ -2518,7 +2623,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               {/* Totals */}
               <div className="flex items-center justify-between border-t border-border pt-3">
                 <span className="text-sm text-muted-foreground">{selectedOrder.total_kg.toFixed(0)} kg total</span>
-                <span className="text-lg font-semibold tabular-nums text-foreground">€{selectedOrder.total_price.toFixed(2)}</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">€{selectedOrder.total_price.toFixed(2)} HT</span>
               </div>
 
               {/* Actions */}
@@ -2561,6 +2666,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               const isEditable = selectedOrder.status === "received";
               const canEdit = !["delivered"].includes(selectedOrder.status);
               const hasSellsyWarning = canEdit && !isEditable && selectedOrder.sellsy_id;
+              // The Loberz service row is shown in the breakdown, not in the item list
+              const detailItems = selectedOrder.items.filter((i) => i.kind !== "service");
+              const hasDeliveryRow = selectedOrder.items.some((i) => i.kind === "service");
+              const breakdown = storedOrderBreakdown(selectedOrder.items, selectedOrder.discount_percent);
               return (
               <div className="space-y-5">
                 {/* Info grid */}
@@ -2608,6 +2717,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 )}
 
+                {/* Price breakdown */}
+                {detailItems.length > 0 && !hasDeliveryRow && (
+                  <div className="rounded-lg border border-brand-sand bg-brand-sand-100 px-3 py-2 text-sm font-medium text-brand-orange-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300">
+                    ⚠ Livraison à ajouter dans Sellsy
+                  </div>
+                )}
+                {detailItems.length > 0 && <PriceBreakdown breakdown={breakdown} />}
+
                 {/* Checklist */}
                 <div className="rounded-lg bg-muted/40 p-3 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Checklist de préparation</p>
@@ -2645,9 +2762,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
                 {/* Items — mobile cards */}
                 <div className="lg:hidden space-y-2">
-                  {selectedOrder.items.length === 0 ? (
+                  {detailItems.length === 0 ? (
                     <p className="text-center text-muted-foreground py-4 text-sm">Aucun article</p>
-                  ) : selectedOrder.items.map((item) => {
+                  ) : detailItems.map((item) => {
                     const size = normalizeSize(item.size_label, item.size_kg);
                     const bags = size && item.size_kg != null ? Math.round(item.quantity / item.size_kg) : null;
                     return (
@@ -2713,10 +2830,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedOrder.items.length === 0 ? (
+                      {detailItems.length === 0 ? (
                         <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">Aucun article</TableCell></TableRow>
                       ) : (
-                        selectedOrder.items.map((item) => {
+                        detailItems.map((item) => {
                           const size = normalizeSize(item.size_label, item.size_kg);
                           return (
                             <TableRow key={item.id}>
@@ -2783,7 +2900,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           <button onClick={() => setShowAddProduct(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
                         </div>
                         <div className="grid gap-1 max-h-48 overflow-y-auto">
-                          {products.filter((p) => p.is_active && !selectedOrder.items.some((i) => i.product_id === p.id)).map((p) => (
+                          {products.filter((p) => p.is_active && p.kind !== "service" && !selectedOrder.items.some((i) => i.product_id === p.id)).map((p) => (
                             <button
                               key={p.id}
                               className="flex items-center justify-between rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
@@ -2814,7 +2931,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 {/* Totals */}
                 <div className="flex items-center justify-between border-t border-border pt-3">
                   <span className="text-sm text-muted-foreground">{selectedOrder.total_kg.toFixed(0)} kg total</span>
-                  <span className="text-lg font-semibold tabular-nums text-foreground">€{selectedOrder.total_price.toFixed(2)}</span>
+                  <span className="text-lg font-semibold tabular-nums text-foreground">€{selectedOrder.total_price.toFixed(2)} HT</span>
                 </div>
 
                 {/* Actions */}
@@ -3001,6 +3118,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           custom_company_name: c.custom_company_name ?? null,
           client_data_mode: c.client_data_mode ?? "custom",
           pricing_tier_id: c.pricing_tier_id ?? null,
+          free_delivery: c.free_delivery === true,
         }))}
         products={products.map((p) => ({
           id: p.id,
@@ -3011,6 +3129,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           custom_price_per_kg: p.custom_price_per_kg,
           data_source_mode: p.data_source_mode,
           is_active: p.is_active,
+          kind: p.kind,
+          vat_rate: p.sellsy_tax_rate,
         }))}
         onCreated={() => void loadOrders()}
       />

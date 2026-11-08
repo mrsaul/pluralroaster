@@ -4,6 +4,10 @@ import type { CartItem, Order } from "@/lib/store";
 /** VAT rate (percent) applied to the Loberz bike-delivery service. */
 export const DELIVERY_VAT_RATE = 20;
 
+/** The Loberz delivery product (order_items row kind 'service'), same values the order RPC writes. */
+export const LOBERZ_SKU = "0001";
+export const LOBERZ_PRODUCT_NAME = "Livraison à vélo Loberz";
+
 /** Share of the delivery price Plural absorbs (percent). */
 export const PLURAL_DELIVERY_CONTRIBUTION_PERCENT = 50;
 
@@ -160,4 +164,81 @@ export function orderToBreakdown(order: Order): OrderBreakdown {
     discountPercent: order.discountPercent,
     delivery: order.delivery ? { kind: "stored", ...order.delivery } : { kind: "none" },
   });
+}
+
+/** The Loberz service row to store for a breakdown; null when there is no delivery (no coffee). */
+export function deliveryRowFor(
+  breakdown: OrderBreakdown,
+): { price_per_kg: number; list_price: number; line_discount_percent: number } | null {
+  const { delivery } = breakdown;
+  if (!delivery) return null;
+  return {
+    price_per_kg: delivery.netHT,
+    list_price: delivery.fullPriceHT,
+    line_discount_percent: delivery.discountPercent,
+  };
+}
+
+/** An order_items row as stored: a coffee line, or the Loberz row (kind 'service'). */
+export type StoredOrderItem = {
+  kind?: string | null;
+  quantity: number;
+  price_per_kg: number;
+  list_price?: number | null;
+  line_discount_percent?: number | null;
+  /** Coffee VAT rate (product's sellsy_tax_rate); defaults to the coffee rate. */
+  vat_rate?: number | null;
+};
+
+function storedCoffeeLines(items: StoredOrderItem[]): PricedCoffeeLine[] {
+  return items
+    .filter((i) => i.kind !== "service")
+    .map((i) => ({
+      pricePerKg: Number(i.price_per_kg),
+      quantityKg: Number(i.quantity),
+      vatRate: i.vat_rate ?? DEFAULT_COFFEE_VAT_RATE,
+    }));
+}
+
+/** Breakdown of an order as stored: its service row if it has one, no delivery for legacy orders. */
+export function storedOrderBreakdown(items: StoredOrderItem[], discountPercent: number): OrderBreakdown {
+  const service = items.find((i) => i.kind === "service");
+  return computeOrderBreakdown({
+    coffeeLines: storedCoffeeLines(items),
+    discountPercent,
+    delivery: service
+      ? {
+          kind: "stored",
+          fullPriceHT: Number(service.list_price ?? service.price_per_kg),
+          discountPercent: Number(service.line_discount_percent ?? 0),
+        }
+      : { kind: "none" },
+  });
+}
+
+/**
+ * What an admin edit writes back: delivery recomputed from the coffee weight (any stored
+ * service row is replaced), total_kg = coffee kg, total_price = total HT incl. delivery.
+ */
+export function recalcOrderFromItems(input: {
+  items: StoredOrderItem[];
+  discountPercent: number;
+  free: boolean;
+}): {
+  breakdown: OrderBreakdown;
+  deliveryRow: ReturnType<typeof deliveryRowFor>;
+  totalKg: number;
+  totalPrice: number;
+} {
+  const breakdown = computeOrderBreakdown({
+    coffeeLines: storedCoffeeLines(input.items),
+    discountPercent: input.discountPercent,
+    delivery: { kind: "auto", free: input.free },
+  });
+  return {
+    breakdown,
+    deliveryRow: deliveryRowFor(breakdown),
+    totalKg: breakdown.coffee.kg,
+    totalPrice: breakdown.totalHT,
+  };
 }

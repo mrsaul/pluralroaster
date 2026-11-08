@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
@@ -29,6 +30,8 @@ export type AppClient = {
   delivery_address: string | null;
   pricing_tier: string | null;
   pricing_tier_id: string | null;
+  /** companies.free_delivery: Plural pays 100 % of the Loberz delivery instead of 50 %. */
+  free_delivery: boolean;
   sellsy_client_id: string | null;
   onboarding_status: string | null;
   client_data_mode: "sellsy" | "custom";
@@ -87,6 +90,7 @@ type ClientEditFormData = {
   deliveryAddress: string;
   pricingTier: string;
   pricingTierId: string | null;
+  freeDelivery: boolean;
 };
 
 function clientToFormData(client: AppClient): ClientEditFormData {
@@ -99,6 +103,7 @@ function clientToFormData(client: AppClient): ClientEditFormData {
     deliveryAddress: client.custom_delivery_address ?? client.delivery_address ?? "",
     pricingTier: client.custom_pricing_tier ?? client.pricing_tier ?? "standard",
     pricingTierId: client.pricing_tier_id ?? null,
+    freeDelivery: client.free_delivery === true,
   };
 }
 
@@ -119,7 +124,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   // ── Draft-persisted form state (key includes client id for per-client drafts) ──
   const defaultFormData = client ? clientToFormData(client) : {
     dataMode: "custom" as const, companyName: "", contactName: "", email: "",
-    phone: "", deliveryAddress: "", pricingTier: "standard", pricingTierId: null,
+    phone: "", deliveryAddress: "", pricingTier: "standard", pricingTierId: null, freeDelivery: false,
   };
 
   const {
@@ -135,6 +140,8 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   );
 
   const { dataMode, companyName, contactName, email, phone, deliveryAddress, pricingTier, pricingTierId } = form;
+  // Drafts saved before the flag existed have no freeDelivery: fall back to the stored value
+  const freeDelivery = form.freeDelivery ?? client?.free_delivery === true;
 
   // Field-specific setters
   const setDataMode = (v: "sellsy" | "custom") => setForm(p => ({ ...p, dataMode: v }));
@@ -145,6 +152,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const setDeliveryAddress = (v: string) => setForm(p => ({ ...p, deliveryAddress: v }));
   const setPricingTier = (v: string) => setForm(p => ({ ...p, pricingTier: v }));
   const setPricingTierId = (v: string | null) => setForm(p => ({ ...p, pricingTierId: v }));
+  const setFreeDelivery = (v: boolean) => setForm(p => ({ ...p, freeDelivery: v }));
 
   useEffect(() => {
     if (!open) return;
@@ -171,7 +179,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
         // Step 2: build OR filter: company_id match OR user_id match
         let query = supabase
           .from("orders")
-          .select("id, created_at, delivery_date, status, total_kg, total_price, sellsy_id, order_items(id, product_name, product_sku, quantity, price_per_kg, size_label)");
+          .select("id, created_at, delivery_date, status, total_kg, total_price, sellsy_id, order_items(id, product_name, product_sku, quantity, price_per_kg, size_label, kind)");
 
         if (userIds.length > 0) {
           query = query.or(`company_id.eq.${client.id},user_id.in.(${userIds.join(",")})`);
@@ -198,7 +206,8 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             total_kg: Number(o.total_kg),
             total_price: Number(o.total_price),
             sellsy_id: o.sellsy_id ?? null,
-            items: (o.order_items ?? []).map((i: any) => ({
+            // The Loberz service row is counted in total_price (HT incl. delivery), not listed as coffee
+            items: (o.order_items ?? []).filter((i: any) => i.kind !== "service").map((i: any) => ({
               id: i.id,
               product_name: i.product_name,
               product_sku: i.product_sku ?? null,
@@ -257,6 +266,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           email: email || null,
           phone: phone || null,
           pricing_tier_id: pricingTierId,
+          free_delivery: freeDelivery,
           sellsy_client_id: sellsyClientId.trim() || null,
         })
         .eq("id", client.id);
@@ -381,7 +391,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                             {order.total_kg} kg
                           </span>
                           <span className="text-xs font-semibold tabular-nums text-foreground ml-2">
-                            €{order.total_price.toFixed(2)}
+                            €{order.total_price.toFixed(2)} HT
                           </span>
                         </button>
                         {isExpanded && (
@@ -520,6 +530,17 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               ) : (
                 <p className="text-sm text-muted-foreground">Aucun palier tarifaire. Créez-en dans la section Tarifs.</p>
               )}
+            </div>
+
+            {/* Free delivery — app-only setting, editable in both data modes */}
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
+              <div className="space-y-0.5">
+                <label htmlFor="free-delivery" className="text-sm font-medium text-foreground cursor-pointer">Livraison gratuite</label>
+                <p className="text-xs text-muted-foreground">
+                  {freeDelivery ? "Plural prend en charge 100 % de la livraison Loberz." : "Plural prend en charge 50 % de la livraison Loberz."}
+                </p>
+              </div>
+              <Switch id="free-delivery" checked={freeDelivery} onCheckedChange={setFreeDelivery} />
             </div>
 
             {/* 5. Client Data Source */}
