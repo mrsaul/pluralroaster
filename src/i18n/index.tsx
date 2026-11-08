@@ -241,6 +241,21 @@ const fr = {
     title:  "Page introuvable",
     link:   "Retour à l'accueil",
   },
+  breakdown: {
+    coffee:        "Café",
+    publicPrice:   (kg: string) => `${kg} kg · prix public`,
+    yourDiscount:  (d: string) => `Votre remise −${d} %`,
+    yourCoffee:    "Votre prix café",
+    delivery:      "Livraison à vélo",
+    loberz:        (band: string) => `Loberz · ${band}`,
+    pluralPays:    "Plural paie 50 %",
+    freeDelivery:  "Livraison offerte",
+    yourDelivery:  "Votre livraison",
+    total:         "Total",
+    totalHT:       "Total HT",
+    vat:           (rate: string) => `TVA ${rate} %`,
+    totalTTC:      "Total TTC",
+  },
 } as const;
 
 const en: typeof fr = {
@@ -401,6 +416,21 @@ const en: typeof fr = {
   notFound: {
     title:  "Oops! Page not found",
     link:   "Return to Home",
+  },
+  breakdown: {
+    coffee:        "Coffee",
+    publicPrice:   (kg: string) => `${kg} kg · list price`,
+    yourDiscount:  (d: string) => `Your discount −${d} %`,
+    yourCoffee:    "Your coffee price",
+    delivery:      "Bike delivery",
+    loberz:        (band: string) => `Loberz · ${band}`,
+    pluralPays:    "Plural pays 50 %",
+    freeDelivery:  "Free delivery",
+    yourDelivery:  "Your delivery",
+    total:         "Total",
+    totalHT:       "Total excl. VAT",
+    vat:           (rate: string) => `VAT ${rate} %`,
+    totalTTC:      "Total incl. VAT",
   },
 } as const;
 
