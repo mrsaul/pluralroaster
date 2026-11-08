@@ -115,10 +115,11 @@ END;
 $function$;
 
 -- Same grants as the 12-arg version: postgres, authenticated, service_role.
+-- anon must be revoked explicitly: Supabase default privileges grant it directly.
 REVOKE ALL ON FUNCTION public.create_order_with_items(
   uuid, date, numeric, numeric, text, timestamptz, text, jsonb,
   uuid, uuid, numeric, text, jsonb
-) FROM PUBLIC;
+) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_order_with_items(
   uuid, date, numeric, numeric, text, timestamptz, text, jsonb,
   uuid, uuid, numeric, text, jsonb
@@ -134,3 +135,7 @@ COMMIT;
 --   where (table_name = 'order_items' and column_name in ('list_price','line_discount_percent'))
 --      or (table_name = 'companies' and column_name = 'free_delivery');
 --   -- expect 3 rows
+-- select has_function_privilege('anon',
+--   'public.create_order_with_items(uuid,date,numeric,numeric,text,timestamptz,text,jsonb,uuid,uuid,numeric,text,jsonb)',
+--   'EXECUTE');
+--   -- expect false
