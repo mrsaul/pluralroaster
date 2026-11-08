@@ -4,7 +4,10 @@ import {
   deliveryFullPrice,
   deliveryBandLabel,
   computeOrderBreakdown,
+  cartToCoffeeLines,
 } from "@/lib/pricing";
+import { buildPlainTextSummary, type OrderReceiptData } from "@/lib/orderUtils";
+import type { CartItem, Product } from "@/lib/store";
 
 describe("round2", () => {
   it("rounds decimal half-up", () => {
@@ -113,5 +116,43 @@ describe("computeOrderBreakdown", () => {
     expect(b.delivery).toBeNull();
     expect(b.totalHT).toBe(0);
     expect(b.totalTTC).toBe(0);
+  });
+});
+
+const product = (over: Partial<Product> = {}) =>
+  ({ id: "p1", name: "ZAÏA", pricePerKg: 28, ...over }) as Product;
+
+describe("cartToCoffeeLines", () => {
+  it("derives per-kg price and kg from a 250 g bag item", () => {
+    const items: CartItem[] = [
+      { product: product({ vatRate: 20 }), quantity: 4, sizeLabel: "250g", sizeKg: 0.25, unitPrice: 8 },
+    ];
+    expect(cartToCoffeeLines(items)).toEqual([{ pricePerKg: 32, quantityKg: 1, vatRate: 20 }]);
+  });
+
+  it("uses product price and quantity as kg for a per-kg item, default VAT 5.5", () => {
+    const items: CartItem[] = [{ product: product(), quantity: 3 }];
+    expect(cartToCoffeeLines(items)).toEqual([{ pricePerKg: 28, quantityKg: 3, vatRate: 5.5 }]);
+  });
+});
+
+describe("buildPlainTextSummary breakdown", () => {
+  it("includes remise, livraison and total TTC", () => {
+    const breakdown = computeOrderBreakdown({
+      coffeeLines: [{ pricePerKg: 28, quantityKg: 30, vatRate: 5.5 }],
+      discountPercent: 10,
+      delivery: { kind: "auto", free: false },
+    });
+    const data: OrderReceiptData = {
+      orderId: "a1b2c3d4-0000", placedAt: "2026-11-08T10:00:00Z", deliveryDate: "2026-11-12", notes: null,
+      items: [{ name: "ZAÏA", sizeLabel: null, sizeKg: null, quantity: 30, unitPrice: null, pricePerKg: 28 }],
+      totalHT: breakdown.totalHT, vatLines: breakdown.vatLines, totalTTC: breakdown.totalTTC,
+      discountPercent: 10, discountAmount: 84, breakdown,
+    };
+    // Intl.NumberFormat("fr-FR") emits non-breaking spaces; compare with plain ones.
+    const text = buildPlainTextSummary(data).replace(/[\u00a0\u202f]/g, " ");
+    expect(text).toContain("Remise −10 %");
+    expect(text).toContain("Livraison à vélo : 12,00 €");
+    expect(text).toContain("Total TTC : 811,98 €");
   });
 });

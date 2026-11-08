@@ -21,6 +21,7 @@ const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
 // Kitchen lives in its own lazy chunk — never downloaded by coffee-only users.
 const KitchenApp = lazy(() => import("@/kitchen/KitchenApp"));
 import { supabase } from "@/integrations/supabase/client";
+import { computeOrderBreakdown, cartToCoffeeLines } from "@/lib/pricing";
 import { OTP_FLOW_KEY } from "./LoginPage";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -177,6 +178,7 @@ const Index = () => {
   const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
   const [pendingReorder, setPendingReorder] = useState<Order | null>(null);
   const [clientTier, setClientTier] = useState<{ discountPercent: number; name: string } | null>(null);
+  const [freeDelivery, setFreeDelivery] = useState(false);
   const t = useT();
   const cart = useCart();
   const { clearCart } = cart;
@@ -302,7 +304,7 @@ const Index = () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     const { data: contact } = await supabase
       .from("contacts")
-      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, pricing_tier_id, pricing_tiers(product_discount_percent, name), company_addresses(label, address_line1, address_line2))")
+      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, pricing_tier_id, free_delivery, pricing_tiers(product_discount_percent, name), company_addresses(label, address_line1, address_line2))")
       .eq("user_id", currentUser?.id ?? "")
       .maybeSingle();
 
@@ -351,6 +353,7 @@ const Index = () => {
         ? { discountPercent: Number(tier.product_discount_percent), name: String(tier.name) }
         : null
     );
+    setFreeDelivery(company?.free_delivery === true);
   }, [loadOrders, setView]);
 
   // ── Auth lifecycle ──────────────────────────────────────────────────────────
@@ -377,6 +380,7 @@ const Index = () => {
       setAuthLoading(false);
       clearCart();
       setClientTier(null);
+      setFreeDelivery(false);
     };
 
     // onAuthStateChange fires for every auth event — including background
@@ -465,13 +469,13 @@ const Index = () => {
       throw new Error("Votre session a expiré. Veuillez vous reconnecter.");
     }
 
-    // Apply product discount for this client's tier (services excluded)
+    // Same breakdown the client saw at checkout: tier discount on coffee, Loberz delivery on top
     const discountPct = clientTier?.discountPercent ?? 0;
-    const coffeeSubtotal = cart.totalPrice;
-    const discountedCoffeeTotal =
-      discountPct > 0
-        ? Math.round(coffeeSubtotal * (1 - discountPct / 100) * 100) / 100
-        : coffeeSubtotal;
+    const breakdown = computeOrderBreakdown({
+      coffeeLines: cartToCoffeeLines(cart.items),
+      discountPercent: discountPct,
+      delivery: { kind: "auto", free: freeDelivery },
+    });
 
     const coffeeItems = cart.items.map((item) => ({
       product_id: item.product.id,
@@ -489,12 +493,19 @@ const Index = () => {
       p_user_id:            user.id,
       p_delivery_date:      deliveryDate,
       p_total_kg:           cart.totalKg,
-      p_total_price:        discountedCoffeeTotal,
+      p_total_price:        breakdown.totalHT,
       p_status:             "received",
       p_confirmed_at:       new Date().toISOString(),
       p_notes:              notes ?? null,
       p_items:              coffeeItems,
       p_reordered_from:     reorderedFromId ?? null,
+      ...(breakdown.delivery ? {
+        p_delivery: {
+          full_price:       breakdown.delivery.fullPriceHT,
+          discount_percent: breakdown.delivery.discountPercent,
+          net:              breakdown.delivery.netHT,
+        },
+      } : {}),
       ...(discountPct > 0 ? {
         p_discount_percent:  discountPct,
         p_pricing_tier_name: clientTier!.name,
@@ -514,7 +525,7 @@ const Index = () => {
     cart.clearCart();
 
     return { orderId: rpcResult.order_id as string };
-  }, [cart, clientTier, loadOrders, reorderedFromId, setDraftDeliveryDate, toast]);
+  }, [cart, clientTier, freeDelivery, loadOrders, reorderedFromId, setDraftDeliveryDate, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
     if (!draftDeliveryDate || cart.items.length === 0) {
@@ -680,12 +691,12 @@ const Index = () => {
           <CheckoutPage
             items={cart.items}
             totalKg={cart.totalKg}
-            totalPrice={cart.totalPrice}
             onBack={() => setView("shop")}
             onConfirm={handleConfirmOrder}
             reorderedFromRef={reorderedFromId}
             clientName={String((onboardingData as any)?.company_name ?? '')}
             discountPercent={clientTier?.discountPercent ?? 0}
+            freeDelivery={freeDelivery}
             onRemoveItem={(product, sizeLabel) => {
               cart.updateQuantity(product, 0, sizeLabel);
             }}

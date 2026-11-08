@@ -1,4 +1,5 @@
-import type { VatLine } from "@/lib/orderUtils";
+import { DEFAULT_COFFEE_VAT_RATE, type VatLine } from "@/lib/orderUtils";
+import type { CartItem } from "@/lib/store";
 
 /** VAT rate (percent) applied to the Loberz bike-delivery service. */
 export const DELIVERY_VAT_RATE = 20;
@@ -140,4 +141,14 @@ export function computeOrderBreakdown(input: {
     vatLines,
     totalTTC: round2(totalHT + totalVat),
   };
+}
+
+/** Cart lines as priced coffee lines (per-kg price, kg and VAT rate) for computeOrderBreakdown. */
+export function cartToCoffeeLines(items: CartItem[]): PricedCoffeeLine[] {
+  return items.map((item) => ({
+    pricePerKg:
+      item.unitPrice != null && item.sizeKg ? item.unitPrice / item.sizeKg : item.product.pricePerKg,
+    quantityKg: item.sizeKg ? item.sizeKg * item.quantity : item.quantity,
+    vatRate: item.product.vatRate ?? DEFAULT_COFFEE_VAT_RATE,
+  }));
 }

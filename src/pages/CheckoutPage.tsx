@@ -6,20 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CartItem, Product } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel, computeVatLines, formatVatRate, DEFAULT_COFFEE_VAT_RATE } from "@/lib/orderUtils";
+import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
+import { computeOrderBreakdown, cartToCoffeeLines, type OrderBreakdown } from "@/lib/pricing";
+import { PriceBreakdown } from "@/components/PriceBreakdown";
 import { SwipeableCartRow } from "@/components/SwipeableCartRow";
 import { useT } from "@/i18n";
 
 interface CheckoutPageProps {
   items: CartItem[];
   totalKg: number;
-  totalPrice: number;
   onBack: () => void;
   onConfirm: (deliveryDate: string, notes?: string) => Promise<{ orderId: string }>;
   /** Short ref of the original order when this is a re-order (e.g. "A1B2C3D4") */
   reorderedFromRef?: string | null;
   clientName?: string;
   discountPercent?: number;
+  /** Company ships free (Plural absorbs the whole Loberz delivery) */
+  freeDelivery: boolean;
   /** Remove a specific line item from the draft order */
   onRemoveItem?: (product: Product, sizeLabel?: string) => void;
   /** Update quantity and/or variant of a specific line item */
@@ -48,18 +51,12 @@ function lineQtyKg(item: CartItem): number {
   return item.sizeKg ? item.sizeKg * item.quantity : item.quantity;
 }
 
-function vatLinesFor(items: CartItem[], discountPercent: number) {
-  return computeVatLines(
-    items.map((item) => ({ ht: lineHT(item), rate: item.product.vatRate ?? DEFAULT_COFFEE_VAT_RATE })),
+function breakdownFor(items: CartItem[], discountPercent: number, freeDelivery: boolean): OrderBreakdown {
+  return computeOrderBreakdown({
+    coffeeLines: cartToCoffeeLines(items),
     discountPercent,
-  );
-}
-
-const sumVat = (lines: { amount: number }[]) => lines.reduce((sum, l) => sum + l.amount, 0);
-
-function linePricePerKg(item: CartItem): number {
-  if (item.unitPrice != null && item.sizeKg) return item.unitPrice / item.sizeKg;
-  return item.product.pricePerKg;
+    delivery: { kind: "auto", free: freeDelivery },
+  });
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -67,12 +64,12 @@ function linePricePerKg(item: CartItem): number {
 export default function CheckoutPage({
   items,
   totalKg,
-  totalPrice,
   onBack,
   onConfirm,
   reorderedFromRef,
   clientName = '',
   discountPercent = 0,
+  freeDelivery,
   onRemoveItem,
   onUpdateItem,
 }: CheckoutPageProps) {
@@ -86,24 +83,17 @@ export default function CheckoutPage({
   // Snapshot before cart clears — keeps success screen populated
   const [confirmedOrderId, setConfirmedOrderId] = useState<string | null>(null);
   const [confirmedItems, setConfirmedItems] = useState<CartItem[]>([]);
-  const [confirmedTotal, setConfirmedTotal] = useState(0);
+  const [confirmedBreakdown, setConfirmedBreakdown] = useState<OrderBreakdown | null>(null);
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
-  const [confirmedDiscountAmt, setConfirmedDiscountAmt] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  const discountAmount = Math.round(totalPrice * discountPercent / 100 * 100) / 100;
-  const discountedProductTotal = totalPrice - discountAmount;
-  const vatLines = vatLinesFor(items, discountPercent);
-  const totalTTC = discountedProductTotal + sumVat(vatLines);
+  const breakdown = breakdownFor(items, discountPercent, freeDelivery);
 
   const handleConfirm = useCallback(async () => {
     if (!deliveryDate || submitting) return;
     // Snapshot now — parent will clear cart after onConfirm resolves
     const snap = [...items];
-    const snapTotal = totalPrice;
-    const snapDiscountAmount = Math.round(snapTotal * discountPercent / 100 * 100) / 100;
-    const snapDiscountedProductTotal = snapTotal - snapDiscountAmount;
-    const snapVatLines = vatLinesFor(snap, discountPercent);
+    const snapBreakdown = breakdownFor(snap, discountPercent, freeDelivery);
 
     setSubmitting(true);
     setOrderError(null);
@@ -111,8 +101,7 @@ export default function CheckoutPage({
       const { orderId } = await onConfirm(deliveryDate, notes.trim() || undefined);
       setConfirmedAt(new Date().toISOString());
       setConfirmedItems(snap);
-      setConfirmedTotal(snapTotal);
-      setConfirmedDiscountAmt(snapDiscountAmount);
+      setConfirmedBreakdown(snapBreakdown);
       setConfirmedOrderId(orderId);
       // Write receipt data for PDF page (localStorage — shared across tabs)
       const now = new Date().toISOString();
@@ -130,13 +119,14 @@ export default function CheckoutPage({
           pricePerKg: item.product.pricePerKg,
           kind: 'coffee' as const,
         })),
-        totalHT: snapDiscountedProductTotal,
-        vatLines: snapVatLines,
-        totalTTC: snapDiscountedProductTotal + sumVat(snapVatLines),
+        totalHT: snapBreakdown.totalHT,
+        vatLines: snapBreakdown.vatLines,
+        totalTTC: snapBreakdown.totalTTC,
         ...(discountPercent > 0 ? {
           discountPercent,
-          discountAmount: snapDiscountAmount,
+          discountAmount: snapBreakdown.coffee.discountHT,
         } : {}),
+        breakdown: snapBreakdown,
       };
       localStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       setStep("success");
@@ -146,15 +136,12 @@ export default function CheckoutPage({
     } finally {
       setSubmitting(false);
     }
-  }, [deliveryDate, items, notes, onConfirm, submitting, totalPrice, discountPercent]);
+  }, [deliveryDate, items, notes, onConfirm, submitting, discountPercent, freeDelivery]);
 
   // ── Success screen ────────────────────────────────────────────────────────
 
   if (step === "success") {
-    const confirmedDiscountedTotal = confirmedTotal - confirmedDiscountAmt;
-    const snapHT  = confirmedDiscountedTotal;
-    const snapVatLines = vatLinesFor(confirmedItems, discountPercent);
-    const snapTTC = snapHT + sumVat(snapVatLines);
+    const snapBreakdown = confirmedBreakdown ?? breakdownFor(confirmedItems, discountPercent, freeDelivery);
 
     const receiptData: OrderReceiptData = {
       orderId:      confirmedOrderId ?? "",
@@ -170,13 +157,14 @@ export default function CheckoutPage({
         pricePerKg: item.product.pricePerKg,
         kind:       'coffee' as const,
       })),
-      totalHT:  snapHT,
-      vatLines: snapVatLines,
-      totalTTC: snapTTC,
+      totalHT:  snapBreakdown.totalHT,
+      vatLines: snapBreakdown.vatLines,
+      totalTTC: snapBreakdown.totalTTC,
       ...(discountPercent > 0 ? {
         discountPercent,
-        discountAmount: confirmedDiscountAmt,
+        discountAmount: snapBreakdown.coffee.discountHT,
       } : {}),
+      breakdown: snapBreakdown,
     };
 
     const handleShare = async () => {
@@ -267,22 +255,7 @@ export default function CheckoutPage({
                 </div>
               ))}
             </div>
-            <div className="border-t border-border bg-muted/20 divide-y divide-border/50 text-sm">
-              <div className="flex justify-between px-4 py-2 text-muted-foreground">
-                <span>{t.checkout.subtotalHT}</span>
-                <span className="tabular-nums">€{snapHT.toFixed(2)}</span>
-              </div>
-              {snapVatLines.map(({ rate, amount }) => (
-                <div key={rate} className="flex justify-between px-4 py-2 text-muted-foreground">
-                  <span>{t.checkout.vat(formatVatRate(rate))}</span>
-                  <span className="tabular-nums">€{amount.toFixed(2)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between px-4 py-2 font-semibold text-foreground">
-                <span>{t.checkout.totalTTC}</span>
-                <span className="tabular-nums">€{snapTTC.toFixed(2)}</span>
-              </div>
-            </div>
+            <PriceBreakdown breakdown={snapBreakdown} className="rounded-none border-0 border-t bg-muted/20" />
           </div>
 
           {/* ── Share actions ── */}
@@ -383,7 +356,7 @@ export default function CheckoutPage({
           <div>
             <h1 className="text-base font-medium text-foreground">{t.checkout.reviewOrder}</h1>
             <p className="text-xs text-muted-foreground tabular-nums">
-              {totalKg.toFixed(2)} kg · €{totalTTC.toFixed(2)} TTC
+              {totalKg.toFixed(2)} kg · €{breakdown.totalTTC.toFixed(2)} TTC
             </p>
           </div>
         </div>
@@ -432,29 +405,7 @@ export default function CheckoutPage({
             })}
           </div>
 
-          {/* Totals */}
-          <div className="border-t border-border bg-muted/20 divide-y divide-border/50 text-sm">
-            <div className="flex justify-between px-4 py-2">
-              <span className="text-muted-foreground">{t.checkout.subtotalHT}</span>
-              <span className="tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
-            </div>
-            {discountPercent > 0 && (
-              <div className="flex justify-between px-4 py-2">
-                <span className="text-brand-green-600 dark:text-emerald-400">Remise {discountPercent} %</span>
-                <span className="tabular-nums text-brand-green-600 dark:text-emerald-400">−€{discountAmount.toFixed(2)}</span>
-              </div>
-            )}
-            {vatLines.map(({ rate, amount }) => (
-              <div key={rate} className="flex justify-between px-4 py-2">
-                <span className="text-muted-foreground">{t.checkout.vat(formatVatRate(rate))}</span>
-                <span className="tabular-nums text-foreground">€{amount.toFixed(2)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between px-4 py-2 font-semibold">
-              <span className="text-foreground">{t.checkout.totalTTC}</span>
-              <span className="tabular-nums text-foreground">€{totalTTC.toFixed(2)}</span>
-            </div>
-          </div>
+          <PriceBreakdown breakdown={breakdown} className="rounded-none border-0 border-t bg-muted/20" />
         </section>
 
         {/* ── Delivery date ── */}

@@ -1,6 +1,7 @@
 // src/lib/orderUtils.ts
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
+import type { OrderBreakdown } from "@/lib/pricing";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,8 @@ export type OrderReceiptData = {
   totalTTC: number;
   discountPercent?: number;
   discountAmount?: number;
+  /** Full breakdown (coffee, discount, delivery, VAT). Absent on receipts saved before it shipped. */
+  breakdown?: OrderBreakdown;
 };
 
 // ── VAT ───────────────────────────────────────────────────────────────────────
@@ -164,6 +167,19 @@ export function buildPlainTextSummary(data: OrderReceiptData): string {
   }
 
   lines.push("");
+  const b = data.breakdown;
+  if (b) {
+    if (b.coffee.discountPercent > 0) {
+      lines.push(`Remise −${formatVatRate(b.coffee.discountPercent)} % : −${fmtEur(b.coffee.discountHT)}`);
+    }
+    if (b.delivery) {
+      lines.push(
+        b.delivery.free
+          ? "Livraison à vélo : offerte"
+          : `Livraison à vélo : ${fmtEur(b.delivery.netHT)}`,
+      );
+    }
+  }
   lines.push(`Total TTC : ${fmtEur(data.totalTTC)}`);
   lines.push("");
   lines.push("pluralcafe.fr");

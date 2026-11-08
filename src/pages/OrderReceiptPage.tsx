@@ -9,6 +9,7 @@ import {
   inferGrind,
   GRIND_LABEL,
 } from "@/lib/orderUtils";
+import type { OrderBreakdown } from "@/lib/pricing";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -27,6 +28,59 @@ function itemUnitHT(item: OrderReceiptData["items"][number]): number {
 
 function fmtEur(n: number): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n);
+}
+
+const rowStyle = { display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#6B6B63", borderBottom: "1px solid #e8e3db" } as const;
+const headingStyle = { fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9E9E93", padding: "8px 0 2px" } as const;
+
+function BreakdownRows({ breakdown: b }: { breakdown: OrderBreakdown }) {
+  return (
+    <>
+      <div style={headingStyle}>Café</div>
+      <div style={rowStyle}>
+        <span>Prix public ({b.coffee.kg} kg)</span>
+        <span>{fmtEur(b.coffee.regularHT)}</span>
+      </div>
+      {b.coffee.discountPercent > 0 && (
+        <div style={{ ...rowStyle, color: "#3a8a5a" }}>
+          <span>Remise {b.coffee.discountPercent} %</span>
+          <span>−{fmtEur(b.coffee.discountHT)}</span>
+        </div>
+      )}
+      <div style={rowStyle}>
+        <span>Café HT</span>
+        <span>{fmtEur(b.coffee.netHT)}</span>
+      </div>
+      {b.delivery && (
+        <>
+          <div style={headingStyle}>Livraison à vélo</div>
+          <div style={rowStyle}>
+            <span>Tarif Loberz ({b.delivery.bandLabel})</span>
+            <span>{fmtEur(b.delivery.fullPriceHT)}</span>
+          </div>
+          <div style={{ ...rowStyle, color: "#3a8a5a" }}>
+            <span>{b.delivery.free ? "Offerte par Plural" : `Prise en charge Plural ${b.delivery.discountPercent} %`}</span>
+            <span>−{fmtEur(b.delivery.discountHT)}</span>
+          </div>
+          <div style={rowStyle}>
+            <span>Livraison HT</span>
+            <span>{fmtEur(b.delivery.netHT)}</span>
+          </div>
+        </>
+      )}
+      <div style={headingStyle}>Total</div>
+      <div style={rowStyle}>
+        <span>Total HT</span>
+        <span>{fmtEur(b.totalHT)}</span>
+      </div>
+      {b.vatLines.map(({ rate, amount }) => (
+        <div key={rate} style={rowStyle}>
+          <span>TVA {formatVatRate(rate)} %</span>
+          <span>{fmtEur(amount)}</span>
+        </div>
+      ))}
+    </>
+  );
 }
 
 function formatPlacedAt(iso: string): string {
@@ -291,6 +345,10 @@ export default function OrderReceiptPage() {
           {/* ── Totals ────────────────────────────────────────────────────── */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 32 }}>
             <div style={{ width: 220, fontSize: 11 }}>
+              {data.breakdown ? (
+                <BreakdownRows breakdown={data.breakdown} />
+              ) : (
+                <>
               {/* Sous-total HT (full catalog price before discount) */}
               {data.discountPercent != null && data.discountPercent > 0 ? (
                 <>
@@ -319,6 +377,8 @@ export default function OrderReceiptPage() {
                   <span>{fmtEur(amount)}</span>
                 </div>
               ))}
+                </>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 5px", fontSize: 14, fontWeight: 700, color: "#1A1A18", borderTop: "2px solid #1A1A18", marginTop: 3 }}>
                 <span>Total TTC</span>
                 <span>{fmtEur(data.totalTTC)}</span>
