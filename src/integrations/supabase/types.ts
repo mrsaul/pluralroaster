@@ -152,6 +152,7 @@ export type Database = {
           employee_count: string | null
           estimated_weekly_volume: number | null
           fax: string | null
+          free_delivery: boolean
           grinder_type: string | null
           id: string
           last_synced_at: string | null
@@ -204,6 +205,7 @@ export type Database = {
           employee_count?: string | null
           estimated_weekly_volume?: number | null
           fax?: string | null
+          free_delivery?: boolean
           grinder_type?: string | null
           id?: string
           last_synced_at?: string | null
@@ -256,6 +258,7 @@ export type Database = {
           employee_count?: string | null
           estimated_weekly_volume?: number | null
           fax?: string | null
+          free_delivery?: boolean
           grinder_type?: string | null
           id?: string
           last_synced_at?: string | null
@@ -829,6 +832,8 @@ export type Database = {
           grind_type: string | null
           id: string
           kind: string
+          line_discount_percent: number | null
+          list_price: number | null
           order_id: string
           price_per_kg: number
           product_id: string | null
@@ -844,6 +849,8 @@ export type Database = {
           grind_type?: string | null
           id?: string
           kind?: string
+          line_discount_percent?: number | null
+          list_price?: number | null
           order_id: string
           price_per_kg?: number
           product_id?: string | null
@@ -859,6 +866,8 @@ export type Database = {
           grind_type?: string | null
           id?: string
           kind?: string
+          line_discount_percent?: number | null
+          list_price?: number | null
           order_id?: string
           price_per_kg?: number
           product_id?: string | null
@@ -1589,6 +1598,7 @@ export type Database = {
         | {
             Args: {
               p_confirmed_at: string
+              p_delivery?: Json
               p_delivery_address_id?: string
               p_delivery_date: string
               p_discount_percent?: number

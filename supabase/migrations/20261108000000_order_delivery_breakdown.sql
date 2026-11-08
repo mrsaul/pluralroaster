@@ -1,0 +1,136 @@
+-- Order price breakdown: store the Loberz delivery line, add a per-client
+-- "Livraison gratuite" flag, and let create_order_with_items insert the
+-- delivery row (RPC v5, new optional p_delivery argument).
+--
+-- p_delivery = { "full_price": number, "discount_percent": number, "net": number }
+-- The legacy 8-arg overload is left untouched.
+
+BEGIN;
+
+ALTER TABLE public.order_items
+  ADD COLUMN IF NOT EXISTS list_price numeric,
+  ADD COLUMN IF NOT EXISTS line_discount_percent numeric;
+
+ALTER TABLE public.companies
+  ADD COLUMN IF NOT EXISTS free_delivery boolean NOT NULL DEFAULT false;
+
+UPDATE public.products SET price_per_kg = 24 WHERE sku = '0001';
+
+DROP FUNCTION IF EXISTS public.create_order_with_items(
+  uuid, date, numeric, numeric, text, timestamptz, text, jsonb,
+  uuid, uuid, numeric, text
+);
+
+CREATE FUNCTION public.create_order_with_items(
+  p_user_id uuid,
+  p_delivery_date date,
+  p_total_kg numeric,
+  p_total_price numeric,
+  p_status text,
+  p_confirmed_at timestamp with time zone,
+  p_notes text,
+  p_items jsonb,
+  p_reordered_from uuid DEFAULT NULL::uuid,
+  p_delivery_address_id uuid DEFAULT NULL::uuid,
+  p_discount_percent numeric DEFAULT 0,
+  p_pricing_tier_name text DEFAULT NULL::text,
+  p_delivery jsonb DEFAULT NULL::jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_order_id    UUID;
+  v_item        JSONB;
+  v_loberz_id   UUID;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_user_id IS DISTINCT FROM auth.uid()
+     AND NOT public.has_role(auth.uid(), 'admin'::public.app_role) THEN
+    RAISE EXCEPTION 'Not authorized to create an order for another user' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_discount_percent < 0 OR p_discount_percent > 100 THEN
+    RAISE EXCEPTION 'p_discount_percent must be between 0 and 100, got %', p_discount_percent;
+  END IF;
+
+  IF p_delivery IS NOT NULL THEN
+    SELECT id INTO v_loberz_id FROM products WHERE sku = '0001' LIMIT 1;
+    IF v_loberz_id IS NULL THEN
+      RAISE EXCEPTION 'Delivery product (sku 0001) not found';
+    END IF;
+  END IF;
+
+  INSERT INTO orders (
+    user_id, delivery_date, total_kg, total_price,
+    status, confirmed_at, notes, discount_percent, pricing_tier_name
+  ) VALUES (
+    p_user_id, p_delivery_date, p_total_kg, p_total_price,
+    p_status, p_confirmed_at, p_notes, p_discount_percent, p_pricing_tier_name
+  )
+  RETURNING id INTO v_order_id;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    INSERT INTO order_items (
+      order_id, product_id, product_name, product_sku,
+      price_per_kg, quantity, size_label, size_kg, kind
+    ) VALUES (
+      v_order_id,
+      (v_item->>'product_id')::UUID,
+      (v_item->>'product_name')::TEXT,
+      (v_item->>'product_sku')::TEXT,
+      (v_item->>'price_per_kg')::NUMERIC,
+      (v_item->>'quantity')::NUMERIC,
+      (v_item->>'size_label')::TEXT,
+      (v_item->>'size_kg')::NUMERIC,
+      COALESCE(v_item->>'kind', 'coffee')
+    );
+  END LOOP;
+
+  IF p_delivery IS NOT NULL THEN
+    INSERT INTO order_items (
+      order_id, product_id, product_name, product_sku,
+      price_per_kg, quantity, kind, list_price, line_discount_percent
+    ) VALUES (
+      v_order_id,
+      v_loberz_id,
+      'Livraison à vélo Loberz',
+      '0001',
+      (p_delivery->>'net')::NUMERIC,
+      1,
+      'service',
+      (p_delivery->>'full_price')::NUMERIC,
+      (p_delivery->>'discount_percent')::NUMERIC
+    );
+  END IF;
+
+  RETURN jsonb_build_object('order_id', v_order_id);
+END;
+$function$;
+
+-- Same grants as the 12-arg version: postgres, authenticated, service_role.
+REVOKE ALL ON FUNCTION public.create_order_with_items(
+  uuid, date, numeric, numeric, text, timestamptz, text, jsonb,
+  uuid, uuid, numeric, text, jsonb
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.create_order_with_items(
+  uuid, date, numeric, numeric, text, timestamptz, text, jsonb,
+  uuid, uuid, numeric, text, jsonb
+) TO authenticated, service_role;
+
+COMMIT;
+
+-- Verification (run manually after applying):
+-- select pg_get_function_identity_arguments(oid) from pg_proc
+--   where proname = 'create_order_with_items';
+--   -- expect exactly 2 rows: legacy 8-arg and new 13-arg (12-arg gone)
+-- select column_name from information_schema.columns
+--   where (table_name = 'order_items' and column_name in ('list_price','line_discount_percent'))
+--      or (table_name = 'companies' and column_name = 'free_delivery');
+--   -- expect 3 rows
