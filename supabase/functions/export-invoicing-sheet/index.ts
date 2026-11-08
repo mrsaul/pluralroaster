@@ -1,5 +1,6 @@
 // ── PluralRoaster — Google Sheets Invoicing Export v2 ────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { computeOrderVat, lineUnitNet, lineVatRate, round2, type VatItem } from "../_shared/order-vat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,10 +105,20 @@ function itemVatRate(product: ItemProduct): number {
   if (product?.sellsy_tax_rate != null) return Number(product.sellsy_tax_rate);
   return product?.kind === "service" ? DEFAULT_SERVICE_VAT_RATE : DEFAULT_COFFEE_VAT_RATE;
 }
+/** Pure VAT-math input for an order_items row (services are the Loberz delivery: net price, 20 %). */
+function toVatItem(item: { kind?: string | null; quantity: number; price_per_kg: number; products: ItemProduct }): VatItem {
+  return {
+    kind: item.kind ?? item.products?.kind ?? null,
+    quantity: Number(item.quantity),
+    price_per_kg: Number(item.price_per_kg),
+    vat_rate: item.products?.sellsy_tax_rate ?? null,
+  };
+}
 function frRate(rate: number): string { return rate.toLocaleString("fr-FR", { maximumFractionDigits: 2 }); }
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 type OrderItem = {
+  kind?: string | null;
   product_name: string | null;
   product_sku: string | null;
   price_per_kg: number;
@@ -121,6 +132,7 @@ type RawOrder = {
   company_id: string | null;
   delivery_date: string;
   total_price: number;
+  discount_percent: number | null;
   status: string;
   sellsy_id: string | null;
   sellsy_invoice_id: string | null;
@@ -141,8 +153,9 @@ type YearSummaryOrder = {
   company_id: string | null;
   delivery_date: string;
   total_price: number;
+  discount_percent: number | null;
   invoicing_status: string;
-  order_items: Pick<OrderItem, "price_per_kg" | "quantity" | "products">[];
+  order_items: Pick<OrderItem, "kind" | "price_per_kg" | "quantity" | "products">[];
   companies: { id: string; name: string | null } | null;
 };
 function emptyCells(n: number): string[] { return Array(n).fill(""); }
@@ -159,9 +172,9 @@ async function fetchOrdersForMonth(
   const { data: ordersRaw, error } = await (db as any)
     .from("orders")
     .select(`
-      id, user_id, company_id, delivery_date, total_price, status,
+      id, user_id, company_id, delivery_date, total_price, discount_percent, status,
       sellsy_id, sellsy_invoice_id, invoicing_status, notes,
-      order_items ( product_name, product_sku, price_per_kg, quantity, size_label, products ( sellsy_tax_rate, kind ) ),
+      order_items ( kind, product_name, product_sku, price_per_kg, quantity, size_label, products ( sellsy_tax_rate, kind ) ),
       companies ( id, name, email )
     `)
     .in("status", ["received", "approved", "packaging", "ready_for_delivery", "delivered"])
@@ -228,7 +241,7 @@ async function fetchAllOrdersForYear(
 ): Promise<YearSummaryOrder[]> {
   const { data, error } = await (db as any)
     .from("orders")
-    .select(`id, user_id, company_id, delivery_date, total_price, invoicing_status, order_items ( price_per_kg, quantity, products ( sellsy_tax_rate, kind ) ), companies ( id, name )`)
+    .select(`id, user_id, company_id, delivery_date, total_price, discount_percent, invoicing_status, order_items ( kind, price_per_kg, quantity, products ( sellsy_tax_rate, kind ) ), companies ( id, name )`)
     .in("status", ["received", "approved", "packaging", "ready_for_delivery", "delivered"])
     .gte("delivery_date", `${year}-01-01`)
     .lte("delivery_date", `${year}-12-31`);
@@ -321,22 +334,26 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
 
       // Product rows
       const items = [...(order.order_items ?? [])].sort((a, b) => (a.product_name ?? "").localeCompare(b.product_name ?? "", "fr"));
+      const discountPct = Number(order.discount_percent ?? 0);
       let orderHt = 0, orderVat = 0;
       const orderRates = new Set<number>();
+      if (items.length > 0) {
+        const totals = computeOrderVat(items.map(toVatItem), discountPct);
+        orderHt = totals.totalHT;
+        orderVat = totals.totalVAT;
+      }
       items.forEach((item, itemIdx) => {
         const productRowIdx = rows.length;
-        const ht = Number(item.quantity) * Number(item.price_per_kg);
-        const rate = itemVatRate(item.products);
-        orderHt += ht;
-        orderVat += ht * rate / 100;
+        const vi = toVatItem(item);
+        const rate = lineVatRate(vi);
         orderRates.add(rate);
         rows.push([
           item.product_name ?? "—",
           item.size_label ?? "—",
           item.product_sku ?? "—",
           Number(item.quantity),
-          Number(item.price_per_kg),
-          `=D${productRowIdx + 1}*E${productRowIdx + 1}`,
+          lineUnitNet(vi, discountPct), // discounted unit price (delivery row is already net)
+          `=ROUND(D${productRowIdx + 1}*E${productRowIdx + 1},2)`,
           rate / 100,
           `=F${productRowIdx + 1}*(1+G${productRowIdx + 1})`,
           "", "", "", "",
@@ -367,7 +384,7 @@ function buildMonthlyTabRows(sheetId: number, groups: ClientGroup[]): MonthlyTab
       for (const [label, val] of [
         ["Sous-total HT:", orderHt],
         [vatLabel, orderVat],
-        ["Total TTC:", orderHt + orderVat],
+        ["Total TTC:", round2(orderHt + orderVat)],
       ] as [string, number][]) {
         const stRowIdx = rows.length;
         const stRow = emptyCells(COLS) as unknown[];
@@ -504,7 +521,7 @@ async function writeResumeAnnuel(
     const m = parseInt(o.delivery_date.split("-")[1], 10) - 1; // timezone-safe month extraction
     const items = o.order_items ?? [];
     const ttc = items.length > 0
-      ? items.reduce((s, i) => s + Number(i.quantity) * Number(i.price_per_kg) * (1 + itemVatRate(i.products) / 100), 0)
+      ? computeOrderVat(items.map(toVatItem), Number(o.discount_percent ?? 0)).totalTTC
       : Number(o.total_price) * (1 + DEFAULT_COFFEE_VAT_RATE / 100);
     clientNames.set(key, name);
     if (!clientMonthTtc.has(key)) clientMonthTtc.set(key, new Map());

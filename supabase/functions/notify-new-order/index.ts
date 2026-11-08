@@ -11,6 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
+import { computeOrderVat, isServiceItem, lineNetHT, type VatItem } from "../_shared/order-vat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +23,8 @@ type OrderItem = {
   product_sku: string | null;
   quantity: number;
   price_per_kg: number;
+  kind?: string | null;
+  products?: { sellsy_tax_rate: number | null } | null;
 };
 
 type Profile = { id: string; full_name: string | null; email: string | null };
@@ -48,16 +51,47 @@ async function sendEmail(
   }
 }
 
-function orderTable(items: OrderItem[]): string {
+function toVatItem(item: OrderItem): VatItem {
+  return {
+    kind: item.kind,
+    quantity: Number(item.quantity),
+    price_per_kg: Number(item.price_per_kg),
+    vat_rate: item.products?.sellsy_tax_rate ?? null,
+  };
+}
+
+function fmtRate(rate: number): string {
+  return String(Number(rate.toFixed(2)));
+}
+
+/** HT, one VAT line per rate, TTC: same figures as the app's order breakdown. */
+function totalsTable(items: OrderItem[], discountPercent: number): string {
+  const t = computeOrderVat(items.map(toVatItem), discountPercent);
+  const vatRows = t.vatLines
+    .map((v) => `<tr><td style="padding:6px 0;color:#666">VAT (${fmtRate(v.rate)}%)</td><td style="text-align:right">€${v.amount.toFixed(2)}</td></tr>`)
+    .join("");
+  return `<table style="width:100%;margin-top:8px;font-size:14px">
+          <tr><td style="padding:6px 0;color:#666">Total HT</td><td style="text-align:right">€${t.totalHT.toFixed(2)}</td></tr>
+          ${vatRows}
+          <tr style="font-weight:700"><td style="padding:6px 0">Total TTC</td><td style="text-align:right">€${t.totalTTC.toFixed(2)}</td></tr>
+        </table>`;
+}
+
+function orderTable(items: OrderItem[], discountPercent: number): string {
   const rows = items
     .map((item) => {
-      const total = (Number(item.quantity) * Number(item.price_per_kg)).toFixed(2);
+      const total = lineNetHT(toVatItem(item), discountPercent).toFixed(2);
+      const service = isServiceItem(item);
+      const qtyCell = service ? "1" : `${Number(item.quantity).toFixed(2)} kg`;
+      const unitCell = service
+        ? "—"
+        : `€${Number(item.price_per_kg).toFixed(2)}/kg${discountPercent > 0 ? ` (-${fmtRate(discountPercent)}%)` : ""}`;
       return `
         <tr>
           <td style="padding:6px 12px;border-bottom:1px solid #eee">${item.product_name}</td>
           <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#666">${item.product_sku ?? "—"}</td>
-          <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right">${Number(item.quantity).toFixed(2)} kg</td>
-          <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right">€${Number(item.price_per_kg).toFixed(2)}/kg</td>
+          <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right">${qtyCell}</td>
+          <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right">${unitCell}</td>
           <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:600">€${total}</td>
         </tr>`;
     })
@@ -115,6 +149,7 @@ Deno.serve(async (req: Request) => {
     const deliveryDate = order.delivery_date as string;
     const totalPrice = Number(order.total_price);
     const totalKg = Number(order.total_kg);
+    const discountPercent = Number(order.discount_percent ?? 0);
     const notes = (order.notes as string | null) ?? null;
 
     // Fetch order items + client profile + company using service role
@@ -123,7 +158,7 @@ Deno.serve(async (req: Request) => {
     const db = createClient(supabaseUrl, serviceKey);
 
     const [{ data: itemsRaw }, { data: profileRaw }, { data: companyRaw }] = await Promise.all([
-      db.from("order_items").select("product_name,product_sku,quantity,price_per_kg").eq("order_id", orderId),
+      db.from("order_items").select("product_name,product_sku,quantity,price_per_kg,kind,products(sellsy_tax_rate)").eq("order_id", orderId),
       userId
         ? db.from("profiles").select("id,full_name,email").eq("id", userId).single()
         : Promise.resolve({ data: null }),
@@ -140,8 +175,6 @@ Deno.serve(async (req: Request) => {
     const clientName = profile?.full_name ?? company?.name ?? profile?.email ?? company?.email ?? "Client";
     const clientEmail = profile?.email ?? company?.email ?? null;
 
-    const vatAmount = totalPrice * 0.20;
-    const totalTTC = totalPrice + vatAmount;
     const ref = orderId.slice(0, 8).toUpperCase();
 
     // ── Admin notification email ───────────────────────────────────────────
@@ -151,13 +184,9 @@ Deno.serve(async (req: Request) => {
         <h2 style="margin:0 0 4px">New order received 🎉</h2>
         <p style="color:#666;margin:0 0 24px">Order #${ref} from <strong>${clientName}</strong></p>
 
-        ${orderTable(items)}
+        ${orderTable(items, discountPercent)}
 
-        <table style="width:100%;margin-top:8px;font-size:14px">
-          <tr><td style="padding:6px 0;color:#666">Subtotal HT</td><td style="text-align:right">€${totalPrice.toFixed(2)}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">VAT (20%)</td><td style="text-align:right">€${vatAmount.toFixed(2)}</td></tr>
-          <tr style="font-weight:700"><td style="padding:6px 0">Total TTC</td><td style="text-align:right">€${totalTTC.toFixed(2)}</td></tr>
-        </table>
+        ${totalsTable(items, discountPercent)}
 
         <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
         <p style="font-size:14px;color:#444"><strong>Delivery date:</strong> ${deliveryDate}</p>
@@ -177,13 +206,9 @@ Deno.serve(async (req: Request) => {
           <p style="color:#666;margin:0 0 8px">Hi ${clientName}, we've received your order.</p>
           <p style="color:#666;margin:0 0 24px;font-size:14px">Reference: <strong>#${ref}</strong></p>
 
-          ${orderTable(items)}
+          ${orderTable(items, discountPercent)}
 
-          <table style="width:100%;margin-top:8px;font-size:14px">
-            <tr><td style="padding:6px 0;color:#666">Subtotal HT</td><td style="text-align:right">€${totalPrice.toFixed(2)}</td></tr>
-            <tr><td style="padding:6px 0;color:#666">VAT (20%)</td><td style="text-align:right">€${vatAmount.toFixed(2)}</td></tr>
-            <tr style="font-weight:700"><td style="padding:6px 0">Total TTC</td><td style="text-align:right">€${totalTTC.toFixed(2)}</td></tr>
-          </table>
+        ${totalsTable(items, discountPercent)}
 
           <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
           <p style="font-size:14px;color:#444"><strong>Delivery date:</strong> ${deliveryDate}</p>

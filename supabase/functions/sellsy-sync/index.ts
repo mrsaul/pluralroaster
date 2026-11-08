@@ -1550,6 +1550,14 @@ async function handleHealthCheck(user: AuthenticatedUser) {
   }, allOk ? 200 : 503);
 }
 
+/** Invoice label of the Loberz delivery row: states Plural's share, or that delivery is free. */
+function loberzDescription(item: any, product: any): string {
+  const d = Number(item.line_discount_percent ?? 0);
+  if (d >= 100) return 'Livraison offerte';
+  if (d > 0) return `Livraison à vélo Loberz — participation Plural ${d} %`;
+  return String(item.product_name ?? product.name ?? '');
+}
+
 async function handleCreateInvoice(
   supabaseClient: ReturnType<typeof createClient>,
   body: JsonRecord,
@@ -1587,7 +1595,7 @@ async function handleCreateInvoice(
     .select(`
       id, user_id, company_id, created_at, total_price, discount_percent,
       order_items (
-        id, product_name, quantity, price_per_kg, size_label,
+        id, product_name, quantity, price_per_kg, list_price, line_discount_percent, size_label,
         products ( id, sellsy_id, sellsy_tax_id, sellsy_tax_rate, name, kind )
       )
     `)
@@ -1707,8 +1715,8 @@ async function handleCreateInvoice(
           type: 'catalog',
           // Sellsy v2: services use related.type = "service" (not "product", not "item")
           related: { type: 'service', id: numericSellsyId },
-          description: String(item.product_name ?? product.name ?? ''),
-          // price_per_kg is repurposed here to hold the flat service fee (e.g. 20 €) for delivery items
+          // Loberz delivery: price_per_kg is the NET price the client pays (list_price minus Plural's share)
+          description: loberzDescription(item, product),
           unit_amount: String(item.price_per_kg ?? 0),
           quantity: String(item.quantity ?? 1),
         };
