@@ -179,6 +179,22 @@ function mapAdminOrderItem(i: any): AdminOrderItem {
   };
 }
 
+async function loadOrderItems(orderId: string): Promise<AdminOrderItem[]> {
+  const { data, error } = await (supabase as any)
+    .from("order_items")
+    .select(ADMIN_ORDER_ITEM_COLUMNS)
+    .eq("order_id", orderId);
+  if (error) throw error;
+  return ((data ?? []) as any[]).map(mapAdminOrderItem);
+}
+
+/** The order's items and totals exactly as stored. */
+async function loadStoredOrder(orderId: string): Promise<{ items: AdminOrderItem[]; totalKg: number; totalPrice: number }> {
+  const { data, error } = await supabase.from("orders").select("total_kg, total_price").eq("id", orderId).single();
+  if (error) throw error;
+  return { items: await loadOrderItems(orderId), totalKg: Number(data.total_kg), totalPrice: Number(data.total_price) };
+}
+
 function formatDate(value: string | null) {
   if (!value) return "—";
   try { return format(parseISO(value), "d MMM yyyy", { locale: fr }); } catch { return "—"; }
@@ -720,16 +736,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       free = contact?.companies?.free_delivery === true;
     }
 
-    const loadItems = async (): Promise<AdminOrderItem[]> => {
-      const { data, error } = await (supabase as any)
-        .from("order_items")
-        .select(ADMIN_ORDER_ITEM_COLUMNS)
-        .eq("order_id", orderId);
-      if (error) throw error;
-      return ((data ?? []) as any[]).map(mapAdminOrderItem);
-    };
-
-    const items = await loadItems();
+    const items = await loadOrderItems(orderId);
     const { deliveryRow, totalKg, totalPrice } = recalcOrderFromItems({
       items,
       discountPercent: Number(order.discount_percent ?? 0),
@@ -768,16 +775,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       .from("orders").update({ total_kg: totalKg, total_price: totalPrice }).eq("id", orderId);
     if (totalsError) throw totalsError;
 
-    return { items: await loadItems(), totalKg, totalPrice };
+    return { items: await loadOrderItems(orderId), totalKg, totalPrice };
+  }, []);
+
+  /** Mirror a stored order (items + totals) into both the list and the open detail. */
+  const applyStoredOrder = useCallback((orderId: string, stored: { items: AdminOrderItem[]; totalKg: number; totalPrice: number }) => {
+    const apply = <T extends AdminOrder>(o: T): T => ({ ...o, items: stored.items, total_kg: stored.totalKg, total_price: stored.totalPrice });
+    setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? apply(o) : o)));
+    setSelectedOrder((prev) => (prev && prev.id === orderId ? apply(prev) : prev));
   }, []);
 
   /** Recalculate after an item write and mirror the stored order locally; toasts on failure. */
   const recalcAndApply = useCallback(async (orderId: string): Promise<boolean> => {
     try {
-      const { items, totalKg, totalPrice } = await recalcOrder(orderId);
-      const apply = <T extends AdminOrder>(o: T): T => ({ ...o, items, total_kg: totalKg, total_price: totalPrice });
-      setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? apply(o) : o)));
-      setSelectedOrder((prev) => (prev && prev.id === orderId ? apply(prev) : prev));
+      applyStoredOrder(orderId, await recalcOrder(orderId));
       return true;
     } catch (err) {
       toast({
@@ -785,38 +796,74 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         description: err instanceof Error ? err.message : (err as any)?.message ?? String(err),
         variant: "destructive",
       });
-      // The item write succeeded: reload so the list shows what is actually stored
-      void loadOrders();
+      // The item write succeeded but the recalculation did not finish: show what is actually
+      // stored, in the list and in the open detail, so further edits start from the DB state.
+      try {
+        applyStoredOrder(orderId, await loadStoredOrder(orderId));
+      } catch (reloadErr) {
+        setSelectedOrder((prev) => (prev && prev.id === orderId ? null : prev));
+        toast({
+          title: "Commande fermée : état inconnu",
+          description: `Rechargez la page avant de la modifier. ${reloadErr instanceof Error ? reloadErr.message : (reloadErr as any)?.message ?? String(reloadErr)}`,
+          variant: "destructive",
+        });
+        void loadOrders();
+      }
       return false;
     }
-  }, [loadOrders, recalcOrder, toast]);
+  }, [applyStoredOrder, loadOrders, recalcOrder, toast]);
 
-  const removeOrderItem = useCallback(async (orderId: string, itemId: string) => {
-    const { error } = await supabase.from("order_items").delete().eq("id", itemId);
-    if (error) { toast({ title: "Échec de la suppression", description: error.message, variant: "destructive" }); return; }
-    if (await recalcAndApply(orderId)) toast({ title: "Article retiré" });
+  // One item edit per order at a time: concurrent recalculations could both insert a Loberz row
+  const orderEditsInFlight = useRef(new Set<string>());
+  const runOrderEdit = useCallback(async (
+    orderId: string,
+    write: () => PromiseLike<{ error: { message: string } | null }>,
+    failTitle: string,
+    successTitle?: string,
+  ) => {
+    if (orderEditsInFlight.current.has(orderId)) return;
+    orderEditsInFlight.current.add(orderId);
+    try {
+      const { error } = await write();
+      if (error) { toast({ title: failTitle, description: error.message, variant: "destructive" }); return; }
+      if (await recalcAndApply(orderId) && successTitle) toast({ title: successTitle });
+    } finally {
+      orderEditsInFlight.current.delete(orderId);
+    }
   }, [recalcAndApply, toast]);
+
+  const removeOrderItem = useCallback((orderId: string, itemId: string) => runOrderEdit(
+    orderId,
+    () => supabase.from("order_items").delete().eq("id", itemId),
+    "Échec de la suppression",
+    "Article retiré",
+  ), [runOrderEdit]);
 
   const updateOrderItemQty = useCallback(async (orderId: string, itemId: string, newQty: number) => {
     if (newQty <= 0) { await removeOrderItem(orderId, itemId); return; }
-    const { error } = await supabase.from("order_items").update({ quantity: newQty }).eq("id", itemId);
-    if (error) { toast({ title: "Échec de la mise à jour", description: error.message, variant: "destructive" }); return; }
-    await recalcAndApply(orderId);
-  }, [recalcAndApply, removeOrderItem, toast]);
+    await runOrderEdit(
+      orderId,
+      () => supabase.from("order_items").update({ quantity: newQty }).eq("id", itemId),
+      "Échec de la mise à jour",
+    );
+  }, [removeOrderItem, runOrderEdit]);
 
   const addProductToOrder = useCallback(async (orderId: string, product: AdminProductRow) => {
     const productName = product.custom_name || product.name;
-    const { error } = await supabase.from("order_items").insert({
-      order_id: orderId,
-      product_id: product.id,
-      product_name: productName,
-      product_sku: product.sku,
-      price_per_kg: product.custom_price_per_kg ?? product.price_per_kg,
-      quantity: 1,
-    });
-    if (error) { toast({ title: "Échec de l'ajout", description: error.message, variant: "destructive" }); return; }
-    if (await recalcAndApply(orderId)) toast({ title: `${productName} added` });
-  }, [recalcAndApply, toast]);
+    await runOrderEdit(
+      orderId,
+      () => supabase.from("order_items").insert({
+        order_id: orderId,
+        product_id: product.id,
+        product_name: productName,
+        product_sku: product.sku,
+        price_per_kg: product.custom_price_per_kg ?? product.price_per_kg,
+        quantity: 1,
+      }),
+      "Échec de l'ajout",
+      `${productName} added`,
+    );
+  }, [runOrderEdit]);
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
