@@ -19,7 +19,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 import { useBeforeUnload } from "@/hooks/useBeforeUnload";
-import { DEFAULT_COFFEE_VAT_RATE } from "@/lib/orderUtils";
+import { DEFAULT_COFFEE_VAT_RATE, withOrderItemDefaults } from "@/lib/orderUtils";
 import { LOBERZ_PRODUCT_NAME, LOBERZ_SKU, computeOrderBreakdown, deliveryRowFor } from "@/lib/pricing";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 
@@ -283,8 +283,11 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           }]
         : [];
 
-      const { error: itemsErr } = await supabase.from("order_items").insert([...items, ...deliveryItem]);
-      if (itemsErr) throw itemsErr;
+      const { error: itemsErr } = await supabase.from("order_items").insert(withOrderItemDefaults([...items, ...deliveryItem]));
+      if (itemsErr) {
+        await supabase.from("orders").delete().eq("id", order.id);
+        throw itemsErr;
+      }
 
       // Log status history
       const { data: { user } } = await supabase.auth.getUser();
@@ -301,7 +304,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
       onOpenChange(false);
       onCreated();
     } catch (err) {
-      toast({ title: "Impossible de créer la commande", description: String(err), variant: "destructive" });
+      toast({ title: "Impossible de créer la commande", description: err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }

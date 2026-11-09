@@ -191,3 +191,13 @@ export function buildPlainTextSummary(data: OrderReceiptData): string {
 
   return lines.join("\n");
 }
+
+/**
+ * Batch inserts send one column list for all rows; a row missing a key gets NULL, not the column default.
+ * Give every order_items row the same keys so coffee rows keep kind 'coffee'.
+ */
+export function withOrderItemDefaults<T extends Record<string, unknown>>(
+  rows: T[],
+): (T & { kind: string; list_price: number | null; line_discount_percent: number | null })[] {
+  return rows.map((r) => ({ kind: "coffee", list_price: null, line_discount_percent: null, ...r }));
+}
