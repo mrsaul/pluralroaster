@@ -20,6 +20,7 @@ import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 import { DEFAULT_COFFEE_VAT_RATE, withOrderItemDefaults } from "@/lib/orderUtils";
+import { isBagVariant, lineGrossHT, linePricePerKg, lineQuantityKg, type AdminLine } from "@/lib/adminOrderLines";
 import { LOBERZ_PRODUCT_NAME, LOBERZ_SKU, computeOrderBreakdown, deliveryRowFor } from "@/lib/pricing";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 
@@ -55,10 +56,16 @@ export type SimpleProduct = {
 
 type LineItem = {
   product: SimpleProduct;
+  /** kg for bulk lines, number of bags when `bag` is set */
   quantity: number;
   price_per_kg: number;
-  sizeLabel?: string;
+  bag?: AdminLine["bag"];
 };
+
+type BagVariant = { id: string; product_id: string; size_label: string; size_kg: number; price: number };
+
+const lineKey = (i: LineItem) => `${i.product.id}::${i.bag?.sizeLabel ?? "kg"}`;
+const toAdminLine = (i: LineItem): AdminLine => ({ productId: i.product.id, quantity: i.quantity, pricePerKg: i.price_per_kg, bag: i.bag });
 
 type ClientTier = {
   name: string;
@@ -96,6 +103,23 @@ interface CreateOrderDialogProps {
 export function CreateOrderDialog({ open, onOpenChange, clients, products, onCreated }: CreateOrderDialogProps) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [bagVariants, setBagVariants] = useState<BagVariant[]>([]);
+
+  // Sub-kilo Sellsy variants (250 g, 150 g bags) that a line can be switched to
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void supabase
+      .from("product_variants")
+      .select("id, product_id, size_label, size_kg, price")
+      .eq("is_active", true)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { console.warn("[CreateOrderDialog] variant load failed:", error.message); return; }
+        setBagVariants(((data ?? []) as BagVariant[]).filter((v) => isBagVariant(v) && Number(v.price) > 0));
+      });
+    return () => { cancelled = true; };
+  }, [open]);
 
   const {
     value: form,
@@ -148,35 +172,66 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const freeDelivery = selectedClient?.free_delivery === true;
   const breakdown = useMemo(() => computeOrderBreakdown({
     coffeeLines: lineItems.map((i) => ({
-      pricePerKg: i.price_per_kg,
-      quantityKg: i.quantity,
+      pricePerKg: linePricePerKg(toAdminLine(i)),
+      quantityKg: lineQuantityKg(toAdminLine(i)),
       vatRate: i.product.vat_rate ?? DEFAULT_COFFEE_VAT_RATE,
     })),
     discountPercent: clientTier?.product_discount_percent ?? 0,
     delivery: { kind: "auto", free: freeDelivery },
   }), [lineItems, clientTier, freeDelivery]);
 
+  const bagsFor = useCallback(
+    (productId: string) => bagVariants.filter((v) => v.product_id === productId),
+    [bagVariants],
+  );
+
+  /** Sizes a product can be sold in: by the kg, plus each sub-kilo bag. */
+  const sizeOptionsFor = useCallback((product: SimpleProduct) => [
+    { value: "kg", bag: undefined as AdminLine["bag"] },
+    ...bagsFor(product.id).map((v) => ({
+      value: v.size_label,
+      bag: { sizeLabel: v.size_label, sizeKg: Number(v.size_kg), unitPrice: Number(v.price), variantId: v.id },
+    })),
+  ], [bagsFor]);
+
   const addProduct = useCallback((product: SimpleProduct) => {
-    if (lineItems.some((i) => i.product.id === product.id)) return;
+    const used = new Set(lineItems.filter((i) => i.product.id === product.id).map((i) => i.bag?.sizeLabel ?? "kg"));
+    const option = sizeOptionsFor(product).find((o) => !used.has(o.value));
+    if (!option) return;
     const price = product.data_source_mode === "custom" && product.custom_price_per_kg != null
       ? product.custom_price_per_kg : product.price_per_kg;
-    setLineItems((prev) => [...prev, { product, quantity: 3, price_per_kg: price }]);
-  }, [lineItems, setLineItems]);
+    setLineItems((prev) => [...prev, { product, quantity: option.bag ? 1 : 3, price_per_kg: price, bag: option.bag }]);
+  }, [lineItems, setLineItems, sizeOptionsFor]);
 
-  const updateQty = useCallback((productId: string, delta: number) => {
+  const updateQty = useCallback((key: string, delta: number) => {
     setLineItems((prev) => prev.map((i) =>
-      i.product.id === productId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i
+      lineKey(i) === key ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i
     ));
   }, [setLineItems]);
 
-  const updatePrice = useCallback((productId: string, price: number) => {
-    setLineItems((prev) => prev.map((i) =>
-      i.product.id === productId ? { ...i, price_per_kg: price } : i
-    ));
+  /** Bulk lines edit €/kg; bag lines edit the price per bag. */
+  const updatePrice = useCallback((key: string, price: number) => {
+    setLineItems((prev) => prev.map((i) => {
+      if (lineKey(i) !== key) return i;
+      return i.bag ? { ...i, bag: { ...i.bag, unitPrice: price } } : { ...i, price_per_kg: price };
+    }));
   }, [setLineItems]);
 
-  const removeItem = useCallback((productId: string) => {
-    setLineItems((prev) => prev.filter((i) => i.product.id !== productId));
+  const changeSize = useCallback((key: string, value: string) => {
+    setLineItems((prev) => {
+      const line = prev.find((i) => lineKey(i) === key);
+      if (!line) return prev;
+      if (prev.some((i) => i.product.id === line.product.id && (i.bag?.sizeLabel ?? "kg") === value)) return prev;
+      const option = sizeOptionsFor(line.product).find((o) => o.value === value);
+      if (!option) return prev;
+      return prev.map((i) => lineKey(i) === key
+        ? { ...i, bag: option.bag, quantity: option.bag ? 1 : 3 }
+        : i);
+    });
+  }, [setLineItems, sizeOptionsFor]);
+
+  const removeItem = useCallback((key: string) => {
+    setLineItems((prev) => prev.filter((i) => lineKey(i) !== key));
   }, [setLineItems]);
 
   const resetForm = useCallback(() => { discardDraft(); }, [discardDraft]);
@@ -231,43 +286,19 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
       if (orderErr || !order) throw orderErr || new Error("Impossible de créer la commande");
 
-      // Resolve product_variant_id for items that have a size variant
-      const sellsyItems = lineItems.filter((item) => item.sizeLabel);
-      let variantIdMap: Record<string, string> = {}; // "productId::sizeLabel" → variant UUID
-
-      if (sellsyItems.length > 0) {
-        const { data: variantRows, error: variantErr } = await supabase
-          .from("product_variants")
-          .select("id, product_id, size_label")
-          .eq("source", "sellsy")
-          .eq("is_active", true)
-          .in(
-            "product_id",
-            [...new Set(sellsyItems.map((i) => i.product.id))],
-          );
-
-        if (variantErr) {
-          console.warn("[CreateOrderDialog] variant lookup failed:", variantErr.message);
-          // Proceed with null product_variant_id for all items — order creation continues
-        }
-
-        for (const v of variantRows ?? []) {
-          variantIdMap[`${v.product_id}::${v.size_label}`] = v.id;
-        }
-      }
-
       const items = lineItems.map((i) => {
-        const variantKey = i.sizeLabel ? `${i.product.id}::${i.sizeLabel}` : null;
-        const productVariantId = variantKey ? (variantIdMap[variantKey] ?? null) : null;
+        const line = toAdminLine(i);
         return {
           order_id: order.id,
           product_id: i.product.id,
           product_name: i.product.data_source_mode === "custom" && i.product.custom_name
             ? i.product.custom_name : i.product.name,
           product_sku: i.product.sku,
-          quantity: i.quantity,
-          price_per_kg: i.price_per_kg,
-          product_variant_id: productVariantId,
+          quantity: lineQuantityKg(line),
+          price_per_kg: linePricePerKg(line),
+          size_label: i.bag?.sizeLabel ?? null,
+          size_kg: i.bag?.sizeKg ?? null,
+          product_variant_id: i.bag?.variantId ?? null,
         };
       });
 
@@ -319,7 +350,9 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const getProductLabel = (p: SimpleProduct) =>
     p.data_source_mode === "custom" && p.custom_name ? p.custom_name : p.name;
 
-  const availableProducts = activeProducts.filter((p) => !lineItems.some((i) => i.product.id === p.id));
+  // A product stays offered while it has a size not yet on the order (kg or a bag)
+  const availableProducts = activeProducts.filter((p) =>
+    lineItems.filter((i) => i.product.id === p.id).length < sizeOptionsFor(p).length);
 
   return (
     // Keep draft alive on close — only discard on explicit Cancel or successful save
@@ -381,23 +414,38 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
             <label className="text-sm font-medium text-foreground mb-1.5 block">Produits</label>
             {lineItems.length > 0 && (
               <div className="space-y-2 mb-3">
-                {lineItems.map((item) => (
-                  <div key={item.product.id} className="rounded-lg border border-border p-3 space-y-2">
+                {lineItems.map((item) => {
+                  const key = lineKey(item);
+                  const sizeOptions = sizeOptionsFor(item.product);
+                  return (
+                  <div key={key} className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-foreground text-sm truncate flex-1">{getProductLabel(item.product)}</span>
                       <button
                         className="w-7 h-7 rounded flex-shrink-0 flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
-                        onClick={() => removeItem(item.product.id)}
+                        onClick={() => removeItem(key)}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
+                    {sizeOptions.length > 1 && (
+                      <Select value={item.bag?.sizeLabel ?? "kg"} onValueChange={(v) => changeSize(key, v)}>
+                        <SelectTrigger className="h-8 w-full text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {sizeOptions.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.bag ? `Sachet ${o.bag.sizeLabel} — €${o.bag.unitPrice.toFixed(2)}` : "Au kg (vrac)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <div className="flex items-center gap-3 flex-wrap">
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-muted-foreground mr-1">Qté</span>
                         <button
                           className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                          onClick={() => updateQty(item.product.id, -1)}
+                          onClick={() => updateQty(key, -1)}
                         >
                           <Minus className="w-3 h-3" />
                         </button>
@@ -409,7 +457,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
                             const val = parseInt(e.target.value);
                             if (!isNaN(val) && val > 0) {
                               setLineItems((prev) => prev.map((i) =>
-                                i.product.id === item.product.id ? { ...i, quantity: val } : i
+                                lineKey(i) === key ? { ...i, quantity: val } : i
                               ));
                             }
                           }}
@@ -417,32 +465,33 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
                         />
                         <button
                           className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                          onClick={() => updateQty(item.product.id, 1)}
+                          onClick={() => updateQty(key, 1)}
                         >
                           <Plus className="w-3 h-3" />
                         </button>
-                        <span className="text-xs text-muted-foreground">kg</span>
+                        <span className="text-xs text-muted-foreground">{item.bag ? `sachet${item.quantity > 1 ? "s" : ""}` : "kg"}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground">€/kg</span>
+                        <span className="text-xs text-muted-foreground">{item.bag ? "€/sachet" : "€/kg"}</span>
                         <Input
                           type="number"
                           step="0.01"
                           min={0}
-                          value={item.price_per_kg}
+                          value={item.bag ? item.bag.unitPrice : item.price_per_kg}
                           onChange={(e) => {
                             const val = parseFloat(e.target.value);
-                            if (!isNaN(val)) updatePrice(item.product.id, val);
+                            if (!isNaN(val)) updatePrice(key, val);
                           }}
                           className="w-16 h-6 text-right text-sm tabular-nums px-1"
                         />
                       </div>
                       <span className="ml-auto text-sm font-medium tabular-nums text-foreground">
-                        €{(item.quantity * item.price_per_kg).toFixed(2)}
+                        €{lineGrossHT(toAdminLine(item)).toFixed(2)}
                       </span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
