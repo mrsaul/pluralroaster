@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CartItem, Product } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
+import { buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
 import { computeOrderBreakdown, cartToCoffeeLines, type OrderBreakdown } from "@/lib/pricing";
 import { buildClientSnapshot, cartItemsToSnapshotItems, type ClientSnapshot } from "@/lib/clientSnapshot";
 import { PriceBreakdown } from "@/components/PriceBreakdown";

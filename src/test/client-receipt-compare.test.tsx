@@ -65,4 +65,22 @@ describe("ClientReceiptCompare", () => {
     expect(baseElement.querySelector('[data-change="added"]')).not.toBeNull();
     expect(screen.getByText("nouveau")).toBeInTheDocument();
   });
+  it("delivery-only change shows Livraison modifiée", () => {
+    const withDelivery = (full: number): ReceiptStoredItem[] => [
+      ...stored(20),
+      { kind: "service", quantity: 1, price_per_kg: full / 2, product_name: "Livraison à vélo Loberz", size_label: null, size_kg: null, list_price: full, line_discount_percent: 50 } as ReceiptStoredItem,
+    ];
+    renderIt(snapshotFor(withDelivery(24)), withDelivery(30));
+    expect(screen.getByText("Livraison modifiée")).toBeInTheDocument();
+  });
+  it("no delivery badge when delivery unchanged", () => {
+    renderIt(snapshotFor(stored(20)), stored(22));
+    expect(screen.queryByText("Livraison modifiée")).toBeNull();
+  });
+  it("unreadable snapshot with mismatch still warns", () => {
+    renderIt({ raw: "oops", orderId: "o1", mismatch: true }, stored(20));
+    expect(screen.getByText("Copie incohérente avec la commande enregistrée")).toBeInTheDocument();
+    expect(screen.getByText("Actuelle (à facturer)")).toBeInTheDocument();
+    expect(screen.queryByText("Vu par le client")).toBeNull();
+  });
 });

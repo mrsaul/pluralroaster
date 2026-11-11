@@ -2,8 +2,9 @@
 -- (orders.client_snapshot) so admin can compare it later (RPC v6).
 --
 -- p_client_snapshot = { "totalHT": number, ... } (opaque jsonb, written once).
--- The RPC stamps orderId (the new order's id as text) and, when totalHT differs
--- from p_total_price by more than 0.01, "mismatch": true.
+-- The RPC stamps orderId (the new order's id as text), placedAt (server time),
+-- source = "client", and, when totalHT differs from p_total_price by more than
+-- 0.01, "mismatch": true (a client-sent mismatch is ignored).
 -- client_snapshot is write-once: only an INSERT (via the RPC, or by an admin)
 -- can set it (direct INSERTs by service role, which has no auth.uid(), are
 -- nulled too); any later UPDATE that changes it raises, for every role.
@@ -82,7 +83,15 @@ BEGIN
       'mismatch', true
     );
   ELSE
-    v_snapshot := jsonb_set(p_client_snapshot, '{orderId}', to_jsonb(v_order_id::text));
+    -- Server-owned keys: orderId, placedAt (server clock, ISO string), source
+    -- ("client": the RPC is the client path; admin copies are direct INSERTs)
+    -- and mismatch (only ever set from the computed result below; any
+    -- client-sent value is dropped first). '-' and '||' run on an object here.
+    v_snapshot := (p_client_snapshot - 'mismatch') || jsonb_build_object(
+      'orderId', v_order_id::text,
+      'placedAt', to_jsonb(now()),
+      'source', 'client'
+    );
     IF jsonb_typeof(p_client_snapshot->'totalHT') IS DISTINCT FROM 'number'
        OR p_total_price IS NULL THEN
       v_snapshot := v_snapshot || '{"mismatch": true}'::jsonb;
@@ -220,4 +229,9 @@ CREATE TRIGGER orders_client_snapshot_guard
 --      -- 8. call the RPC with p_client_snapshot => '"oops"'::jsonb, then again with
 --      --    '{"totalHT": "abc"}'::jsonb; both orders are placed, and the stored
 --      --    snapshot has mismatch = true (first one wrapped under "raw")
+--      -- 9. admin path: as an ADMIN user (claims sub = an admin user id), a direct
+--      --    insert into orders (id, user_id, ..., client_snapshot)
+--      --    values (..., '{"version":1,"source":"admin"}') keeps client_snapshot
+--      --    NOT NULL (if it comes back NULL, has_role(auth.uid(),'admin') is false
+--      --    for that session and admin manual orders lose their copy)
 --      rollback;

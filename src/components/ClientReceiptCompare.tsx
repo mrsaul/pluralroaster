@@ -117,6 +117,10 @@ export function ClientReceiptCompare({
     [snapshot, items, currentBreakdown],
   );
 
+  // An unreadable copy (parse fails) can still carry the RPC's mismatch flag.
+  const rawMismatch =
+    !snapshot && typeof snapshotRaw === "object" && snapshotRaw !== null &&
+    (snapshotRaw as { mismatch?: unknown }).mismatch === true;
   const mismatch = snapshot?.mismatch === true;
   const showBoth = !!snapshot && !!diff && (!diff.identical || mismatch);
   const statuses = useMemo(
@@ -139,6 +143,11 @@ export function ClientReceiptCompare({
           <DialogDescription asChild>
             <div className="flex flex-wrap items-center gap-2">
               {!snapshot && <span>Récapitulatif client non disponible</span>}
+              {rawMismatch && (
+                <div role="alert" className="rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+                  Copie incohérente avec la commande enregistrée
+                </div>
+              )}
               {snapshot && mismatch && (
                 <div role="alert" className="rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
                   Copie incohérente avec la commande enregistrée
@@ -150,6 +159,11 @@ export function ClientReceiptCompare({
               {snapshot && !mismatch && diff && !diff.identical && (
                 <Badge variant="outline" className="border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                   Modifiée après validation · {signedEur(diff.htDelta)} HT
+                </Badge>
+              )}
+              {snapshot && !mismatch && diff?.deliveryChanged && (
+                <Badge variant="outline" className="border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  Livraison modifiée
                 </Badge>
               )}
             </div>

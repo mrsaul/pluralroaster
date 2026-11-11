@@ -145,6 +145,7 @@
 ### Task 6: Ship (owner approval required at each production step)
 
 - [ ] **Step 1:** Final whole-branch review (fresh reviewer).
-- [ ] **Step 2:** Ask the owner; on OK, apply the Task 1 migration via MCP `apply_migration` to `wkffugaijomivqahnxom`, then run verification queries 1–7 (4–7 inside `BEGIN … ROLLBACK`). All must match.
+- [ ] **Step 2:** Ask the owner; on OK, apply the Task 1 migration via MCP `apply_migration` to `wkffugaijomivqahnxom`, then run verification queries 1–9 (4–9 inside `BEGIN … ROLLBACK`). All must match.
 - [ ] **Step 3:** Ask the owner; on OK, `git push origin HEAD:main`, deploy with the git-archive recipe (`vercel --prod --yes`), confirm `vercel inspect` Ready and the live admin chunk contains "Comparer avec le récapitulatif client".
 - [ ] **Step 4:** Owner places a test order on SAUL TEST → admin dialog shows "Identique"; owner edits a quantity → both columns, badge. Delete the test order afterwards.
+  Also run verification query 9 (admin direct insert keeps a non-null snapshot, in `BEGIN … ROLLBACK`), and create one manual order in admin: the dialog must show "Créée par l'admin" + "Identique à la commande" and the row's `client_snapshot` must not be null.
