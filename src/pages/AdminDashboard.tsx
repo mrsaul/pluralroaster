@@ -46,6 +46,7 @@ import {
   storedOrderBreakdown,
 } from "@/lib/pricing";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
+import { ClientReceiptCompareButton } from "@/components/ClientReceiptCompare";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -148,6 +149,8 @@ type AdminOrder = {
   invoicing_status: InvoicingStatus;
   last_invoice_sync: string | null;
   items: AdminOrderItem[];
+  /** Summary the client saw at validation (orders.client_snapshot); null on older orders. */
+  client_snapshot: unknown;
 };
 
 interface AdminDashboardProps {
@@ -456,7 +459,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .from("orders")
         .select(`
           id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes, client_name, discount_percent,
+          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes, client_name, discount_percent, client_snapshot,
           order_items ( ${ADMIN_ORDER_ITEM_COLUMNS} ),
           companies ( name, email, free_delivery )
         `)
@@ -523,6 +526,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           invoicing_status: (o.invoicing_status as InvoicingStatus) ?? "not_sent",
           last_invoice_sync: o.last_invoice_sync ?? null,
           items: (o.order_items ?? []).map(mapAdminOrderItem),
+          client_snapshot: o.client_snapshot ?? null,
         };
       });
 
@@ -2463,6 +2467,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               )}
               {detailItems.length > 0 && <PriceBreakdown breakdown={breakdown} />}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Récapitulatif</p>
+                <ClientReceiptCompareButton
+                  snapshotRaw={selectedOrder.client_snapshot}
+                  items={selectedOrder.items}
+                  discountPercent={selectedOrder.discount_percent}
+                  createdAt={selectedOrder.created_at}
+                />
+              </div>
 
               {/* Checklist */}
               <div className="rounded-lg bg-muted/40 p-3 space-y-2">
@@ -2771,6 +2784,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 )}
                 {detailItems.length > 0 && <PriceBreakdown breakdown={breakdown} />}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Récapitulatif</p>
+                  <ClientReceiptCompareButton
+                    snapshotRaw={selectedOrder.client_snapshot}
+                    items={selectedOrder.items}
+                    discountPercent={selectedOrder.discount_percent}
+                    createdAt={selectedOrder.created_at}
+                  />
+                </div>
 
                 {/* Checklist */}
                 <div className="rounded-lg bg-muted/40 p-3 space-y-2">
