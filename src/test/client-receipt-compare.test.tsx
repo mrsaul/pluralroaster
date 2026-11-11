@@ -21,7 +21,7 @@ const snapshotFor = (items: ReceiptStoredItem[], source: "client" | "admin" = "c
 const renderIt = (snapshotRaw: unknown, items: ReceiptStoredItem[]) =>
   render(
     <ClientReceiptCompare open onOpenChange={() => {}} snapshotRaw={snapshotRaw}
-      items={items} discountPercent={0} createdAt="2026-11-11T10:00:00Z" />,
+      items={items} discountPercent={0} />,
   );
 
 describe("ClientReceiptCompare", () => {
@@ -41,7 +41,7 @@ describe("ClientReceiptCompare", () => {
     const { container } = renderIt(snapshotFor(stored(20)), stored(22));
     expect(screen.getByText("Vu par le client")).toBeInTheDocument();
     expect(screen.getByText("Actuelle (à facturer)")).toBeInTheDocument();
-    expect(screen.getByText(/Modifiée après validation/).textContent).toMatch(/\+50,00\s€/);
+    expect(screen.getByText(/Modifiée après validation/).textContent).toMatch(/·\s\+50,00\s€\sHT/);
     expect(container.ownerDocument.querySelector('[data-change="changed"]')).not.toBeNull();
   });
   it("admin source", () => {
@@ -50,7 +50,19 @@ describe("ClientReceiptCompare", () => {
   });
   it("mismatch", () => {
     renderIt({ ...snapshotFor(stored(20)), mismatch: true }, stored(22));
-    expect(screen.getByText("Copie incohérente avec la commande enregistrée")).toBeInTheDocument();
+    const alert = screen.getByText("Copie incohérente avec la commande enregistrée");
+    expect(alert).toBeInTheDocument();
+    expect(alert.className).toMatch(/text-destructive/);
     expect(screen.queryByText(/Modifiée après validation/)).toBeNull();
+  });
+  it("added and removed lines", () => {
+    const snap = snapshotFor(stored(20));
+    const current: ReceiptStoredItem[] = [
+      { kind: "coffee", quantity: 5, price_per_kg: 30, product_name: "Brésil", size_label: null, size_kg: null },
+    ];
+    const { baseElement } = renderIt(snap, current);
+    expect(baseElement.querySelector('[data-change="removed"]')).not.toBeNull();
+    expect(baseElement.querySelector('[data-change="added"]')).not.toBeNull();
+    expect(screen.getByText("nouveau")).toBeInTheDocument();
   });
 });

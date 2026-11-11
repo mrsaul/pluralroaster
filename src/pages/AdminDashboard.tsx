@@ -2473,7 +2473,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   snapshotRaw={selectedOrder.client_snapshot}
                   items={selectedOrder.items}
                   discountPercent={selectedOrder.discount_percent}
-                  createdAt={selectedOrder.created_at}
                 />
               </div>
 
@@ -2790,7 +2789,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     snapshotRaw={selectedOrder.client_snapshot}
                     items={selectedOrder.items}
                     discountPercent={selectedOrder.discount_percent}
-                    createdAt={selectedOrder.created_at}
                   />
                 </div>
 
