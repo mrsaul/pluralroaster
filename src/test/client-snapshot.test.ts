@@ -65,6 +65,28 @@ describe("client snapshot diff", () => {
     expect(d.lines[0].after?.quantity).toBe(4);
   });
 
+  it("3 kg variant matches stored kg rows", () => {
+    const kg3: SnapItem = { name: "Cauca", sizeLabel: "3kg", sizeKg: 3, quantity: 2, unitPrice: 75, pricePerKg: 26.5, kind: "coffee" };
+    const snap = snapshotFor([kg3], 0);
+    const rows: ReceiptStoredItem[] = [
+      { kind: "coffee", quantity: 6, price_per_kg: 25, product_name: "Cauca", size_label: "3kg", size_kg: 3 },
+      storedService(10, 20, 50),
+    ];
+    rows[1] = storedService(snap.breakdown.delivery!.netHT, snap.breakdown.delivery!.fullPriceHT, 50);
+    const d = diffReceipts(snap, rows, storedOrderBreakdown(rows, 0));
+    expect(d.lines[0].before?.unit).toBe("bag");
+    expect(d.lines[0].after?.quantity).toBe(2);
+    expect(d.identical).toBe(true);
+  });
+
+  it("duplicate stored rows of one product+size are summed", () => {
+    const snap = snapshotFor([cauca(20)], 0);
+    const rows = [storedCauca(12), storedCauca(8), storedService(12, 24, 50)];
+    const d = diffReceipts(snap, rows, storedOrderBreakdown(rows, 0));
+    expect(d.lines).toHaveLength(1);
+    expect(d.identical).toBe(true);
+  });
+
   it("quantity change is flagged", () => {
     const snap = snapshotFor([bresilBags(4)], 0);
     const rows = [storedBresil(2.25, 38), storedService(10, 20, 50)];
@@ -119,6 +141,11 @@ describe("parseClientSnapshot", () => {
     expect(parseClientSnapshot({})).toBeNull();
     expect(parseClientSnapshot({ version: 2 })).toBeNull();
     expect(parseClientSnapshot({ version: 1 })).toBeNull();
+    const good = JSON.parse(JSON.stringify(snapshotFor([cauca(10)], 0)));
+    expect(parseClientSnapshot({ ...good, items: "x" })).toBeNull();
+    expect(parseClientSnapshot({ ...good, items: [null] })).toBeNull();
+    expect(parseClientSnapshot({ ...good, breakdown: undefined })).toBeNull();
+    expect(parseClientSnapshot({ ...good, breakdown: { ...good.breakdown, totalHT: "12" } })).toBeNull();
     expect(parseClientSnapshot("x")).toBeNull();
   });
   it("round-trips a built snapshot", () => {

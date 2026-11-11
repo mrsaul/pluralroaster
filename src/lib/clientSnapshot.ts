@@ -63,8 +63,11 @@ export function buildClientSnapshot(input: {
 export function parseClientSnapshot(raw: unknown): ClientSnapshot | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  if (r.version !== 1 || !r.breakdown || typeof r.breakdown !== "object") return null;
-  if (!Array.isArray(r.items)) return null;
+  if (r.version !== 1) return null;
+  const b = r.breakdown as Record<string, unknown> | null | undefined;
+  if (!b || typeof b !== "object") return null;
+  if (typeof b.totalHT !== "number" || typeof b.totalTTC !== "number") return null;
+  if (!Array.isArray(r.items) || r.items.some((i) => !i || typeof i !== "object")) return null;
   return raw as ClientSnapshot;
 }
 
@@ -99,13 +102,26 @@ export type ReceiptLine = {
 
 const lineKey = (name: string, sizeKg: number | null) => `${name}::${sizeKg ?? "kg"}`;
 
+/** Merges lines sharing a key (quantity and gross HT summed), keeping first-seen order. */
+function mergeLines(lines: ReceiptLine[]): ReceiptLine[] {
+  const out = new Map<string, ReceiptLine>();
+  for (const l of lines) {
+    const prev = out.get(l.key);
+    out.set(
+      l.key,
+      prev ? { ...prev, quantity: round2(prev.quantity + l.quantity), grossHT: round2(prev.grossHT + l.grossHT) } : l,
+    );
+  }
+  return [...out.values()];
+}
+
 export function snapshotLines(s: ClientSnapshot): ReceiptLine[] {
-  return s.items
+  return mergeLines(s.items
     .filter((i: SnapshotItem) => i.kind !== "service")
     .map((i) => {
       const pricePerKg = i.unitPrice != null && i.sizeKg ? i.unitPrice / i.sizeKg : i.pricePerKg;
       const quantityKg = i.sizeKg ? i.sizeKg * i.quantity : i.quantity;
-      const isBag = i.sizeKg != null && i.sizeKg < 1;
+      const isBag = i.sizeKg != null && i.sizeKg > 0;
       return {
         key: lineKey(i.name, i.sizeKg),
         label: i.name,
@@ -114,15 +130,15 @@ export function snapshotLines(s: ClientSnapshot): ReceiptLine[] {
         unit: isBag ? ("bag" as const) : ("kg" as const),
         grossHT: round2(pricePerKg * quantityKg),
       };
-    });
+    }));
 }
 
 export function storedLines(items: ReceiptStoredItem[]): ReceiptLine[] {
-  return items
+  return mergeLines(items
     .filter((i) => i.kind !== "service")
     .map((i) => {
       const qty = Number(i.quantity);
-      const isBag = i.size_kg != null && i.size_kg < 1;
+      const isBag = i.size_kg != null && i.size_kg > 0;
       return {
         key: lineKey(i.product_name, i.size_kg),
         label: i.product_name,
@@ -131,7 +147,7 @@ export function storedLines(items: ReceiptStoredItem[]): ReceiptLine[] {
         unit: isBag ? ("bag" as const) : ("kg" as const),
         grossHT: round2(Number(i.price_per_kg) * qty),
       };
-    });
+    }));
 }
 
 export type LineChange = {
@@ -155,7 +171,7 @@ export function diffReceipts(
     seen.add(b.key);
     const a = afterByKey.get(b.key);
     if (!a) return { key: b.key, status: "removed", before: b };
-    const same = a.quantity === b.quantity && a.grossHT === b.grossHT;
+    const same = round2(a.quantity) === round2(b.quantity) && a.grossHT === b.grossHT;
     return { key: b.key, status: same ? "same" : "changed", before: b, after: a };
   });
   for (const a of after) {
@@ -167,8 +183,8 @@ export function diffReceipts(
   const identical =
     lines.every((l) => l.status === "same") &&
     !deliveryChanged &&
-    s.breakdown.totalHT === currentBreakdown.totalHT &&
-    s.breakdown.totalTTC === currentBreakdown.totalTTC;
+    round2(s.breakdown.totalHT) === round2(currentBreakdown.totalHT) &&
+    round2(s.breakdown.totalTTC) === round2(currentBreakdown.totalTTC);
 
   return {
     identical,
