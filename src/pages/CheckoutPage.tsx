@@ -8,6 +8,7 @@ import type { CartItem, Product } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { type OrderReceiptData, buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
 import { computeOrderBreakdown, cartToCoffeeLines, type OrderBreakdown } from "@/lib/pricing";
+import { buildClientSnapshot, cartItemsToSnapshotItems, type ClientSnapshot } from "@/lib/clientSnapshot";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 import { SwipeableCartRow } from "@/components/SwipeableCartRow";
 import { useT } from "@/i18n";
@@ -16,7 +17,9 @@ interface CheckoutPageProps {
   items: CartItem[];
   totalKg: number;
   onBack: () => void;
-  onConfirm: (deliveryDate: string, notes?: string) => Promise<{ orderId: string }>;
+  onConfirm: (deliveryDate: string, notes: string | undefined, snapshot: ClientSnapshot) => Promise<{ orderId: string }>;
+  /** Pre-selected delivery date (e.g. the one chosen on the draft order) */
+  initialDeliveryDate?: string | null;
   /** Short ref of the original order when this is a re-order (e.g. "A1B2C3D4") */
   reorderedFromRef?: string | null;
   clientName?: string;
@@ -70,12 +73,13 @@ export default function CheckoutPage({
   clientName = '',
   discountPercent = 0,
   freeDelivery,
+  initialDeliveryDate = null,
   onRemoveItem,
   onUpdateItem,
 }: CheckoutPageProps) {
   const t = useT();
   const [step, setStep] = useState<Step>("review");
-  const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
+  const [deliveryDate, setDeliveryDate] = useState<string | null>(initialDeliveryDate);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
@@ -98,36 +102,21 @@ export default function CheckoutPage({
     setSubmitting(true);
     setOrderError(null);
     try {
-      const { orderId } = await onConfirm(deliveryDate, notes.trim() || undefined);
+      const snapshot = buildClientSnapshot({
+        items: cartItemsToSnapshotItems(snap),
+        breakdown: snapBreakdown,
+        deliveryDate,
+        notes: notes.trim() || null,
+        discountPercent,
+        source: "client",
+      });
+      const { orderId } = await onConfirm(deliveryDate, notes.trim() || undefined, snapshot);
       setConfirmedAt(new Date().toISOString());
       setConfirmedItems(snap);
       setConfirmedBreakdown(snapBreakdown);
       setConfirmedOrderId(orderId);
       // Write receipt data for PDF page (localStorage — shared across tabs)
-      const now = new Date().toISOString();
-      const receiptData: OrderReceiptData = {
-        orderId: orderId,
-        placedAt: now,
-        deliveryDate: deliveryDate,
-        notes: notes.trim() || null,
-        items: snap.map((item) => ({
-          name: item.product.name,
-          sizeLabel: item.sizeLabel ?? null,
-          sizeKg: item.sizeKg ?? null,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice ?? null,
-          pricePerKg: item.product.pricePerKg,
-          kind: 'coffee' as const,
-        })),
-        totalHT: snapBreakdown.totalHT,
-        vatLines: snapBreakdown.vatLines,
-        totalTTC: snapBreakdown.totalTTC,
-        ...(discountPercent > 0 ? {
-          discountPercent,
-          discountAmount: snapBreakdown.coffee.discountHT,
-        } : {}),
-        breakdown: snapBreakdown,
-      };
+      const receiptData: ClientSnapshot = { ...snapshot, orderId };
       localStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       setStep("success");
     } catch (err) {

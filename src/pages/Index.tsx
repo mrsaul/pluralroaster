@@ -21,7 +21,7 @@ const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
 // Kitchen lives in its own lazy chunk — never downloaded by coffee-only users.
 const KitchenApp = lazy(() => import("@/kitchen/KitchenApp"));
 import { supabase } from "@/integrations/supabase/client";
-import { computeOrderBreakdown, cartToCoffeeLines } from "@/lib/pricing";
+import { rpcTotalsFromBreakdown, type ClientSnapshot } from "@/lib/clientSnapshot";
 import { mapPersistedOrder, type PersistedOrderRow } from "@/lib/persistedOrder";
 import { OTP_FLOW_KEY } from "./LoginPage";
 import {
@@ -403,7 +403,7 @@ const Index = () => {
     cart.updateQuantity(draftItem.product, Math.max(0, nextQuantity));
   }, [cart]);
 
-  const handleConfirmOrder = useCallback(async (deliveryDate: string, notes?: string): Promise<{ orderId: string }> => {
+  const handleConfirmOrder = useCallback(async (deliveryDate: string, notes: string | undefined, snapshot: ClientSnapshot): Promise<{ orderId: string }> => {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
 
@@ -411,13 +411,8 @@ const Index = () => {
       throw new Error("Votre session a expiré. Veuillez vous reconnecter.");
     }
 
-    // Same breakdown the client saw at checkout: tier discount on coffee, Loberz delivery on top
-    const discountPct = clientTier?.discountPercent ?? 0;
-    const breakdown = computeOrderBreakdown({
-      coffeeLines: cartToCoffeeLines(cart.items),
-      discountPercent: discountPct,
-      delivery: { kind: "auto", free: freeDelivery },
-    });
+    // Totals come from the breakdown the client saw (stored in the snapshot), never recomputed here
+    const totals = rpcTotalsFromBreakdown(snapshot.breakdown);
 
     const coffeeItems = cart.items.map((item) => ({
       product_id: item.product.id,
@@ -435,23 +430,14 @@ const Index = () => {
       p_user_id:            user.id,
       p_delivery_date:      deliveryDate,
       p_total_kg:           cart.totalKg,
-      p_total_price:        breakdown.totalHT,
       p_status:             "received",
       p_confirmed_at:       new Date().toISOString(),
       p_notes:              notes ?? null,
       p_items:              coffeeItems,
       p_reordered_from:     reorderedFromId ?? null,
-      ...(breakdown.delivery ? {
-        p_delivery: {
-          full_price:       breakdown.delivery.fullPriceHT,
-          discount_percent: breakdown.delivery.discountPercent,
-          net:              breakdown.delivery.netHT,
-        },
-      } : {}),
-      ...(discountPct > 0 ? {
-        p_discount_percent:  discountPct,
-        p_pricing_tier_name: clientTier!.name,
-      } : {}),
+      ...totals,
+      ...(totals.p_discount_percent != null ? { p_pricing_tier_name: clientTier!.name } : {}),
+      p_client_snapshot:    snapshot,
     });
 
     if (rpcError || !rpcResult?.order_id) {
@@ -467,15 +453,16 @@ const Index = () => {
     cart.clearCart();
 
     return { orderId: rpcResult.order_id as string };
-  }, [cart, clientTier, freeDelivery, loadOrders, reorderedFromId, setDraftDeliveryDate, toast]);
+  }, [cart, clientTier, loadOrders, reorderedFromId, setDraftDeliveryDate, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
     if (!draftDeliveryDate || cart.items.length === 0) {
       return;
     }
 
-    void handleConfirmOrder(draftDeliveryDate);
-  }, [cart.items.length, draftDeliveryDate, handleConfirmOrder]);
+    // Goes through checkout so the client sees (and we save) the summary
+    setView("checkout");
+  }, [cart.items.length, draftDeliveryDate, setView]);
 
   const handleReorder = useCallback((order: Order) => {
     setPendingReorder(order);
@@ -639,6 +626,7 @@ const Index = () => {
             clientName={String((onboardingData as any)?.company_name ?? '')}
             discountPercent={clientTier?.discountPercent ?? 0}
             freeDelivery={freeDelivery}
+            initialDeliveryDate={draftDeliveryDate}
             onRemoveItem={(product, sizeLabel) => {
               cart.updateQuantity(product, 0, sizeLabel);
             }}
