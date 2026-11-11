@@ -146,6 +146,12 @@ figcaption{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-
 .trust ul{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
 .trust li{font-family:var(--font-display);font-size:16px;padding:9px 18px;border:1px solid var(--line);border-radius:999px;background:var(--paper)}
 
+.top-links{display:flex;align-items:center;gap:clamp(12px,3vw,24px)}
+.text-link{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;color:var(--ink-soft)}
+.text-link:hover{color:var(--ink)}
+.top-links .text-link,.top-links .btn{white-space:nowrap}
+@media (max-width:560px){.top-links .btn{display:none}}
+
 /* contact */
 .contact{background:var(--ink);color:var(--paper);padding:var(--section) 0}
 .contact .wrap{display:grid;gap:40px}
@@ -159,6 +165,8 @@ figcaption{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-
 .contact dd a:hover{color:var(--salmon)}
 .stack{display:flex;gap:10px;align-items:flex-end}
 .stack i{display:block;width:44px}
+.back{display:grid;gap:18px;justify-items:start}
+.back p{font-family:var(--font-display);font-size:clamp(18px,2.2vw,22px);line-height:1.4;max-width:30ch}
 footer{background:var(--ink);color:rgba(251,248,241,.6);font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:0 0 40px}
 footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
 
@@ -179,11 +187,14 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-betw
   .brand{grid-template-columns:300px 1fr;column-gap:56px}
   .about .wrap{grid-template-columns:1fr 1fr}
   .contact .wrap{grid-template-columns:1.2fr .8fr;align-items:end}
-  .contact dl{grid-column:1/-1}
+  .contact dl{grid-column:1/-1;order:3}
+  .back{justify-items:end;text-align:right}
+  .shapes-row{grid-column:1/-1;order:4}
+  .back p{margin-left:auto}
 }
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn{transition:none}}
 @media print{
-  .top{position:static}.top .btn{display:none}
+  .top{position:static}.top .btn,.top-links,.back{display:none}
   .phase,.contact{break-before:page}
   .trust{break-before:avoid}
   article,.card,figure,.list li,.brand .intro,header,.photos,dl div{break-inside:avoid}
@@ -195,8 +206,11 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-betw
 
 <div class="top">
   <div class="wrap">
-    <a href="#haut" aria-label="Plural, retour en haut"><img src="/nous/img/logo.png" alt="Plural · Coffee made by several humans"></a>
-    <a class="btn small" href="#contact">Nous contacter</a>
+    <a href="/" aria-label="Plural Pro, accueil"><img src="/nous/img/logo.png" alt="Plural · Coffee made by several humans"></a>
+    <nav class="top-links">
+      <a class="text-link" href="/">Acheter du café</a>
+      <a class="btn small" href="#contact">Nous contacter</a>
+    </nav>
   </div>
 </div>
 
@@ -413,8 +427,12 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-betw
       <p class="eyebrow">Contact</p>
       <h2 style="margin-top:18px">Discutons de votre projet café.</h2>
     </div>
-    <div class="stack" aria-hidden="true">
+    <div class="stack shapes-row" aria-hidden="true">
       <i class="semi bg-blue"></i><i class="circle bg-red"></i><i class="quarter bg-sand"></i><i class="semi down bg-green"></i><i class="circle bg-orange"></i>
+    </div>
+    <div class="back">
+      <p>Déjà client ? Retrouvez votre compte et passez commande sur Plural&nbsp;Pro.</p>
+      <a class="btn coral" href="/">Acheter du café</a>
     </div>
     <dl>
       <div><dt>E-mail</dt><dd><a href="mailto:contact@pluralcafe.fr">contact@pluralcafe.fr</a></dd></div>
