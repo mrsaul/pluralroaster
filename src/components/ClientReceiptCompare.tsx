@@ -23,6 +23,8 @@ const signedEur = (n: number) =>
 
 const PRINT_CSS = `
 @media print {
+  html, body { height: auto !important; overflow: visible !important; }
+  body > *:not(:has(.client-compare-print)) { display: none !important; }
   body * { visibility: hidden !important; }
   .client-compare-print, .client-compare-print * { visibility: visible !important; }
   .client-compare-print {
@@ -77,7 +79,7 @@ function ReceiptColumn({
               <span className={cn(status === "removed" && "line-through text-muted-foreground")}>
                 {l.label}
                 {status === "added" && (
-                  <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-900 no-underline dark:bg-amber-900 dark:text-amber-100">
+                  <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-900 dark:bg-amber-900 dark:text-amber-100">
                     nouveau
                   </span>
                 )}
