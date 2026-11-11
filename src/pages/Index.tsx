@@ -128,9 +128,12 @@ const Index = () => {
   const sessionInitialized = useRef(false);
 
   // Wraps setView so every navigation is saved to sessionStorage automatically.
+  // Date pre-selected at checkout; only the draft "Commander" button sets it.
+  const [checkoutInitialDate, setCheckoutInitialDate] = useState<string | null>(null);
   const setView = useCallback((v: View) => {
     saveView(v);
     setViewRaw(v);
+    setCheckoutInitialDate(null);
   }, []);
 
   const loadOrders = useCallback(async () => {
@@ -462,6 +465,7 @@ const Index = () => {
 
     // Goes through checkout so the client sees (and we save) the summary
     setView("checkout");
+    setCheckoutInitialDate(draftDeliveryDate);
   }, [cart.items.length, draftDeliveryDate, setView]);
 
   const handleReorder = useCallback((order: Order) => {
@@ -626,7 +630,7 @@ const Index = () => {
             clientName={String((onboardingData as any)?.company_name ?? '')}
             discountPercent={clientTier?.discountPercent ?? 0}
             freeDelivery={freeDelivery}
-            initialDeliveryDate={draftDeliveryDate}
+            initialDeliveryDate={checkoutInitialDate}
             onRemoveItem={(product, sizeLabel) => {
               cart.updateQuantity(product, 0, sizeLabel);
             }}

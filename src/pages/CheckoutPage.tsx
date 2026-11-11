@@ -79,16 +79,19 @@ export default function CheckoutPage({
 }: CheckoutPageProps) {
   const t = useT();
   const [step, setStep] = useState<Step>("review");
-  const [deliveryDate, setDeliveryDate] = useState<string | null>(initialDeliveryDate);
+  const [deliveryDate, setDeliveryDate] = useState<string | null>(() => {
+    if (!initialDeliveryDate) return null;
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return initialDeliveryDate >= today ? initialDeliveryDate : null;
+  });
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
   // Snapshot before cart clears — keeps success screen populated
-  const [confirmedOrderId, setConfirmedOrderId] = useState<string | null>(null);
   const [confirmedItems, setConfirmedItems] = useState<CartItem[]>([]);
-  const [confirmedBreakdown, setConfirmedBreakdown] = useState<OrderBreakdown | null>(null);
-  const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
+  const [confirmedSnapshot, setConfirmedSnapshot] = useState<ClientSnapshot | null>(null);
   const [copied, setCopied] = useState(false);
 
   const breakdown = breakdownFor(items, discountPercent, freeDelivery);
@@ -111,12 +114,10 @@ export default function CheckoutPage({
         source: "client",
       });
       const { orderId } = await onConfirm(deliveryDate, notes.trim() || undefined, snapshot);
-      setConfirmedAt(new Date().toISOString());
-      setConfirmedItems(snap);
-      setConfirmedBreakdown(snapBreakdown);
-      setConfirmedOrderId(orderId);
       // Write receipt data for PDF page (localStorage — shared across tabs)
       const receiptData: ClientSnapshot = { ...snapshot, orderId };
+      setConfirmedItems(snap);
+      setConfirmedSnapshot(receiptData);
       localStorage.setItem("plural_order_receipt", JSON.stringify(receiptData));
       setStep("success");
     } catch (err) {
@@ -130,31 +131,9 @@ export default function CheckoutPage({
   // ── Success screen ────────────────────────────────────────────────────────
 
   if (step === "success") {
-    const snapBreakdown = confirmedBreakdown ?? breakdownFor(confirmedItems, discountPercent, freeDelivery);
-
-    const receiptData: OrderReceiptData = {
-      orderId:      confirmedOrderId ?? "",
-      placedAt:     confirmedAt ?? new Date().toISOString(),
-      deliveryDate: deliveryDate ?? "",
-      notes:        notes.trim() || null,
-      items: confirmedItems.map(item => ({
-        name:       item.product.name,
-        sizeLabel:  item.sizeLabel ?? null,
-        sizeKg:     item.sizeKg ?? null,
-        quantity:   item.quantity,
-        unitPrice:  item.unitPrice ?? null,
-        pricePerKg: item.product.pricePerKg,
-        kind:       'coffee' as const,
-      })),
-      totalHT:  snapBreakdown.totalHT,
-      vatLines: snapBreakdown.vatLines,
-      totalTTC: snapBreakdown.totalTTC,
-      ...(discountPercent > 0 ? {
-        discountPercent,
-        discountAmount: snapBreakdown.coffee.discountHT,
-      } : {}),
-      breakdown: snapBreakdown,
-    };
+    const receiptData = confirmedSnapshot!;
+    const snapBreakdown = receiptData.breakdown;
+    const confirmedOrderId = receiptData.orderId;
 
     const handleShare = async () => {
       const text = buildPlainTextSummary(receiptData);
