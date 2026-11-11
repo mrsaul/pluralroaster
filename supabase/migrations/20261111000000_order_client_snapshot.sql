@@ -5,8 +5,12 @@
 -- The RPC stamps orderId (the new order's id as text) and, when totalHT differs
 -- from p_total_price by more than 0.01, "mismatch": true.
 -- client_snapshot is write-once: only an INSERT (via the RPC, or by an admin)
--- can set it; any later UPDATE that changes it raises, for every role.
+-- can set it (direct INSERTs by service role, which has no auth.uid(), are
+-- nulled too); any later UPDATE that changes it raises, for every role.
 -- The legacy 8-arg overload is left untouched.
+-- A malformed p_client_snapshot (non-object, or totalHT not a number) never
+-- blocks the order: it is stored with "mismatch": true (non-objects wrapped
+-- under "raw").
 
 
 ALTER TABLE public.orders
@@ -66,11 +70,23 @@ BEGIN
 
   v_order_id := gen_random_uuid();
 
+  -- The snapshot is a best-effort copy: a malformed one must never block the
+  -- order. Non-object snapshots are wrapped; the totalHT cast only runs on a
+  -- JSON number.
   IF p_client_snapshot IS NULL THEN
     v_snapshot := NULL;
+  ELSIF jsonb_typeof(p_client_snapshot) <> 'object' THEN
+    v_snapshot := jsonb_build_object(
+      'raw', p_client_snapshot,
+      'orderId', v_order_id::text,
+      'mismatch', true
+    );
   ELSE
     v_snapshot := jsonb_set(p_client_snapshot, '{orderId}', to_jsonb(v_order_id::text));
-    IF abs((p_client_snapshot->>'totalHT')::numeric - p_total_price) > 0.01 THEN
+    IF jsonb_typeof(p_client_snapshot->'totalHT') IS DISTINCT FROM 'number'
+       OR p_total_price IS NULL THEN
+      v_snapshot := v_snapshot || '{"mismatch": true}'::jsonb;
+    ELSIF abs((p_client_snapshot->>'totalHT')::numeric - p_total_price) > 0.01 THEN
       v_snapshot := v_snapshot || '{"mismatch": true}'::jsonb;
     END IF;
   END IF;
@@ -146,6 +162,10 @@ GRANT EXECUTE ON FUNCTION public.create_order_with_items(
 -- snapshot (it is silently nulled). UPDATE: any change to client_snapshot
 -- raises, for every role; updates that leave it untouched pass through.
 -- DELETE is not covered by this trigger.
+-- NULL -> value on UPDATE is blocked on purpose: copies only come from the RPC
+-- or an admin INSERT, so orders from old app versions never get one later.
+-- Note: plural.snapshot_rpc can be set by anyone with raw SQL access;
+-- PostgREST callers cannot set it and run an insert in the same transaction.
 CREATE OR REPLACE FUNCTION public.orders_client_snapshot_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -197,4 +217,7 @@ CREATE TRIGGER orders_client_snapshot_guard
 --      --    -- raises: client_snapshot is write-once
 --      -- 7. direct insert into orders (..., client_snapshot) values (..., '{"x":1}')
 --      --    as the client -> stored client_snapshot IS NULL
+--      -- 8. call the RPC with p_client_snapshot => '"oops"'::jsonb, then again with
+--      --    '{"totalHT": "abc"}'::jsonb; both orders are placed, and the stored
+--      --    snapshot has mismatch = true (first one wrapped under "raw")
 --      rollback;
