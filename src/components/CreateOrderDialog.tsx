@@ -20,7 +20,8 @@ import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 import { DEFAULT_COFFEE_VAT_RATE, withOrderItemDefaults } from "@/lib/orderUtils";
-import { isBagVariant, lineGrossHT, linePricePerKg, lineQuantityKg, type AdminLine } from "@/lib/adminOrderLines";
+import { adminLinesToSnapshotItems, isBagVariant, lineGrossHT, linePricePerKg, lineQuantityKg, productRowName, type AdminLine } from "@/lib/adminOrderLines";
+import { buildClientSnapshot } from "@/lib/clientSnapshot";
 import { LOBERZ_PRODUCT_NAME, LOBERZ_SKU, computeOrderBreakdown, deliveryRowFor } from "@/lib/pricing";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 
@@ -272,15 +273,30 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
       }
 
       // orders.delivery_discount_percent is no longer written (DB default 0): delivery lives in the Loberz row
+      // The snapshot is write-once, so it goes in the same insert as the order (id generated here)
+      const orderId = crypto.randomUUID();
+      const deliveryYmd = format(deliveryDate, "yyyy-MM-dd");
+      const discountPercent = clientTier?.product_discount_percent ?? 0;
+      const clientSnapshot = buildClientSnapshot({
+        items: adminLinesToSnapshotItems(lineItems.map((i) => ({ name: productRowName(i.product), line: toAdminLine(i) }))),
+        breakdown,
+        deliveryDate: deliveryYmd,
+        notes: notes.trim() || null,
+        discountPercent,
+        source: "admin",
+        orderId,
+      });
       const { data: order, error: orderErr } = await supabase.from("orders").insert({
+        id: orderId,
+        client_snapshot: clientSnapshot,
         user_id: orderUserId,
         company_id: selectedCompanyId,
-        delivery_date: format(deliveryDate, "yyyy-MM-dd"),
+        delivery_date: deliveryYmd,
         total_kg: breakdown.coffee.kg,
         total_price: breakdown.totalHT,
         status: "received",
         invoicing_status: "not_sent",
-        discount_percent: clientTier?.product_discount_percent ?? 0,
+        discount_percent: discountPercent,
         pricing_tier_name: clientTier?.name ?? null,
       } as any).select("id").single();
 
@@ -291,8 +307,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
         return {
           order_id: order.id,
           product_id: i.product.id,
-          product_name: i.product.data_source_mode === "custom" && i.product.custom_name
-            ? i.product.custom_name : i.product.name,
+          product_name: productRowName(i.product),
           product_sku: i.product.sku,
           quantity: lineQuantityKg(line),
           price_per_kg: linePricePerKg(line),
@@ -339,7 +354,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     } finally {
       setSaving(false);
     }
-  }, [selectedCompanyId, selectedClient, deliveryDate, lineItems, breakdown, clientTier, toast, clearDraft, onOpenChange, onCreated]);
+  }, [selectedCompanyId, selectedClient, deliveryDate, lineItems, breakdown, clientTier, notes, toast, clearDraft, onOpenChange, onCreated]);
 
   const getClientLabel = (c: SimpleClient) => {
     const name = c.client_data_mode === "custom" && c.custom_company_name
