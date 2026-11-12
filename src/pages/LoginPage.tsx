@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Mail, ArrowLeft, Coffee, Loader2, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Mail, ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
@@ -263,9 +263,13 @@ export default function LoginPage() {
         >
           {/* Brand */}
           <div className="flex items-center gap-2.5 mb-8">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Coffee style={{ width: 18, height: 18 }} className="text-primary" />
-            </div>
+            <img
+                src="/favicon.png"
+                alt=""
+                width={36}
+                height={36}
+                className="w-9 h-9 rounded-full"
+              />
             <span className="text-base font-semibold tracking-tight text-foreground">PluralRoaster</span>
           </div>
 
@@ -373,9 +377,13 @@ export default function LoginPage() {
         {/* Brand header */}
         <div className="mb-8">
           <div className="flex items-center gap-2.5 mb-5">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Coffee className="text-primary" style={{ width: 18, height: 18 }} />
-            </div>
+            <img
+                src="/favicon.png"
+                alt=""
+                width={36}
+                height={36}
+                className="w-9 h-9 rounded-full"
+              />
             <span className="text-base font-semibold tracking-tight text-foreground">PluralRoaster</span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground leading-tight">
@@ -545,6 +553,14 @@ export default function LoginPage() {
               {t.login.linkCreate}
             </button>
           )}
+
+          {/* Public presentation page — plain <a>: /nous is a static page, not an app route. */}
+          <a
+            href="/nous"
+            className="block w-full pt-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {t.login.linkAbout}
+          </a>
         </div>
       </motion.div>
     </div>

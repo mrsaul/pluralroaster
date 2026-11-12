@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plural Café · Offre professionnelle</title>
+<meta name="description" content="Café en grains torréfié à Paris, choix des machines, conception du bar et formation barista : Plural accompagne votre coffee shop en quatre étapes.">
+<meta property="og:title" content="Plural Café · Offre professionnelle">
+<meta property="og:image" content="https://www.pluralpro.fr/nous/img/bar.jpg">
+<link rel="icon" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap">
+<style>
+@font-face{font-family:"Averia Serif Libre";src:url("/nous/fonts/AveriaSerifLibre-Regular.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Averia Serif Libre";src:url("/nous/fonts/AveriaSerifLibre-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+
+/* Layout idea: one long paper page, four numbered phases, each owning one logo hue;
+   photos in crisp frames beside flat geometry, text always on paper. Single theme by choice. */
+:root{
+  color-scheme:light;
+  --paper:#FBF8F1; --paper-2:#F4EFE3; --ink:#1C1A17; --ink-soft:#6B645B; --line:rgba(28,26,23,.14);
+  --blue:#7E9CD0; --red:#F0605C; --salmon:#EFA89E; --sand:#F1DDA9; --green:#509040; --orange:#F0951F;
+  --blue-wash:#E8EEF8; --orange-wash:#FCE9CC; --green-wash:#DDEAD7; --red-wash:#FDE4E3;
+  --font-display:"Averia Serif Libre",Georgia,serif;
+  --font-body:"Averia Serif Libre",Georgia,serif;
+  --font-mono:"Space Mono",ui-monospace,monospace;
+  --wrap:1120px; --gutter:clamp(20px,5vw,48px);
+  --section:clamp(72px,11vw,144px);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.65;overflow-x:hidden}
+img{display:block;max-width:100%;height:auto}
+a{color:inherit}
+a:focus-visible,button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--blue)}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;line-height:1.08;letter-spacing:-.02em;margin:0;text-wrap:balance}
+p{margin:0;max-width:62ch}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 var(--gutter)}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin:0}
+.lead{font-family:var(--font-display);font-weight:400;font-size:clamp(19px,2.1vw,23px);line-height:1.45}
+
+/* ---------- top bar ---------- */
+.top{position:sticky;top:0;z-index:10;background:var(--paper);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px}
+.top img{height:30px;width:auto}
+.btn{display:inline-flex;align-items:center;gap:10px;background:var(--ink);color:var(--paper);text-decoration:none;font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:14px 22px;border-radius:999px;transition:background .2s}
+.btn:hover{background:#3A352F}
+.btn.small{padding:10px 16px}
+.btn.coral{background:var(--red);color:var(--ink)}
+.btn.coral:hover{background:#E8514D}
+
+/* ---------- hero ---------- */
+.hero{padding:clamp(48px,8vw,104px) 0 var(--section)}
+.hero .wrap{display:grid;gap:clamp(40px,6vw,80px);align-items:center}
+.hero h1{font-size:clamp(38px,5.2vw,64px);margin:20px 0 28px}
+.hero h1 em{font-style:normal;color:var(--red)}
+.hero .cta{display:flex;flex-wrap:wrap;align-items:center;gap:20px;margin-top:36px}
+.hero .cta a.text{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.collage{position:relative;display:grid;grid-template-columns:5fr 4fr;gap:16px;align-items:end}
+.collage img{width:100%;object-fit:cover}
+.collage .a{aspect-ratio:3/4}
+.collage .b{aspect-ratio:3/4;border-radius:999px 999px 0 0}
+.collage .col{display:grid;gap:16px}
+.shape{display:block}
+.semi{aspect-ratio:2/1;border-radius:999px 999px 0 0}
+.semi.down{border-radius:0 0 999px 999px}
+.circle{aspect-ratio:1;border-radius:50%}
+.quarter{aspect-ratio:1;border-radius:100% 0 0 0}
+.bg-blue{background:var(--blue)}.bg-red{background:var(--red)}.bg-salmon{background:var(--salmon)}
+.bg-sand{background:var(--sand)}.bg-green{background:var(--green)}.bg-orange{background:var(--orange)}
+.collage .shapes{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end}
+
+/* ---------- phase index ---------- */
+.index{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.index ol{list-style:none;margin:0;padding:0;display:grid}
+.index a{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start;padding:28px 0;text-decoration:none;border-bottom:1px solid var(--line)}
+.index li:last-child a{border-bottom:0}
+.index .dot{width:44px;height:44px;display:grid;place-items:center;font-family:var(--font-mono);font-size:13px;font-weight:700}
+.index li:nth-child(1) .dot{background:var(--blue);border-radius:50%}
+.index li:nth-child(2) .dot{background:var(--orange)}
+.index li:nth-child(3) .dot{background:var(--green);color:var(--paper);border-radius:999px 999px 0 0}
+.index li:nth-child(4) .dot{background:var(--red);border-radius:100% 0 0 0}
+.index strong{display:block;font-family:var(--font-display);font-size:21px;line-height:1.2}
+.index span.d{display:block;color:var(--ink-soft);font-size:15px;line-height:1.5;margin-top:6px}
+.index a:hover strong{color:var(--red)}
+
+/* ---------- phases ---------- */
+.phase{padding:var(--section) 0}
+.phase .wrap{display:grid;gap:clamp(40px,6vw,88px)}
+.phase header{display:grid;gap:20px}
+.num{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:14px}
+.num i{display:block;width:28px;height:28px}
+.phase h2{font-size:clamp(32px,4.6vw,56px)}
+.copy{display:grid;gap:22px;align-content:start}
+.list{list-style:none;margin:8px 0 0;padding:0;display:grid;border-top:1px solid var(--line)}
+.list li{padding:16px 0;border-bottom:1px solid var(--line);display:grid;gap:2px}
+.list b{font-family:var(--font-display);font-size:18px}
+.list span{color:var(--ink-soft);font-size:15.5px;line-height:1.5}
+.duo{display:grid;gap:clamp(32px,5vw,72px)}
+.photos{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.photos img{width:100%;object-fit:cover}
+.photos .tall{aspect-ratio:3/4}
+.photos .wide{grid-column:1/-1;aspect-ratio:16/10}
+.photos .sq{aspect-ratio:1}
+.photos .arch{border-radius:999px 999px 0 0}
+.photos .round{border-radius:50%}
+.photos .drop{margin-top:clamp(32px,6vw,72px)}
+.photos .shape{align-self:end}
+figure{margin:0}
+figcaption{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-top:10px}
+
+/* coffee range */
+.range{display:grid;gap:0;border-top:1px solid var(--ink)}
+.range article{display:grid;gap:10px;padding:22px 0;border-bottom:1px solid var(--line)}
+.range h3{font-size:22px}
+.range .o{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.range .notes{font-size:15.5px}
+.meters{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
+.meters span{display:inline-flex;align-items:center;gap:8px}
+.dots{display:inline-flex;gap:3px}
+.dots i{width:8px;height:8px;border-radius:50%;border:1px solid var(--ink)}
+.dots i.on{background:var(--ink)}
+.subhead{display:grid;gap:10px;margin-bottom:8px}
+.subhead h3{font-size:clamp(24px,3vw,32px)}
+
+/* machines */
+.band{background:var(--paper-2)}
+.brand{display:grid;gap:28px;padding:clamp(36px,5vw,56px) 0;border-top:1px solid var(--line)}
+.brand:first-of-type{border-top:1px solid var(--ink)}
+.brand .intro{display:grid;gap:14px;align-content:start}
+.brand .intro h3{font-size:clamp(26px,3.2vw,36px)}
+.brand .intro p{font-size:16px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:20px}
+.card{display:grid;gap:12px;align-content:start}
+.card img{width:100%;aspect-ratio:4/5;object-fit:cover}
+.card h4{font-family:var(--font-display);font-size:20px;line-height:1.2;margin:0}
+.card .g{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.card p{font-size:15px;line-height:1.5;color:var(--ink-soft)}
+.card.text{padding:20px;background:var(--paper);border:1px solid var(--line)}
+
+/* about + trust */
+.about .wrap{display:grid;gap:clamp(36px,6vw,80px);align-items:center}
+.about h2{font-size:clamp(32px,4.6vw,56px)}
+.quote{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,52px);line-height:1.1;letter-spacing:-.02em}
+.trust{padding:0 0 var(--section)}
+.trust ul{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
+.trust li{font-family:var(--font-display);font-size:16px;padding:9px 18px;border:1px solid var(--line);border-radius:999px;background:var(--paper)}
+
+.top-links{display:flex;align-items:center;gap:clamp(12px,3vw,24px)}
+.text-link{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;color:var(--ink-soft)}
+.text-link:hover{color:var(--ink)}
+.top-links .text-link,.top-links .btn{white-space:nowrap}
+@media (max-width:560px){.top-links .btn{display:none}}
+
+/* contact */
+.contact{background:var(--ink);color:var(--paper);padding:var(--section) 0}
+.contact .wrap{display:grid;gap:40px}
+.contact h2{font-size:clamp(34px,5.4vw,68px)}
+.contact .eyebrow{color:var(--sand)}
+.contact dl{margin:0;display:grid;gap:0;border-top:1px solid rgba(251,248,241,.2)}
+.contact dl div{display:grid;gap:4px;padding:18px 0;border-bottom:1px solid rgba(251,248,241,.2)}
+.contact dt{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--sand)}
+.contact dd{margin:0;font-family:var(--font-display);font-size:clamp(20px,2.6vw,26px);overflow-wrap:anywhere}
+.contact dd a{text-decoration:none}
+.contact dd a:hover{color:var(--salmon)}
+.stack{display:flex;gap:10px;align-items:flex-end}
+.stack i{display:block;width:44px}
+.back{display:grid;gap:18px;justify-items:start}
+.back p{font-family:var(--font-display);font-size:clamp(18px,2.2vw,22px);line-height:1.4;max-width:30ch}
+footer{background:var(--ink);color:rgba(251,248,241,.6);font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:0 0 40px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+
+@media (min-width:720px){
+  .index ol{grid-template-columns:1fr 1fr;column-gap:48px}
+  .index li:nth-last-child(2) a{border-bottom:0}
+  .range{grid-template-columns:1fr 1fr;column-gap:48px}
+  .contact dl{grid-template-columns:repeat(3,1fr);column-gap:32px}
+}
+@media (min-width:960px){
+  .hero .wrap{grid-template-columns:1.05fr .95fr}
+  .index ol{grid-template-columns:repeat(4,1fr);column-gap:32px}
+  .index a{grid-template-columns:1fr;border-bottom:0;padding:36px 0}
+  .duo{grid-template-columns:1fr 1fr;align-items:start}
+  .duo.flip .copy{order:2}
+  .phase header{grid-template-columns:1fr 1fr;column-gap:clamp(32px,5vw,72px);align-items:end}
+  .phase header .num{grid-column:1/-1}
+  .brand{grid-template-columns:300px 1fr;column-gap:56px}
+  .about .wrap{grid-template-columns:1fr 1fr}
+  .contact .wrap{grid-template-columns:1.2fr .8fr;align-items:end}
+  .contact dl{grid-column:1/-1;order:3}
+  .back{justify-items:end;text-align:right}
+  .shapes-row{grid-column:1/-1;order:4}
+  .back p{margin-left:auto}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn{transition:none}}
+@media print{
+  .top{position:static}.top .btn,.top-links,.back{display:none}
+  .phase,.contact{break-before:page}
+  .trust{break-before:avoid}
+  article,.card,figure,.list li,.brand .intro,header,.photos,dl div{break-inside:avoid}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wrap">
+    <a href="/" aria-label="Plural Pro, accueil"><img src="/nous/img/logo.png" alt="Plural · Coffee made by several humans"></a>
+    <nav class="top-links">
+      <a class="text-link" href="/">Acheter du café</a>
+      <a class="btn small" href="#contact">Nous contacter</a>
+    </nav>
+  </div>
+</div>
+
+<main id="haut">
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow">Offre professionnelle · Torréfacteur à Paris</p>
+      <h1>Votre coffee shop, <em>du&nbsp;grain à&nbsp;la&nbsp;tasse.</em></h1>
+      <p class="lead">Que vous lanciez votre projet ou que vous cherchiez à offrir un meilleur café à vos clients, nous sommes là pour vous accompagner. Café, machines, aménagement du bar, formation : une seule équipe, quatre étapes.</p>
+      <div class="cta">
+        <a class="btn" href="#contact">Parlons de votre projet</a>
+        <a class="text" href="#phases">Voir les 4 étapes ↓</a>
+      </div>
+    </div>
+    <div class="collage" aria-hidden="false">
+      <div class="col">
+        <img class="a" src="/nous/img/coffrets.jpg" alt="Coffrets de café Plural rose, vert et noir tenus dans les bras">
+        <div class="shapes"><i class="shape semi down bg-blue"></i><i class="shape circle bg-orange"></i></div>
+      </div>
+      <div class="col">
+        <i class="shape quarter bg-red"></i>
+        <img class="b" src="/nous/img/espresso.jpg" alt="Extraction d'un espresso dans un verre">
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="index" id="phases" aria-label="Les quatre étapes">
+  <div class="wrap">
+    <ol>
+      <li><a href="#cafe"><span class="dot">01</span><span><strong>Le café</strong><span class="d">Du café en grains, torréfié à Paris.</span></span></a></li>
+      <li><a href="#machines"><span class="dot">02</span><span><strong>Les machines</strong><span class="d">On vous aide à bien choisir vos machines et moulins.</span></span></a></li>
+      <li><a href="#bar"><span class="dot">03</span><span><strong>Le bar</strong><span class="d">On vous suit pendant les travaux : bar et workflow.</span></span></a></li>
+      <li><a href="#formation"><span class="dot">04</span><span><strong>L'équipe</strong><span class="d">On forme votre équipe au métier de barista.</span></span></a></li>
+    </ol>
+  </div>
+</nav>
+
+<!-- 01 -->
+<section class="phase" id="cafe">
+  <div class="wrap">
+    <header>
+      <p class="num"><i class="bg-blue" style="border-radius:50%"></i>Étape 01 · Le café</p>
+      <h2>Du café en grains, torréfié à Paris.</h2>
+      <p class="lead">Nous sélectionnons les meilleurs grains auprès de producteurs engagés et les torréfions avec soin pour révéler toute leur complexité aromatique.</p>
+    </header>
+
+    <div class="duo">
+      <div class="photos">
+        <figure><img class="tall" src="/nous/img/grains-verts.jpg" alt="Deux mains plongées dans un sac de café vert"><figcaption>Café vert, avant torréfaction</figcaption></figure>
+        <figure class="drop"><img class="tall arch" src="/nous/img/ferme.jpg" alt="Trois personnes regardent une vallée de caféiers en Colombie"><figcaption>Chez nos producteurs, Colombie</figcaption></figure>
+      </div>
+      <div class="copy">
+        <p>Une grille tarifaire claire, adaptée aux professionnels, selon le volume commandé et le type de café choisi. Coffee shop indépendant ou restaurant plus structuré, nous avons une solution pour vous.</p>
+        <ul class="list">
+          <li><b>Une sélection de cafés fraîchement torréfiés</b><span>Filtre, espresso, blends.</span></li>
+          <li><b>Des formats adaptés</b><span>1 kg, packs, abonnements.</span></li>
+          <li><b>Livraison régulière ou à la demande</b><span>Vous commandez au rythme de votre service.</span></li>
+          <li><b>Conseils personnalisés</b><span>Machines, recettes, extraction.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="subhead">
+        <p class="eyebrow">Notre gamme pro</p>
+        <h3>Cinq cafés pour commencer</h3>
+      </div>
+      <div class="range">
+        <article><p class="o">Mogiana · Nature</p><h3>Brésil</h3><p class="notes">Gourmand, chocolat, caramel, corps.</p>
+          <p class="meters"><span>Torréfaction <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span><span>Amertume <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span><span>Acidité <span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></span></p></article>
+        <article><p class="o">Ruben Cevallos · Lavé</p><h3>Pérou</h3><p class="notes">Floral, équilibré, doux, chocolat.</p>
+          <p class="meters"><span>Torréfaction <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span><span>Amertume <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span><span>Acidité <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span></p></article>
+        <article><p class="o">Golden Huila · Lavé</p><h3>Colombie</h3><p class="notes">Fruité, équilibré, doux.</p>
+          <p class="meters"><span>Torréfaction <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span><span>Amertume <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span><span>Acidité <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span></p></article>
+        <article><p class="o">Blend · Brésil / Colombie</p><h3>Populaire</h3><p class="notes">Chocolat, équilibré, amertume, corps.</p>
+          <p class="meters"><span>Torréfaction <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span><span>Amertume <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span><span>Acidité <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span></p></article>
+        <article><p class="o">À l'italienne · Robusta / Arabica</p><h3>Stupendo</h3><p class="notes">Intense, chocolat, caractère, amertume.</p>
+          <p class="meters"><span>Torréfaction <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></span><span>Amertume <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></span><span>Acidité <span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></span></p></article>
+        <article><p class="o">Tarifs professionnels</p><h3>Prix dégressifs selon le volume</h3><p class="notes">Demandez notre grille tarifaire à jour : <a href="#contact">contactez-nous</a>.</p></article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 -->
+<section class="phase band" id="machines">
+  <div class="wrap">
+    <header>
+      <p class="num"><i class="bg-orange"></i>Étape 02 · Les machines</p>
+      <h2>On vous aide à bien choisir vos machines.</h2>
+      <p class="lead">Nous distribuons les équipements les plus performants du marché, adaptés à tous les besoins, du coffee shop de spécialité au concept plus rapide. Étude de votre projet, choix du modèle, installation, suivi de la garantie.</p>
+    </header>
+
+    <div>
+      <div class="brand">
+        <div class="intro">
+          <p class="eyebrow">Machines espresso</p>
+          <h3>La Marzocco</h3>
+          <p>Nous sommes fournisseurs officiels de la marque italienne, reconnue mondialement pour la qualité de ses machines à espresso. Nous proposons toute la gamme actuelle.</p>
+        </div>
+        <div class="cards">
+          <div class="card"><img src="/nous/img/linea-classic.jpg" alt="La Marzocco Linea Classic S sur un comptoir clair"><p class="g">1 à 4 groupes</p><h4>Linea Classic S</h4><p>L'iconique. Double chaudière, extraction constante, fiable et robuste sur les volumes élevés.</p></div>
+          <div class="card"><img src="/nous/img/linea-pb.jpg" alt="La Marzocco Linea PB jaune dans un café"><p class="g">2 à 4 groupes</p><h4>Linea PB</h4><p>Interface intuitive, écran digital, contrôle précis de chaque paramètre d'extraction.</p></div>
+          <div class="card"><img src="/nous/img/gb5.jpg" alt="La Marzocco GB5 S sur un bar en terrazzo" style="object-position:38% 50%"><p class="g">2 à 4 groupes</p><h4>GB5 S</h4><p>Stabilité thermique, débit élevé constant, confort de travail et économie d'énergie.</p></div>
+          <div class="card"><img src="/nous/img/kb90.jpg" alt="La Marzocco KB90 bleue derrière un bouquet"><p class="g">2 ou 3 groupes</p><h4>KB90</h4><p>Pour les cafés à très fort volume : porte-filtre repensé pour le poignet et rinçage Steam Flush.</p></div>
+        </div>
+      </div>
+
+      <div class="brand">
+        <div class="intro">
+          <p class="eyebrow">Moulins</p>
+          <h3>Mahlkönig</h3>
+          <p>Plural et Mahlkönig travaillent ensemble depuis plus de 5 ans. Ces moulins garantissent constance, qualité et performance, et répondent aux exigences des coffee shops.</p>
+        </div>
+        <div class="cards">
+          <div class="card"><img src="/nous/img/mahlkonig.jpg" alt="Moulin Mahlkönig en service, porte-filtre rempli de mouture"><p class="g">Espresso</p><h4>E80S</h4><p>Vitesse de mouture exceptionnelle, pensée pour les volumes quotidiens élevés.</p></div>
+          <div class="card text"><p class="g">Espresso · Pesée</p><h4>E80S GbW</h4><p>Grind-by-Weight en temps réel et détection automatique du porte-filtre : des réglages qui tiennent, même en plein rush.</p></div>
+          <div class="card text"><p class="g">Filtre et polyvalent</p><h4>EK43</h4><p>La référence mondiale du café de spécialité, pour son profil de broyage unique et sa fiabilité.</p></div>
+          <div class="card text"><p class="g">Filtre et polyvalent</p><h4>EK Omnia</h4><p>La mouture d'exception de l'EK, avec un flux de travail plus rapide et plus pratique.</p></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="phase" id="bar">
+  <div class="wrap">
+    <header>
+      <p class="num"><i class="bg-green" style="border-radius:999px 999px 0 0"></i>Étape 03 · Le bar</p>
+      <h2>On vous suit pendant les travaux.</h2>
+      <p class="lead">Un bar bien pensé se dessine avant le premier coup de marteau. Nous vous conseillons sur la construction du bar et sur le workflow adapté à un coffee shop.</p>
+    </header>
+
+    <div class="duo flip">
+      <div class="copy">
+        <p>Nous avons conçu et ouvert nos propres cafés à Paris. Nous savons ce qu'un bar demande pour tenir un service chargé, et nous mettons cette expérience au service de votre local.</p>
+        <ul class="list">
+          <li><b>Implantation du bar</b><span>Emplacement de la machine, des moulins, de la caisse et de la zone de retrait.</span></li>
+          <li><b>Workflow barista</b><span>Un enchaînement de gestes court et logique, de la commande à la tasse servie.</span></li>
+          <li><b>Contraintes techniques</b><span>Arrivées d'eau, évacuations, électricité et filtration, à prévoir avec vos artisans.</span></li>
+          <li><b>Suivi de chantier</b><span>Nous restons à vos côtés jusqu'à l'installation des machines et aux premiers réglages.</span></li>
+        </ul>
+      </div>
+      <div class="photos">
+        <figure class="wide" style="grid-column:1/-1"><img class="wide" src="/nous/img/bar.jpg" alt="Bar Plural en carrelage terracotta avec une machine La Marzocco et deux moulins"><figcaption>Le bar d'un café Plural, Paris</figcaption></figure>
+        <figure><img class="sq" src="/nous/img/devanture.jpg" alt="Devanture d'un café Plural à Paris" style="object-position:70% 50%"></figure>
+        <i class="shape semi bg-green" aria-hidden="true"></i>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="phase band" id="formation">
+  <div class="wrap">
+    <header>
+      <p class="num"><i class="bg-red" style="border-radius:100% 0 0 0"></i>Étape 04 · L'équipe</p>
+      <h2>On forme votre équipe au métier de barista.</h2>
+      <p class="lead">Chez nous, la formation est un moment de partage, d'échange et de pratique, dans un espace dédié pensé pour les passionnés et les professionnels.</p>
+    </header>
+
+    <div class="duo">
+      <div class="photos">
+        <figure class="wide" style="grid-column:1/-1"><img class="wide" src="/nous/img/cupping.jpg" alt="Séance de dégustation autour d'une table dans l'espace de formation Plural"><figcaption>Espace de formation Plural</figcaption></figure>
+        <img class="sq round" src="/nous/img/latte.jpg" alt="Latte art dans une tasse jaune tenue à deux mains">
+        <img class="sq" src="/nous/img/v60.jpg" alt="Préparation d'un café filtre en méthode douce">
+      </div>
+      <div class="copy">
+        <p>Votre équipe apprend, pratique et repart avec les bons gestes : de quoi servir la même qualité de tasse à chaque service.</p>
+        <ul class="list">
+          <li><b>Techniques d'extraction</b><span>Régler son moulin, sa recette et sa machine pour un espresso régulier.</span></li>
+          <li><b>Latte art</b><span>Texturer le lait et maîtriser les premiers motifs.</span></li>
+          <li><b>Méthodes douces</b><span>Chemex, V60, Aeropress, presse française.</span></li>
+          <li><b>Culture du café de spécialité</b><span>Origines, procédés, dégustation : comprendre ce que l'on sert pour mieux en parler.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- about -->
+<section class="phase about">
+  <div class="wrap">
+    <figure><img src="/nous/img/fondateurs.jpg" alt="Saul et Carlos, fondateurs de Plural, devant le café"><figcaption>Saul et Carlos, fondateurs</figcaption></figure>
+    <div class="copy">
+      <p class="eyebrow">Qui sommes-nous</p>
+      <h2>Coffee made by several humans.</h2>
+      <p>Plural est né de la volonté de valoriser l'ensemble des acteurs et actrices de la chaîne du café. Cultivateurs, torréfacteurs, baristas : chaque rôle est indispensable à la réussite d'une excellente tasse.</p>
+      <p>Nous sommes Saul et Carlos. Notre équipe possède des compétences avérées dans toute la chaîne de production et de commercialisation du café, de la cerise jusqu'à la tasse.</p>
+    </div>
+  </div>
+</section>
+
+<section class="trust">
+  <div class="wrap">
+    <p class="quote">We filter coffee, <span style="color:var(--blue)">not people.</span></p>
+    <p style="margin-top:40px" class="eyebrow">Ils nous font confiance</p>
+    <ul>
+      <li>Sciences Po</li><li>Refugee Food</li><li>Les Cuistots Migrateurs</li><li>Poiscaille</li><li>Singa</li><li>Garantme</li><li>55</li><li>La Ruche</li><li>Wake up Café</li><li>The Human Safety Net</li><li>Act for Impact · BNP Paribas</li><li>The Coffee Quest</li><li>Federación Nacional de Cafeteros de Colombia</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<section class="contact" id="contact">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow">Contact</p>
+      <h2 style="margin-top:18px">Discutons de votre projet café.</h2>
+    </div>
+    <div class="stack shapes-row" aria-hidden="true">
+      <i class="semi bg-blue"></i><i class="circle bg-red"></i><i class="quarter bg-sand"></i><i class="semi down bg-green"></i><i class="circle bg-orange"></i>
+    </div>
+    <div class="back">
+      <p>Déjà client ? Retrouvez votre compte et passez commande sur Plural&nbsp;Pro.</p>
+      <a class="btn coral" href="/">Acheter du café</a>
+    </div>
+    <dl>
+      <div><dt>E-mail</dt><dd><a href="mailto:contact@pluralcafe.fr">contact@pluralcafe.fr</a></dd></div>
+      <div><dt>Site</dt><dd><a href="https://www.pluralcafe.fr">www.pluralcafe.fr</a></dd></div>
+      <div><dt>Instagram</dt><dd>@pluralcafe.fr · @pluralroaster</dd></div>
+    </dl>
+  </div>
+</section>
+<footer><div class="wrap"><span>Plural · Populaire SAS · Paris</span><span>Coffee made by several humans</span></div></footer>
+
+</body>
+</html>
