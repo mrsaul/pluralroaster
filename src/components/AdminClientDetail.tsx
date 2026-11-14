@@ -328,8 +328,8 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {resolvedCompany}
+            <DialogTitle className="flex flex-wrap items-center gap-2 pr-10 sm:pr-8 leading-snug">
+              <span className="min-w-0 break-words">{resolvedCompany}</span>
               <Badge
                 variant={client.onboarding_status === "completed" ? "default" : "secondary"}
                 className="text-[10px]"
@@ -372,13 +372,13 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                         <button
                           type="button"
                           onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                          className="w-full flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
                         >
                           {isExpanded
                             ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                           <span className="text-xs font-mono font-semibold text-foreground">{orderRef}</span>
-                          <span className="flex-1 text-xs text-muted-foreground tabular-nums">
+                          <span className="flex-1 min-w-0 text-xs text-muted-foreground tabular-nums">
                             {format(parseISO(order.created_at), "d MMM yyyy", { locale: fr })}
                             {order.delivery_date && (
                               <span className="ml-1.5">→ {format(parseISO(order.delivery_date), "d MMM", { locale: fr })}</span>
@@ -387,18 +387,20 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                           <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", statusColor)}>
                             {ORDER_STATUS_LABEL[normalizeOrderStatus(order.status)]}
                           </span>
-                          <span className="text-xs font-medium tabular-nums text-muted-foreground ml-2">
-                            {order.total_kg} kg
-                          </span>
-                          <span className="text-xs font-semibold tabular-nums text-foreground ml-2">
-                            €{order.total_price.toFixed(2)} HT
+                          <span className="ml-auto flex items-baseline gap-3 whitespace-nowrap">
+                            <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                              {order.total_kg} kg
+                            </span>
+                            <span className="text-xs font-semibold tabular-nums text-foreground">
+                              €{order.total_price.toFixed(2)} HT
+                            </span>
                           </span>
                         </button>
                         {isExpanded && (
                           <div className="border-t border-border bg-muted/20 px-3 py-2 space-y-1">
                             {order.items.map((item) => (
-                              <div key={item.id} className="flex items-baseline justify-between gap-2 text-xs">
-                                <span className="text-foreground font-medium truncate">{item.product_name}</span>
+                              <div key={item.id} className="flex flex-wrap items-baseline justify-between gap-x-2 text-xs">
+                                <span className="min-w-0 text-foreground font-medium break-words">{item.product_name}</span>
                                 <span className="shrink-0 text-muted-foreground tabular-nums">
                                   {item.quantity} kg{item.size_label ? ` · ${item.size_label}` : ""}
                                   {" · "}€{item.price_per_kg.toFixed(2)}/kg
@@ -594,7 +596,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               )}
 
               {client.sellsy_client_id && (
-                <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {client.last_synced_at
@@ -655,7 +657,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             </div>
 
             {/* Save */}
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-2 border-t border-border bg-background/95 px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
               <Button onClick={handleSave} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}

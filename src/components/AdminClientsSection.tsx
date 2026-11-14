@@ -46,27 +46,28 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
 
   return (
     <section className="mt-8">
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-muted-foreground" />
           <h2 className="text-sm font-medium text-muted-foreground">
             Clients ({query ? `${filtered.length} / ${clients.length}` : clients.length})
           </h2>
         </div>
-        <div className="relative w-56">
+        <div className="relative w-full sm:w-56">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher un client…"
-            className="h-8 pl-8 pr-8 text-sm"
+            className="h-10 sm:h-8 pl-8 pr-8 text-base sm:text-sm"
           />
           {query && (
             <button
               onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Effacer la recherche"
+              className="absolute right-1 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -85,6 +86,55 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
           </div>
         ) : null}
 
+        {/* Phones: one tappable card per client */}
+        <ul aria-label="Clients" className="md:hidden divide-y divide-border">
+          {loading ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">Chargement des clients…</li>
+          ) : filtered.length === 0 ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">
+              {query ? `Aucun client pour « ${query} »` : "Aucun client."}
+            </li>
+          ) : (
+            filtered.map((client) => (
+              <li key={client.id} className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onSelectClient(client)}
+                  className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left active:bg-muted/60"
+                >
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="font-medium text-foreground break-words">{resolveField(client, "company_name")}</p>
+                    <p className="text-xs text-muted-foreground truncate">{resolveField(client, "contact_name")}</p>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <Badge
+                        variant={client.onboarding_status === "completed" ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {client.onboarding_status === "completed" ? "Actif" : "En attente"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground capitalize">{resolveField(client, "pricing_tier")}</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+                {onDeleteClient && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Supprimer ${resolveField(client, "company_name")}`}
+                    className="mr-2 h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => onDeleteClient(client)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </li>
+            ))
+          )}
+        </ul>
+
+        {/* Wider screens: full table */}
+        <div data-clients-table className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -172,6 +222,7 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
     </section>
   );
