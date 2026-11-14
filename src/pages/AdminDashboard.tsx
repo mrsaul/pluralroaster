@@ -63,6 +63,7 @@ import {
 } from "@/components/ui/select";
 import { CreateOrderDialog, type SimpleClient, type SimpleProduct } from "@/components/CreateOrderDialog";
 import { ClientSyncCard } from "@/components/ClientSyncCard";
+import { ADMIN_CLIENTS_SELECT, companyRowToAppClient } from "@/lib/adminClients";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -918,52 +919,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const { data, error } = await supabase
         .from("companies")
-        .select(`
-          id, name, email, phone,
-          client_data_mode, onboarding_status, sellsy_client_id,
-          pricing_tier_id, free_delivery, last_synced_at, created_at, updated_at,
-          contacts(user_id, last_name, first_name, email, phone, is_primary),
-          company_addresses(label, address_line1)
-        `)
+        .select(ADMIN_CLIENTS_SELECT)
         .order("name", { ascending: true });
       if (error) throw new Error(error.message);
 
-      const mapped: AppClient[] = ((data ?? []) as any[]).map((company) => {
-        const contacts: any[] = company.contacts ?? [];
-        const primaryContact = contacts.find((c) => c.is_primary) ?? contacts[0] ?? null;
-        const deliveryAddr = (company.company_addresses ?? []).find((a: any) => a.label === "Delivery") ?? null;
-        const contactName = primaryContact
-          ? [primaryContact.first_name, primaryContact.last_name].filter(Boolean).join(" ") || null
-          : null;
-        const resolvedEmail = company.email ?? primaryContact?.email ?? null;
-        const resolvedPhone = company.phone ?? primaryContact?.phone ?? null;
-
-        return {
-          id: company.id,
-          user_id: primaryContact?.user_id ?? null,
-          company_name: company.name,
-          contact_name: contactName,
-          email: resolvedEmail,
-          phone: resolvedPhone,
-          delivery_address: deliveryAddr?.address_line1 ?? null,
-          pricing_tier: null,
-          pricing_tier_id: company.pricing_tier_id ?? null,
-          free_delivery: company.free_delivery === true,
-          sellsy_client_id: company.sellsy_client_id ?? null,
-          onboarding_status: company.onboarding_status ?? null,
-          client_data_mode: company.client_data_mode ?? "custom",
-          // New schema has no separate custom_* columns — map to same values
-          custom_company_name: company.name,
-          custom_contact_name: contactName,
-          custom_email: resolvedEmail,
-          custom_phone: resolvedPhone,
-          custom_delivery_address: deliveryAddr?.address_line1 ?? null,
-          custom_pricing_tier: null,
-          last_synced_at: company.last_synced_at ?? null,
-          created_at: company.created_at,
-          updated_at: company.updated_at,
-        };
-      });
+      const mapped: AppClient[] = ((data ?? []) as any[]).map(companyRowToAppClient);
       setClients(mapped);
     } catch (err) {
       setClientError(err instanceof Error ? err.message : String(err));
