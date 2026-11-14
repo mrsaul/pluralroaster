@@ -62,6 +62,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { CreateOrderDialog, type SimpleClient, type SimpleProduct } from "@/components/CreateOrderDialog";
+import { ClientSyncCard } from "@/components/ClientSyncCard";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -2015,51 +2016,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
 
                 {/* Sellsy Client Sync */}
-                <div className="mb-6 rounded-lg border border-border bg-card p-4 space-y-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <h2 className="text-sm font-medium text-foreground">Synchro clients Sellsy</h2>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Importer ou mettre à jour les fiches clients depuis Sellsy.
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowAddClient(true)}>
-                        <Plus className="h-4 w-4" /> Add New Client
-                      </Button>
-                      <Button size="sm" className="gap-2 bg-brand-orange text-brand-ink hover:bg-brand-orange opacity-95" onClick={() => void runClientSync()} disabled={runningClientSync}>
-                        <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
-                        {runningClientSync ? "synchronisation…" : "Synchroniser les clients depuis Sellsy"}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Import single client by Sellsy ID */}
-                  <div className="flex items-center gap-2 border-t border-border pt-3">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="ID client Sellsy (ex. 46)"
-                        value={importSellsyId}
-                        onChange={(e) => setImportSellsyId(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && void importClientBySellsyId()}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 shrink-0"
-                      disabled={!importSellsyId.trim() || importingClient}
-                      onClick={() => void importClientBySellsyId()}
-                    >
-                      <RefreshCw className={cn("h-3.5 w-3.5", importingClient && "animate-spin")} />
-                      {importingClient ? "Import…" : "Importer le client"}
-                    </Button>
-                  </div>
-                </div>
+                <ClientSyncCard
+                  syncing={runningClientSync}
+                  importing={importingClient}
+                  importId={importSellsyId}
+                  onImportIdChange={setImportSellsyId}
+                  onAddClient={() => setShowAddClient(true)}
+                  onSyncAll={() => void runClientSync()}
+                  onImport={() => void importClientBySellsyId()}
+                />
 
                 {/* ── Duplicate client detection ── */}
                 {(() => {
