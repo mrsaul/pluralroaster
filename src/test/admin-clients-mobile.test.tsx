@@ -120,6 +120,15 @@ describe("Client window on phones", () => {
     expect(within(row).getByText("€767.40 HT")).toBeInTheDocument();
   });
 
+  it("keeps the order dates on one line instead of squeezing them into a column", async () => {
+    render(<AdminClientDetail client={client()} open onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    const row = await screen.findByRole("button", { name: /#ABCDEF12/ });
+    const date = within(row).getByText(/22 sept\. 2026/);
+    expect(date.className).toMatch(/\bwhitespace-nowrap\b/);
+    // On phones a line break puts the date and the amounts on their own line.
+    expect(row.querySelector("[data-row-break]")?.className).toMatch(/\bbasis-full\b/);
+  });
+
   it("lets the Sellsy sync line wrap under the date", async () => {
     render(<AdminClientDetail client={client()} open onOpenChange={vi.fn()} onSaved={vi.fn()} />);
     const syncButton = await screen.findByRole("button", { name: /Synchroniser depuis Sellsy/ });

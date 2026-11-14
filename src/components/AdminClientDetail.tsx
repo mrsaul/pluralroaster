@@ -327,7 +327,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+          <DialogHeader className="text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 pr-10 sm:pr-8 leading-snug">
               <span className="min-w-0 break-words">{resolvedCompany}</span>
               <Badge
@@ -378,14 +378,15 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                             ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                           <span className="text-xs font-mono font-semibold text-foreground">{orderRef}</span>
-                          <span className="flex-1 min-w-0 text-xs text-muted-foreground tabular-nums">
+                          <span className={cn("ml-auto sm:ml-0 sm:order-last rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", statusColor)}>
+                            {ORDER_STATUS_LABEL[normalizeOrderStatus(order.status)]}
+                          </span>
+                          <span data-row-break className="basis-full h-0 sm:hidden" aria-hidden="true" />
+                          <span className="flex-1 whitespace-nowrap pl-6 sm:pl-0 text-xs text-muted-foreground tabular-nums">
                             {format(parseISO(order.created_at), "d MMM yyyy", { locale: fr })}
                             {order.delivery_date && (
                               <span className="ml-1.5">→ {format(parseISO(order.delivery_date), "d MMM", { locale: fr })}</span>
                             )}
-                          </span>
-                          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", statusColor)}>
-                            {ORDER_STATUS_LABEL[normalizeOrderStatus(order.status)]}
                           </span>
                           <span className="ml-auto flex items-baseline gap-3 whitespace-nowrap">
                             <span className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -520,7 +521,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                     if (!sel) return null;
                     return (
                       <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                        {sel.product_discount_percent > 0 && <span>{sel.product_discount_percent}% off products</span>}
+                        {sel.product_discount_percent > 0 && <span>-{sel.product_discount_percent} % sur le café</span>}
                         {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
                         {sel.delivery_discount_percent > 0 && (
                           <span>{sel.delivery_discount_percent === 100 ? "Livraison offerte" : `-${sel.delivery_discount_percent} % sur la livraison`}</span>
@@ -562,7 +563,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                   <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
                   <div>
                     <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary font-semibold" : "text-foreground")}>Synchronisé avec Sellsy</p>
-                    <p className="text-[11px] text-muted-foreground">Read-only data</p>
+                    <p className="text-[11px] text-muted-foreground">Lecture seule</p>
                   </div>
                 </button>
                 <button
