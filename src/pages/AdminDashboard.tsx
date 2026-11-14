@@ -63,6 +63,7 @@ import {
 } from "@/components/ui/select";
 import { CreateOrderDialog, type SimpleClient, type SimpleProduct } from "@/components/CreateOrderDialog";
 import { ClientSyncCard } from "@/components/ClientSyncCard";
+import { AdminProductsList } from "@/components/AdminProductsList";
 import { ADMIN_CLIENTS_SELECT, companyRowToAppClient } from "@/lib/adminClients";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -2206,88 +2207,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   )}
                 </div>
 
-                {/* Products table */}
-                <div className="bg-card border border-border rounded-lg overflow-hidden">
-                  {productError && (
-                    <div className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-                      <p className="text-sm font-medium text-foreground">Impossible de charger les produits</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{productError}</p>
-                    </div>
-                  )}
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50 hover:bg-muted/50">
-                          <TableHead>Produit</TableHead>
-                          <TableHead>Origine</TableHead>
-                          <TableHead>Torréfaction</TableHead>
-                          <TableHead>SKU</TableHead>
-                          <TableHead className="text-right">Prix</TableHead>
-                          <TableHead className="text-right">Statut</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {loadingProducts ? (
-                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Chargement des produits…</TableCell></TableRow>
-                        ) : products.length === 0 ? (
-                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Aucun produit.</TableCell></TableRow>
-                        ) : (
-                          products.filter((p) => p.kind !== "service").map((product) => {
-                            const isCustom = product.data_source_mode === "custom";
-                            const displayName = isCustom && product.custom_name ? product.custom_name : product.name;
-                            const displayPrice = isCustom && product.custom_price_per_kg != null ? product.custom_price_per_kg : product.price_per_kg;
-                            return (
-                            <TableRow
-                              key={product.id}
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => {
-                                setSelectedProduct(product as AdminProduct);
-                                setProductDetailOpen(true);
-                              }}
-                            >
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  {product.image_url ? (
-                                    <img src={product.image_url} alt="" className="h-8 w-8 rounded object-cover border border-border" />
-                                  ) : (
-                                    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                                      <Coffee className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                  )}
-                                  <div>
-                                    <p className="font-medium text-foreground">{displayName}</p>
-                                    <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">{product.origin ?? "—"}</TableCell>
-                              <TableCell className="text-muted-foreground capitalize">{product.roast_level ?? "—"}</TableCell>
-                              <TableCell className="font-mono text-foreground">{product.sku ?? "—"}</TableCell>
-                              <TableCell className="text-right tabular-nums text-foreground font-medium">€{displayPrice.toFixed(2)}/kg</TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  {isCustom && (
-                                   <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Personnalisé</Badge>
-                                  )}
-                                  <span className="text-muted-foreground">{product.is_active ? "Actif" : "Archivé"}</span>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    onClick={(e) => { e.stopPropagation(); setProductToDelete(product); }}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                            );
-                          })
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                {/* Products: cards on phones, table on wider screens */}
+                <AdminProductsList
+                  products={products}
+                  loading={loadingProducts}
+                  error={productError}
+                  onOpen={(product) => {
+                    setSelectedProduct(product as AdminProduct);
+                    setProductDetailOpen(true);
+                  }}
+                  onDelete={(product) => setProductToDelete(product)}
+                />
               </section>
             )}
 

@@ -112,7 +112,7 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
                       >
                         {client.onboarding_status === "completed" ? "Actif" : "En attente"}
                       </Badge>
-                      <span className="text-xs text-muted-foreground capitalize">{resolveField(client, "pricing_tier")}</span>
+                      <span className="text-xs text-muted-foreground">{resolveField(client, "pricing_tier")}</span>
                     </div>
                   </div>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -180,7 +180,7 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient, o
                     <TableCell className="text-muted-foreground max-w-[200px] truncate">
                       {resolveField(client, "delivery_address")}
                     </TableCell>
-                    <TableCell className="text-muted-foreground capitalize">
+                    <TableCell className="text-muted-foreground">
                       {resolveField(client, "pricing_tier")}
                     </TableCell>
                     <TableCell>

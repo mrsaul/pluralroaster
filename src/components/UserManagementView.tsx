@@ -254,6 +254,62 @@ export function UserManagementView() {
     invited: users.filter((u) => u.status === "invited").length,
   };
 
+  /** Role / kitchen / invite / disable / remove actions — same menu in cards and table. */
+  const userActions = (user: ManagedUser) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-10 w-10 md:h-8 md:w-8" aria-label={`Actions pour ${user.fullName || user.email}`}>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => { setRoleChangeUser(user); setNewRole(user.role ?? (user.kitchenRole ? "none" : "user")); }}>
+          Changer le rôle Café
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            setKitchenEditUser(user);
+            setEditKitchenRole(user.kitchenRole ?? "none");
+            setEditCafeId(user.cafeId ?? "");
+          }}
+        >
+          Modifier l'accès Cuisine
+        </DropdownMenuItem>
+        {user.status === "invited" && (
+          <DropdownMenuItem onClick={() => void handleAction("resend-invite", user)}>
+            Renvoyer l'invitation
+          </DropdownMenuItem>
+        )}
+        {user.role === null ? (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground max-w-[200px]">
+            Les utilisateurs Cuisine uniquement se retirent avec « Supprimer l'utilisateur ».
+          </p>
+        ) : user.status === "active" ? (
+          <DropdownMenuItem onClick={() => setConfirmAction({ type: "disable", user })}>
+            Désactiver l'accès
+          </DropdownMenuItem>
+        ) : user.status === "disabled" ? (
+          <DropdownMenuItem onClick={() => void handleAction("enable", user)}>
+            Réactiver l'accès
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => setConfirmAction({ type: "remove", user })}
+        >
+          Supprimer l'utilisateur
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const lastSeen = (user: ManagedUser) =>
+    user.lastSignIn
+      ? formatDistanceToNow(parseISO(user.lastSignIn), { addSuffix: true, locale: fr })
+      : user.invitedAt
+        ? `Invité·e ${formatDistanceToNow(parseISO(user.invitedAt), { addSuffix: true, locale: fr })}`
+        : "—";
+
   return (
     <section className="space-y-6">
       {/* Stats */}
@@ -298,9 +354,52 @@ export function UserManagementView() {
         </div>
       </div>
 
-      {/* Users table */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Phones: one card per user */}
+        <ul aria-label="Utilisateurs" className="md:hidden divide-y divide-border">
+          {loading ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">Chargement des utilisateurs…</li>
+          ) : users.length === 0 ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">Aucun utilisateur.</li>
+          ) : (
+            users.map((user) => {
+              const roleMeta = user.role ? (ROLE_META[user.role] ?? ROLE_META.user) : null;
+              const RoleIcon = roleMeta?.icon;
+              return (
+                <li key={user.userId} className={cn("flex items-start gap-2 px-4 py-3", user.status === "disabled" && "opacity-50")}>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="font-medium text-foreground text-sm break-words">{user.fullName || user.email}</p>
+                    {user.fullName && <p className="text-xs text-muted-foreground break-all">{user.email}</p>}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {roleMeta && RoleIcon && (
+                        <Badge variant="outline" className={cn("gap-1", roleMeta.color)}>
+                          <RoleIcon className="w-3 h-3" />
+                          {roleMeta.label}
+                        </Badge>
+                      )}
+                      {user.kitchenRole && (
+                        <Badge variant="outline" className="text-xs">
+                          {KITCHEN_ROLE_LABELS[user.kitchenRole]}
+                          {user.cafeName ? ` · ${user.cafeName}` : ""}
+                        </Badge>
+                      )}
+                      <span className={cn("inline-flex px-2 py-0.5 rounded text-xs font-medium capitalize", STATUS_STYLES[user.status] ?? "bg-muted text-muted-foreground")}>
+                        {STATUS_LABELS[user.status] ?? user.status}
+                      </span>
+                    </div>
+                    {(user.lastSignIn || user.invitedAt) && (
+                      <p className="text-[11px] text-muted-foreground">{lastSeen(user)}</p>
+                    )}
+                  </div>
+                  <div className="shrink-0">{userActions(user)}</div>
+                </li>
+              );
+            })
+          )}
+        </ul>
+
+        {/* Wider screens: full table */}
+        <div data-wide-table className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -358,59 +457,9 @@ export function UserManagementView() {
                           {STATUS_LABELS[user.status] ?? user.status}
                         </span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {user.lastSignIn
-                          ? formatDistanceToNow(parseISO(user.lastSignIn), { addSuffix: true, locale: fr })
-                          : user.invitedAt
-                            ? `Invité·e ${formatDistanceToNow(parseISO(user.invitedAt), { addSuffix: true, locale: fr })}`
-                            : "—"}
-                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{lastSeen(user)}</TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setRoleChangeUser(user); setNewRole(user.role ?? (user.kitchenRole ? "none" : "user")); }}>
-                              Changer le rôle Café
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setKitchenEditUser(user);
-                                setEditKitchenRole(user.kitchenRole ?? "none");
-                                setEditCafeId(user.cafeId ?? "");
-                              }}
-                            >
-                              Modifier l'accès Cuisine
-                            </DropdownMenuItem>
-                            {user.status === "invited" && (
-                              <DropdownMenuItem onClick={() => void handleAction("resend-invite", user)}>
-                                Renvoyer l'invitation
-                              </DropdownMenuItem>
-                            )}
-                            {user.role === null ? (
-                              <p className="px-2 py-1.5 text-xs text-muted-foreground max-w-[200px]">
-                                Les utilisateurs Cuisine uniquement se retirent avec « Supprimer l'utilisateur ».
-                              </p>
-                            ) : user.status === "active" ? (
-                              <DropdownMenuItem onClick={() => setConfirmAction({ type: "disable", user })}>
-                                Désactiver l'accès
-                              </DropdownMenuItem>
-                            ) : user.status === "disabled" ? (
-                              <DropdownMenuItem onClick={() => void handleAction("enable", user)}>
-                                Réactiver l'accès
-                              </DropdownMenuItem>
-                            ) : null}
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setConfirmAction({ type: "remove", user })}
-                            >
-                              Supprimer l'utilisateur
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {userActions(user)}
                       </TableCell>
                     </TableRow>
                   );

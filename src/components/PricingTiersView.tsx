@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2, Percent, Bike, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Bike, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -165,18 +165,71 @@ export function PricingTiersView() {
   return (
     <section className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Paliers tarifaires</h2>
           <p className="text-sm text-muted-foreground">Créez des modèles de prix réutilisables à attribuer aux clients.</p>
         </div>
         <Button size="sm" className="gap-2" onClick={openCreate}>
-          <Plus className="w-4 h-4" /> New Tier
+          <Plus className="w-4 h-4" /> Nouveau palier
         </Button>
       </div>
 
-      {/* Tiers table */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
+        {/* Phones: one card per tier */}
+        <ul aria-label="Paliers tarifaires" className="md:hidden divide-y divide-border">
+          {loading ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">Chargement…</li>
+          ) : tiers.length === 0 ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">Aucun palier tarifaire. Créez-en un pour commencer.</li>
+          ) : (
+            tiers.map((tier) => (
+              <li key={tier.id} className="flex items-start gap-2 px-4 py-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-foreground break-words">{tier.name}</p>
+                    <Badge variant={tier.is_active ? "default" : "secondary"} className="text-[10px]">
+                      {tier.is_active ? "Actif" : "Inactif"}
+                    </Badge>
+                  </div>
+                  {tier.description && <p className="text-xs text-muted-foreground break-words">{tier.description}</p>}
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {tier.product_discount_percent > 0 && (
+                      <Badge variant="secondary" className="gap-1">
+                        -{tier.product_discount_percent} % café
+                      </Badge>
+                    )}
+                    {tier.delivery_discount_percent > 0 && (
+                      <Badge variant="secondary" className="gap-1">
+                        <Bike className="w-3 h-3" />
+                        {tier.delivery_discount_percent === 100 ? "Livraison offerte" : `-${tier.delivery_discount_percent} % livraison`}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    aria-label={`Modifier ${tier.name}`}
+                    className="w-10 h-10 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+                    onClick={() => openEdit(tier)}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    aria-label={`Supprimer ${tier.name}`}
+                    className="w-10 h-10 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                    onClick={() => setDeleteTier(tier)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
+
+        {/* Wider screens: full table */}
+        <div data-wide-table className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -191,7 +244,7 @@ export function PricingTiersView() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading…</TableCell>
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Chargement…</TableCell>
               </TableRow>
             ) : tiers.length === 0 ? (
               <TableRow>
@@ -207,8 +260,7 @@ export function PricingTiersView() {
                   <TableCell className="text-center">
                     {tier.product_discount_percent > 0 ? (
                       <Badge variant="secondary" className="gap-1">
-                        <Percent className="w-3 h-3" />
-                        {tier.product_discount_percent}% off
+                        -{tier.product_discount_percent} % café
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground text-sm">—</span>
@@ -232,12 +284,14 @@ export function PricingTiersView() {
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <button
+                        aria-label={`Modifier ${tier.name}`}
                         className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
                         onClick={() => openEdit(tier)}
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        aria-label={`Supprimer ${tier.name}`}
                         className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
                         onClick={() => setDeleteTier(tier)}
                       >
@@ -250,6 +304,7 @@ export function PricingTiersView() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* Create / Edit dialog */}

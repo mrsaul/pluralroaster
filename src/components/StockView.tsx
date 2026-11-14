@@ -171,7 +171,7 @@ function EditPopover({
         <Input
           value={editNote}
           onChange={(e) => setEditNote(e.target.value)}
-          placeholder="e.g. Morning roast batch, 12kg Ethiopia Yirgacheffe"
+          placeholder="ex. torréfaction du matin, 12 kg Éthiopie Yirgacheffe"
           className="h-8 text-sm"
         />
       </div>
@@ -201,6 +201,8 @@ function EditPopover({
 }
 
 // ── Loading skeleton ──────────────────────────────────────────────────────────
+
+type Layout = "card" | "table";
 
 function StockTableSkeleton() {
   return (
@@ -267,7 +269,7 @@ export function StockView() {
     return true;
   });
 
-  const handleInitAndEdit = async (item: StockListItem) => {
+  const handleInitAndEdit = async (item: StockListItem, layout: Layout) => {
     try {
       await initMutation.mutateAsync({
         productId: item.product_id,
@@ -275,11 +277,90 @@ export function StockView() {
       });
       // After invalidation, the item will have an id — open edit via product_id
       // We set editingId to the product_id temporarily; the refreshed list will have the real stock id
-      setEditingId(`init:${item.product_id}`);
+      setEditingId(`${layout}:init:${item.product_id}`);
     } catch {
       // error toast shown by useInitStock onError
     }
   };
+
+  /** "En stock" / "Stock bas" / "Non suivi" — same badge in cards and table. */
+  const statusBadge = (item: StockListItem) => {
+    if (item.id === null) {
+      return (
+        <Badge variant="secondary" className="text-[10px] bg-brand-sand-100 text-brand-orange-700 border-brand-sand dark:bg-amber-950/30 dark:text-amber-400">
+          Non suivi
+        </Badge>
+      );
+    }
+    if (item.is_low) {
+      return (
+        <Badge variant="secondary" className="text-[10px] bg-brand-sand-100 text-brand-orange-700 border-brand-sand dark:bg-amber-950/30 dark:text-amber-400">
+          Stock bas
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="secondary" className="text-[10px] bg-brand-green-100 text-brand-green-600 border-brand-green/40 dark:bg-green-950/30 dark:text-green-400">
+        En stock
+      </Badge>
+    );
+  };
+
+  /**
+   * Configurer / edit / history buttons. Cards and table each render their own copy,
+   * so the edit popover is keyed by layout: only the visible one opens.
+   */
+  const stockActions = (item: StockListItem, layout: Layout) => {
+    if (item.id === null) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn("text-xs px-2", layout === "card" ? "h-10" : "h-7")}
+          disabled={initMutation.isPending}
+          onClick={() => void handleInitAndEdit(item, layout)}
+        >
+          {initMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Configurer"}
+        </Button>
+      );
+    }
+    const editKey = `${layout}:${item.id}`;
+    return (
+      <div className="flex justify-end gap-1">
+        <Popover open={editingId === editKey} onOpenChange={(v) => { if (!v) setEditingId(null); }}>
+          <PopoverTrigger asChild>
+            <button
+              aria-label={`Modifier le stock de ${item.product_name}`}
+              className="w-11 h-11 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+              onClick={() => setEditingId(editKey)}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 max-w-[calc(100vw-2rem)] p-4" align="end">
+            <p className="text-sm font-medium text-foreground mb-3">{item.product_name}</p>
+            <EditPopover item={item} onClose={() => setEditingId(null)} />
+          </PopoverContent>
+        </Popover>
+        <button
+          aria-label={`Historique de ${item.product_name}`}
+          className="w-11 h-11 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+          onClick={() => {
+            setHistoryId(item.id);
+            setHistoryName(item.product_name);
+          }}
+        >
+          <History className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  };
+
+  const emptyText = search
+    ? `Aucun résultat pour « ${search} »`
+    : filter === "low"
+      ? "Aucun produit en stock bas."
+      : "Aucun produit actif.";
 
   return (
     <TooltipProvider>
@@ -288,7 +369,7 @@ export function StockView() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Stock torréfié</h2>
           <p className="text-sm text-muted-foreground">
-            {totalCount} {totalCount === 1 ? "reference" : "references"}
+            {totalCount} {totalCount === 1 ? "référence" : "références"}
             {lowCount > 0 && (
               <>
                 {" · "}
@@ -296,12 +377,12 @@ export function StockView() {
                   onClick={() => setFilter(f => f === "low" ? "all" : "low")}
                   className="font-medium text-brand-orange-700 hover:underline transition-colors"
                 >
-                  {lowCount} low stock
+                  {lowCount} en stock bas
                 </button>
               </>
             )}
             {untrackedCount > 0 && (
-              <span className="text-muted-foreground"> · {untrackedCount} untracked</span>
+              <span className="text-muted-foreground"> · {untrackedCount} non suivi{untrackedCount > 1 ? "s" : ""}</span>
             )}
           </p>
         </div>
@@ -309,13 +390,13 @@ export function StockView() {
         {/* ── Search + filter bar ── */}
         <div className="flex items-center gap-3 flex-wrap">
           {/* Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Rechercher une référence de café…"
-              className="pl-8 h-8 text-sm"
+              className="pl-8 h-10 sm:h-8 text-base sm:text-sm"
             />
             {search && (
               <button
@@ -346,8 +427,55 @@ export function StockView() {
           </div>
         </div>
 
-        {/* ── Table ── */}
         <div className="bg-card border border-border rounded-lg overflow-hidden">
+          {/* ── Phones: one card per coffee ── */}
+          <ul aria-label="Stock" className="md:hidden divide-y divide-border">
+            {isLoading ? (
+              <li className="px-4 py-6 text-center text-sm text-muted-foreground">Chargement du stock…</li>
+            ) : displayed.length === 0 ? (
+              <li className="px-4 py-6 text-center text-sm text-muted-foreground">{emptyText}</li>
+            ) : (
+              displayed.map((item) => (
+                <li
+                  key={item.product_id}
+                  className={cn("flex items-center gap-2 px-4 py-3", item.is_low && "bg-brand-sand-100 dark:bg-amber-950/10")}
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="flex items-start gap-1.5 font-medium text-foreground break-words">
+                      {item.is_low && <AlertTriangle className="mt-0.5 w-3.5 h-3.5 text-brand-orange-700 shrink-0" />}
+                      <span className="min-w-0">{item.product_name}</span>
+                    </p>
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      {item.id !== null && (
+                        <>
+                          <span className={cn(
+                            "text-lg font-semibold tabular-nums",
+                            item.is_low ? "text-brand-orange-700 dark:text-amber-400" : "text-foreground",
+                          )}>
+                            {item.quantity_kg!.toFixed(2)}
+                          </span>
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            kg · seuil {item.low_stock_threshold_kg!.toFixed(2)} kg
+                          </span>
+                        </>
+                      )}
+                      {statusBadge(item)}
+                    </div>
+                    {item.last_updated_at && (
+                      <p className="text-[11px] text-muted-foreground">
+                        <RelativeTime iso={item.last_updated_at} />
+                        {item.updater_name ? ` · ${item.updater_name}` : ""}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0">{stockActions(item, "card")}</div>
+                </li>
+              ))
+            )}
+          </ul>
+
+          {/* ── Wider screens: full table ── */}
+          <div data-wide-table className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -365,158 +493,50 @@ export function StockView() {
                 <StockTableSkeleton />
               ) : displayed.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
-                    {search
-                      ? `Aucun résultat pour « ${search} »`
-                      : filter === "low"
-                        ? "Aucun produit en stock bas."
-                        : "Aucun produit actif."}
-                  </TableCell>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">{emptyText}</TableCell>
                 </TableRow>
               ) : (
                 displayed.map((item) => {
                   const isUntracked = item.id === null;
-                  const rowEditId = item.id ?? `init:${item.product_id}`;
-
                   return (
                     <TableRow
                       key={item.product_id}
-                      className={cn(
-                        "hover:bg-muted/30",
-                        item.is_low && "bg-brand-sand-100 dark:bg-amber-950/10"
-                      )}
+                      className={cn("hover:bg-muted/30", item.is_low && "bg-brand-sand-100 dark:bg-amber-950/10")}
                     >
-                      {/* Coffee reference — no truncation, wraps naturally */}
                       <TableCell className="font-medium text-foreground">
                         <div className="flex items-center gap-2">
-                          {item.is_low && (
-                            <AlertTriangle className="w-3.5 h-3.5 text-brand-orange-700 shrink-0" />
-                          )}
+                          {item.is_low && <AlertTriangle className="w-3.5 h-3.5 text-brand-orange-700 shrink-0" />}
                           {item.product_name}
                         </div>
                       </TableCell>
-
-                      {/* Stock qty */}
                       <TableCell className="text-right">
                         {isUntracked ? (
                           <span className="text-muted-foreground text-sm">—</span>
                         ) : (
                           <span className={cn(
                             "text-lg font-semibold tabular-nums",
-                            item.is_low
-                              ? "text-brand-orange-700 dark:text-amber-400"
-                              : "text-foreground"
+                            item.is_low ? "text-brand-orange-700 dark:text-amber-400" : "text-foreground",
                           )}>
                             {item.quantity_kg!.toFixed(2)}
                           </span>
                         )}
                       </TableCell>
-
-                      {/* Threshold */}
                       <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                         {isUntracked ? "—" : item.low_stock_threshold_kg!.toFixed(2)}
                       </TableCell>
-
-                      {/* Status badge */}
-                      <TableCell className="text-center">
-                        {isUntracked ? (
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] bg-brand-sand-100 text-brand-orange-700 border-brand-sand dark:bg-amber-950/30 dark:text-amber-400"
-                          >
-                            Non suivi
-                          </Badge>
-                        ) : item.is_low ? (
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] bg-brand-sand-100 text-brand-orange-700 border-brand-sand dark:bg-amber-950/30 dark:text-amber-400"
-                          >
-                            Stock bas
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] bg-brand-green-100 text-brand-green-600 border-brand-green/40 dark:bg-green-950/30 dark:text-green-400"
-                          >
-                            En stock
-                          </Badge>
-                        )}
-                      </TableCell>
-
-                      {/* Last updated by */}
+                      <TableCell className="text-center">{statusBadge(item)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{item.updater_name ?? "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {item.updater_name ?? "—"}
+                        {item.last_updated_at ? <RelativeTime iso={item.last_updated_at} /> : "—"}
                       </TableCell>
-
-                      {/* Last updated */}
-                      <TableCell className="text-sm text-muted-foreground">
-                        {item.last_updated_at
-                          ? <RelativeTime iso={item.last_updated_at} />
-                          : "—"
-                        }
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell className="text-right">
-                        {isUntracked ? (
-                          // "Set up" button for untracked products
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2"
-                            disabled={initMutation.isPending}
-                            onClick={() => void handleInitAndEdit(item)}
-                          >
-                            {initMutation.isPending
-                              ? <Loader2 className="w-3 h-3 animate-spin" />
-                              : "Configurer"
-                            }
-                          </Button>
-                        ) : (
-                          <div className="flex justify-end gap-1">
-                            {/* Edit popover */}
-                            <Popover
-                              open={editingId === rowEditId}
-                              onOpenChange={(v) => { if (!v) setEditingId(null); }}
-                            >
-                              <PopoverTrigger asChild>
-                                <button
-                                  className="w-11 h-11 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
-                                  onClick={() => setEditingId(rowEditId)}
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-72 p-4" align="end">
-                                <p className="text-sm font-medium text-foreground mb-3">
-                                  {item.product_name}
-                                </p>
-                                <EditPopover
-                                  item={item}
-                                  onClose={() => setEditingId(null)}
-                                />
-                              </PopoverContent>
-                            </Popover>
-
-                            {/* History button */}
-                            <button
-                              className="w-11 h-11 rounded flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
-                              onClick={() => {
-                                setHistoryId(item.id);
-                                setHistoryName(item.product_name);
-                              }}
-                            >
-                              <History className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </TableCell>
+                      <TableCell className="text-right">{stockActions(item, "table")}</TableCell>
                     </TableRow>
                   );
                 })
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
 
         {/* ── History Sheet ── */}
