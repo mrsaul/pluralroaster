@@ -31,6 +31,8 @@ export type VatItem = {
   price_per_kg: number;
   /** Coffee VAT rate (product's sellsy_tax_rate); defaults to 5.5. */
   vat_rate?: number | null;
+  /** Rate applied to this coffee line (tier rules); null/absent falls back to the order discount. */
+  line_discount_percent?: number | null;
 };
 
 export type VatLine = { rate: number; amount: number };
@@ -48,7 +50,9 @@ export function lineVatRate(item: VatItem): number {
 /** Discounted unit price of a coffee line (service rows are never discounted). */
 export function lineUnitNet(item: VatItem, discountPercent: number): number {
   const price = Number(item.price_per_kg);
-  return isServiceItem(item) ? price : discountedUnit(price, discountPercent);
+  if (isServiceItem(item)) return price;
+  const rate = item.line_discount_percent != null ? Number(item.line_discount_percent) : discountPercent;
+  return discountedUnit(price, rate);
 }
 
 /** Net line total HT, rounded like the Sellsy invoice. */

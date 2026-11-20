@@ -48,7 +48,7 @@ describe("computeOrderBreakdown", () => {
       discountPercent: 10,
       delivery: { kind: "auto", free: false },
     });
-    expect(b.coffee).toEqual({ kg: 30, regularHT: 840, discountPercent: 10, discountHT: 84, netHT: 756 });
+    expect(b.coffee).toMatchObject({ kg: 30, regularHT: 840, discountPercent: 10, discountHT: 84, netHT: 756 });
     expect(b.delivery).toEqual({
       bandLabel: "11–30 kg", fullPriceHT: 24, discountPercent: 50, discountHT: 12, netHT: 12, free: false,
     });
@@ -127,12 +127,12 @@ describe("cartToCoffeeLines", () => {
     const items: CartItem[] = [
       { product: product({ vatRate: 20 }), quantity: 4, sizeLabel: "250g", sizeKg: 0.25, unitPrice: 8 },
     ];
-    expect(cartToCoffeeLines(items)).toEqual([{ pricePerKg: 32, quantityKg: 1, vatRate: 20 }]);
+    expect(cartToCoffeeLines(items)).toEqual([{ pricePerKg: 32, quantityKg: 1, vatRate: 20, isBag: true }]);
   });
 
   it("uses product price and quantity as kg for a per-kg item, default VAT 5.5", () => {
     const items: CartItem[] = [{ product: product(), quantity: 3 }];
-    expect(cartToCoffeeLines(items)).toEqual([{ pricePerKg: 28, quantityKg: 3, vatRate: 5.5 }]);
+    expect(cartToCoffeeLines(items)).toEqual([{ pricePerKg: 28, quantityKg: 3, vatRate: 5.5, isBag: false }]);
   });
 });
 

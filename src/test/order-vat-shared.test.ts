@@ -118,4 +118,31 @@ describe("decimal-safe rounding vs an exact integer-cents oracle", () => {
     expect(discountedUnit(65 / 3, 0)).toBe(65 / 3);
     expect(lineNetHT({ kind: "coffee", quantity: 3, price_per_kg: 65 / 3 }, 0)).toBe(65);
   });
+
+  it("line_discount_percent on a coffee item overrides the order discount; null falls back", () => {
+    expect(lineNetHT({ kind: "coffee", quantity: 10, price_per_kg: 28, line_discount_percent: 10 }, 5)).toBe(252);
+    expect(lineNetHT({ kind: "coffee", quantity: 10, price_per_kg: 28, line_discount_percent: null }, 5)).toBe(266);
+    expect(lineNetHT({ kind: "service", quantity: 1, price_per_kg: 12, line_discount_percent: 50 }, 5)).toBe(12);
+  });
+
+  it("app and edge agree on a mixed-rate order", () => {
+    const rules = { kg: 5, bag: 5, thresholdKg: 20, kgAbove: 10 };
+    const b = computeOrderBreakdown({
+      coffeeLines: [
+        { pricePerKg: 26.5, quantityKg: 20, vatRate: 5.5 },
+        { pricePerKg: 38, quantityKg: 1, vatRate: 5.5, isBag: true },
+      ],
+      rules,
+      delivery: { kind: "auto", free: false },
+    });
+    const items = [
+      { kind: "coffee", quantity: 20, price_per_kg: 26.5, vat_rate: 5.5, line_discount_percent: b.coffee.lineRates[0] },
+      { kind: "coffee", quantity: 1, price_per_kg: 38, vat_rate: 5.5, line_discount_percent: b.coffee.lineRates[1] },
+      { kind: "service", quantity: 1, price_per_kg: b.delivery!.netHT },
+    ];
+    const edge = computeOrderVat(items, 0);
+    expect(b.coffee.lineRates).toEqual([10, 5]);
+    expect(edge.totalHT).toBe(b.totalHT);
+    expect(edge.totalTTC).toBe(b.totalTTC);
+  });
 });

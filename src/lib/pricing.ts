@@ -1,5 +1,6 @@
 import { DEFAULT_COFFEE_VAT_RATE, type VatLine } from "@/lib/orderUtils";
 import type { CartItem, Order } from "@/lib/store";
+import { flatRules, isBagSize, ratesFor, type TierRules } from "@/lib/tierRules";
 
 /** VAT rate (percent) applied to the Loberz bike-delivery service. */
 export const DELIVERY_VAT_RATE = 20;
@@ -38,7 +39,7 @@ export function deliveryBandLabel(coffeeKg: number): string {
   return "plus de 30 kg";
 }
 
-export type PricedCoffeeLine = { pricePerKg: number; quantityKg: number; vatRate: number };
+export type PricedCoffeeLine = { pricePerKg: number; quantityKg: number; vatRate: number; isBag?: boolean };
 
 export type DeliveryInput =
   | { kind: "auto"; free: boolean }
@@ -55,7 +56,18 @@ export type DeliveryBreakdown = {
 };
 
 export type OrderBreakdown = {
-  coffee: { kg: number; regularHT: number; discountPercent: number; discountHT: number; netHT: number };
+  coffee: {
+    kg: number;
+    regularHT: number;
+    /** The kg rate applied (the bag rate when the order has only bags, 0 without a tier). */
+    discountPercent: number;
+    discountHT: number;
+    netHT: number;
+    /** One entry per rate > 0 applied to at least one line, kg first. */
+    discounts: { kind: "kg" | "bag"; percent: number; discountHT: number }[];
+    /** Rate applied to each input coffee line, in input order. */
+    lineRates: number[];
+  };
   delivery: DeliveryBreakdown | null;
   totalHT: number;
   vatLines: VatLine[];
@@ -97,10 +109,18 @@ function buildDelivery(
  */
 export function computeOrderBreakdown(input: {
   coffeeLines: PricedCoffeeLine[];
-  discountPercent: number;
+  /** Flat tier rate; ignored when `rules` is given. */
+  discountPercent?: number;
+  rules?: TierRules;
   delivery: DeliveryInput;
 }): OrderBreakdown {
-  const { coffeeLines, discountPercent } = input;
+  const { coffeeLines } = input;
+  const rules = input.rules ?? flatRules(input.discountPercent ?? 0);
+  const kgByTheKg = round2(coffeeLines.reduce((sum, l) => sum + (l.isBag ? 0 : l.quantityKg), 0));
+  const rates = ratesFor(rules, kgByTheKg);
+  const lineRates: number[] = [];
+  const kgDiscount = { regular: 0, net: 0, used: false };
+  const bagDiscount = { regular: 0, net: 0, used: false };
 
   let kg = 0;
   let regularHT = 0;
@@ -109,11 +129,18 @@ export function computeOrderBreakdown(input: {
 
   for (const line of coffeeLines) {
     kg += line.quantityKg;
-    regularHT += round2(line.pricePerKg * line.quantityKg);
+    const lineRegular = round2(line.pricePerKg * line.quantityKg);
+    regularHT += lineRegular;
+    const discountPercent = line.isBag ? rates.bag : rates.kg;
+    lineRates.push(discountPercent);
     // No tier: the raw price, like sellsy-sync sends it (21.666… €/kg × 3 kg = 65.00, not 65.01).
     const unit = discountPercent > 0 ? round2(line.pricePerKg * (1 - discountPercent / 100)) : line.pricePerKg;
     const net = round2(unit * line.quantityKg);
     coffeeNetHT += net;
+    const bucket = line.isBag ? bagDiscount : kgDiscount;
+    bucket.regular += lineRegular;
+    bucket.net += net;
+    bucket.used = true;
     baseByRate.set(line.vatRate, (baseByRate.get(line.vatRate) ?? 0) + net);
   }
   kg = round2(kg);
@@ -134,6 +161,15 @@ export function computeOrderBreakdown(input: {
   const totalHT = round2(coffeeNetHT + (delivery?.netHT ?? 0));
   const totalVat = vatLines.reduce((sum, v) => sum + v.amount, 0);
 
+  const discounts: OrderBreakdown["coffee"]["discounts"] = [];
+  if (kgDiscount.used && rates.kg > 0) {
+    discounts.push({ kind: "kg", percent: rates.kg, discountHT: round2(kgDiscount.regular - kgDiscount.net) });
+  }
+  if (bagDiscount.used && rates.bag > 0) {
+    discounts.push({ kind: "bag", percent: rates.bag, discountHT: round2(bagDiscount.regular - bagDiscount.net) });
+  }
+  const discountPercent = kgDiscount.used ? rates.kg : bagDiscount.used ? rates.bag : 0;
+
   return {
     coffee: {
       kg,
@@ -141,6 +177,8 @@ export function computeOrderBreakdown(input: {
       discountPercent,
       discountHT: round2(regularHT - coffeeNetHT),
       netHT: coffeeNetHT,
+      discounts,
+      lineRates,
     },
     delivery,
     totalHT,
@@ -156,6 +194,7 @@ export function cartToCoffeeLines(items: CartItem[]): PricedCoffeeLine[] {
       item.unitPrice != null && item.sizeKg ? item.unitPrice / item.sizeKg : item.product.pricePerKg,
     quantityKg: item.sizeKg ? item.sizeKg * item.quantity : item.quantity,
     vatRate: item.product.vatRate ?? DEFAULT_COFFEE_VAT_RATE,
+    isBag: isBagSize(item.sizeKg),
   }));
 }
 
@@ -190,6 +229,8 @@ export type StoredOrderItem = {
   line_discount_percent?: number | null;
   /** Coffee VAT rate (product's sellsy_tax_rate); defaults to the coffee rate. */
   vat_rate?: number | null;
+  /** Bag size in kg (0.15, 0.25); null/absent or >= 1 means coffee by the kg. */
+  size_kg?: number | null;
 };
 
 function storedCoffeeLines(items: StoredOrderItem[]): PricedCoffeeLine[] {
@@ -199,15 +240,19 @@ function storedCoffeeLines(items: StoredOrderItem[]): PricedCoffeeLine[] {
       pricePerKg: Number(i.price_per_kg),
       quantityKg: Number(i.quantity),
       vatRate: i.vat_rate ?? DEFAULT_COFFEE_VAT_RATE,
+      isBag: isBagSize(i.size_kg == null ? null : Number(i.size_kg)),
     }));
 }
 
 /** Breakdown of an order as stored: its service row if it has one, no delivery for legacy orders. */
-export function storedOrderBreakdown(items: StoredOrderItem[], discountPercent: number): OrderBreakdown {
+export function storedOrderBreakdown(
+  items: StoredOrderItem[],
+  discountOrRules: number | TierRules,
+): OrderBreakdown {
   const service = items.find((i) => i.kind === "service");
   return computeOrderBreakdown({
     coffeeLines: storedCoffeeLines(items),
-    discountPercent,
+    ...(typeof discountOrRules === "number" ? { discountPercent: discountOrRules } : { rules: discountOrRules }),
     delivery: service
       ? {
           kind: "stored",
@@ -224,16 +269,19 @@ export function storedOrderBreakdown(items: StoredOrderItem[], discountPercent: 
  */
 export function recalcOrderFromItems(input: {
   items: StoredOrderItem[];
-  discountPercent: number;
+  rules?: TierRules;
+  discountPercent?: number;
   free: boolean;
 }): {
   breakdown: OrderBreakdown;
   deliveryRow: ReturnType<typeof deliveryRowFor>;
   totalKg: number;
   totalPrice: number;
+  lineRates: number[];
 } {
   const breakdown = computeOrderBreakdown({
     coffeeLines: storedCoffeeLines(input.items),
+    rules: input.rules,
     discountPercent: input.discountPercent,
     delivery: { kind: "auto", free: input.free },
   });
@@ -242,5 +290,6 @@ export function recalcOrderFromItems(input: {
     deliveryRow: deliveryRowFor(breakdown),
     totalKg: breakdown.coffee.kg,
     totalPrice: breakdown.totalHT,
+    lineRates: breakdown.coffee.lineRates,
   };
 }
