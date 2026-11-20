@@ -1,6 +1,6 @@
 import { DEFAULT_COFFEE_VAT_RATE, type VatLine } from "@/lib/orderUtils";
 import type { CartItem, Order } from "@/lib/store";
-import { flatRules, isBagSize, ratesFor, type TierRules } from "@/lib/tierRules";
+import { flatRules, isBagSize, ratesFor, describeRules, volumeNudge, formatNudge, type TierRules } from "@/lib/tierRules";
 
 /** VAT rate (percent) applied to the Loberz bike-delivery service. */
 export const DELIVERY_VAT_RATE = 20;
@@ -103,6 +103,11 @@ function buildDelivery(
   };
 }
 
+/** Kg ordered by the kg (bags excluded), rounded so 19.7 + 0.3 is exactly 20. */
+export function kgByTheKg(lines: PricedCoffeeLine[]): number {
+  return round2(lines.reduce((sum, l) => sum + (l.isBag ? 0 : l.quantityKg), 0));
+}
+
 /**
  * Client-facing order breakdown, rounded line by line exactly like the Sellsy invoice.
  * The tier discount applies to coffee only, never to delivery.
@@ -116,8 +121,7 @@ export function computeOrderBreakdown(input: {
 }): OrderBreakdown {
   const { coffeeLines } = input;
   const rules = input.rules ?? flatRules(input.discountPercent ?? 0);
-  const kgByTheKg = round2(coffeeLines.reduce((sum, l) => sum + (l.isBag ? 0 : l.quantityKg), 0));
-  const rates = ratesFor(rules, kgByTheKg);
+  const rates = ratesFor(rules, kgByTheKg(coffeeLines));
   const lineRates: number[] = [];
   const kgDiscount = { regular: 0, net: 0, used: false };
   const bagDiscount = { regular: 0, net: 0, used: false };
@@ -300,4 +304,15 @@ export function breakdownDiscounts(b: OrderBreakdown): OrderBreakdown["coffee"][
   return b.coffee.discountPercent > 0
     ? [{ kind: "kg", percent: b.coffee.discountPercent, discountHT: b.coffee.discountHT }]
     : [];
+}
+
+/** Client terms summary and volume nudge for a cart; both null when there is nothing to say. */
+export function clientTermsAndNudge(
+  rules: TierRules | null | undefined,
+  items: CartItem[],
+): { terms: string | null; nudge: string | null } {
+  if (!rules) return { terms: null, nudge: null };
+  const summary = describeRules(rules);
+  const n = volumeNudge(rules, kgByTheKg(cartToCoffeeLines(items)));
+  return { terms: summary ? `Vos conditions : ${summary}` : null, nudge: n ? formatNudge(n) : null };
 }

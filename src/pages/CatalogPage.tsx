@@ -55,6 +55,8 @@ interface CatalogPageProps {
   lastOrder?: Order | null;
   mode: "home" | "shop";
   onCheckout: () => void;
+  terms?: string | null;
+  nudge?: string | null;
   onReorderLastOrder: () => void;
   onGoHome: () => void;
   onGoShop: () => void;
@@ -221,6 +223,8 @@ export default function CatalogPage({
   lastOrder,
   mode,
   onCheckout,
+  terms,
+  nudge,
   onReorderLastOrder,
   onGoHome,
   onGoShop,
@@ -726,6 +730,8 @@ export default function CatalogPage({
         itemCount={cart.items.length}
         totalPrice={cart.totalPrice}
         onCheckout={onCheckout}
+        terms={terms}
+        nudge={nudge}
       />
 
       {/* ── Product Detail Sheet ── */}

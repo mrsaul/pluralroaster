@@ -22,6 +22,8 @@ const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
 const KitchenApp = lazy(() => import("@/kitchen/KitchenApp"));
 import { supabase } from "@/integrations/supabase/client";
 import { rpcTotalsFromBreakdown, type ClientSnapshot } from "@/lib/clientSnapshot";
+import { tierRulesFromRow, describeRules, type TierRules } from "@/lib/tierRules";
+import { clientTermsAndNudge } from "@/lib/pricing";
 import { mapPersistedOrder, type PersistedOrderRow } from "@/lib/persistedOrder";
 import { OTP_FLOW_KEY } from "./LoginPage";
 import {
@@ -115,7 +117,7 @@ const Index = () => {
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const [reorderedFromId, setReorderedFromId] = useState<string | null>(null);
   const [pendingReorder, setPendingReorder] = useState<Order | null>(null);
-  const [clientTier, setClientTier] = useState<{ discountPercent: number; name: string } | null>(null);
+  const [clientTier, setClientTier] = useState<{ name: string; rules: TierRules } | null>(null);
   const [freeDelivery, setFreeDelivery] = useState(false);
   const t = useT();
   const cart = useCart();
@@ -249,7 +251,7 @@ const Index = () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     const { data: contact } = await supabase
       .from("contacts")
-      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, pricing_tier_id, free_delivery, pricing_tiers(product_discount_percent, name), company_addresses(label, address_line1, address_line2))")
+      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, pricing_tier_id, free_delivery, pricing_tiers(name, product_discount_percent, kg_discount_percent, bag_discount_percent, volume_threshold_kg, volume_kg_discount_percent), company_addresses(label, address_line1, address_line2))")
       .eq("user_id", currentUser?.id ?? "")
       .maybeSingle();
 
@@ -293,11 +295,8 @@ const Index = () => {
 
     // Load discount tier for this client's company
     const tier = (company?.pricing_tiers as any) ?? null;
-    setClientTier(
-      tier && Number(tier.product_discount_percent) > 0
-        ? { discountPercent: Number(tier.product_discount_percent), name: String(tier.name) }
-        : null
-    );
+    const tierRules = tier ? tierRulesFromRow(tier) : null;
+    setClientTier(tier && tierRules && describeRules(tierRules) ? { name: String(tier.name), rules: tierRules } : null);
     setFreeDelivery(company?.free_delivery === true);
   }, [loadOrders, setView]);
 
@@ -417,7 +416,7 @@ const Index = () => {
     // Totals come from the breakdown the client saw (stored in the snapshot), never recomputed here
     const totals = rpcTotalsFromBreakdown(snapshot.breakdown);
 
-    const coffeeItems = cart.items.map((item) => ({
+    const coffeeItems = cart.items.map((item, idx) => ({
       product_id: item.product.id,
       product_name: item.product.name,
       product_sku: item.product.sku ?? null,
@@ -427,6 +426,7 @@ const Index = () => {
       quantity: item.sizeKg ? item.sizeKg * item.quantity : item.quantity,
       size_label: item.sizeLabel ?? null,
       size_kg: item.sizeKg ?? null,
+      line_discount_percent: snapshot.breakdown.coffee.lineRates[idx] ?? 0,
     }));
 
     const { data: rpcResult, error: rpcError } = await (supabase as any).rpc("create_order_with_items", {
@@ -439,7 +439,8 @@ const Index = () => {
       p_items:              coffeeItems,
       p_reordered_from:     reorderedFromId ?? null,
       ...totals,
-      ...(totals.p_discount_percent != null ? { p_pricing_tier_name: clientTier!.name } : {}),
+      ...(clientTier ? { p_pricing_rules: clientTier.rules } : {}),
+      ...(totals.p_discount_percent != null && clientTier ? { p_pricing_tier_name: clientTier.name } : {}),
       p_client_snapshot:    snapshot,
     });
 
@@ -481,6 +482,7 @@ const Index = () => {
   }, [cart, pendingReorder, setView]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
+  const cartTerms = clientTermsAndNudge(clientTier?.rules, cart.items);
   const visibleOrders = role === "admin" ? [...orders, ...MOCK_ORDERS] : orders;
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -593,6 +595,8 @@ const Index = () => {
               lastOrder={orders[0] ?? null}
               mode="home"
               onCheckout={() => setView("checkout")}
+              terms={cartTerms.terms}
+              nudge={cartTerms.nudge}
               onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("shop"); }}
               onGoHome={() => setView("home")}
               onGoShop={() => setView("shop")}
@@ -611,6 +615,8 @@ const Index = () => {
             lastOrder={orders[0] ?? null}
             mode="shop"
             onCheckout={() => setView("checkout")}
+            terms={cartTerms.terms}
+            nudge={cartTerms.nudge}
             onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("shop"); }}
             onGoHome={() => setView("home")}
             onGoShop={() => setView("shop")}
@@ -628,7 +634,7 @@ const Index = () => {
             onConfirm={handleConfirmOrder}
             reorderedFromRef={reorderedFromId}
             clientName={String((onboardingData as any)?.company_name ?? '')}
-            discountPercent={clientTier?.discountPercent ?? 0}
+            rules={clientTier?.rules}
             freeDelivery={freeDelivery}
             initialDeliveryDate={checkoutInitialDate}
             onRemoveItem={(product, sizeLabel) => {

@@ -7,8 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import type { CartItem, Product } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { buildPlainTextSummary, resolveVariantLabel } from "@/lib/orderUtils";
-import { computeOrderBreakdown, cartToCoffeeLines, type OrderBreakdown } from "@/lib/pricing";
+import { computeOrderBreakdown, cartToCoffeeLines, clientTermsAndNudge, type OrderBreakdown } from "@/lib/pricing";
 import { buildClientSnapshot, cartItemsToSnapshotItems, type ClientSnapshot } from "@/lib/clientSnapshot";
+import { flatRules, type TierRules } from "@/lib/tierRules";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 import { SwipeableCartRow } from "@/components/SwipeableCartRow";
 import { useT } from "@/i18n";
@@ -23,7 +24,9 @@ interface CheckoutPageProps {
   /** Short ref of the original order when this is a re-order (e.g. "A1B2C3D4") */
   reorderedFromRef?: string | null;
   clientName?: string;
-  discountPercent?: number;
+  /** The client's tier rules; omit for a client without a tier */
+  rules?: TierRules;
+  /** Tier name is shown nowhere here; terms and nudge come from the rules */
   /** Company ships free (Plural absorbs the whole Loberz delivery) */
   freeDelivery: boolean;
   /** Remove a specific line item from the draft order */
@@ -54,10 +57,10 @@ function lineQtyKg(item: CartItem): number {
   return item.sizeKg ? item.sizeKg * item.quantity : item.quantity;
 }
 
-function breakdownFor(items: CartItem[], discountPercent: number, freeDelivery: boolean): OrderBreakdown {
+function breakdownFor(items: CartItem[], rules: TierRules, freeDelivery: boolean): OrderBreakdown {
   return computeOrderBreakdown({
     coffeeLines: cartToCoffeeLines(items),
-    discountPercent,
+    rules,
     delivery: { kind: "auto", free: freeDelivery },
   });
 }
@@ -71,7 +74,7 @@ export default function CheckoutPage({
   onConfirm,
   reorderedFromRef,
   clientName = '',
-  discountPercent = 0,
+  rules: rulesProp,
   freeDelivery,
   initialDeliveryDate = null,
   onRemoveItem,
@@ -94,13 +97,15 @@ export default function CheckoutPage({
   const [confirmedSnapshot, setConfirmedSnapshot] = useState<ClientSnapshot | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const breakdown = breakdownFor(items, discountPercent, freeDelivery);
+  const rules = rulesProp ?? flatRules(0);
+  const breakdown = breakdownFor(items, rules, freeDelivery);
+  const { terms, nudge } = clientTermsAndNudge(rulesProp, items);
 
   const handleConfirm = useCallback(async () => {
     if (!deliveryDate || submitting) return;
     // Snapshot now — parent will clear cart after onConfirm resolves
     const snap = [...items];
-    const snapBreakdown = breakdownFor(snap, discountPercent, freeDelivery);
+    const snapBreakdown = breakdownFor(snap, rules, freeDelivery);
 
     setSubmitting(true);
     setOrderError(null);
@@ -110,7 +115,7 @@ export default function CheckoutPage({
         breakdown: snapBreakdown,
         deliveryDate,
         notes: notes.trim() || null,
-        discountPercent,
+        discountPercent: snapBreakdown.coffee.discountPercent,
         source: "client",
       });
       const { orderId } = await onConfirm(deliveryDate, notes.trim() || undefined, snapshot);
@@ -126,7 +131,7 @@ export default function CheckoutPage({
     } finally {
       setSubmitting(false);
     }
-  }, [deliveryDate, items, notes, onConfirm, submitting, discountPercent, freeDelivery]);
+  }, [deliveryDate, items, notes, onConfirm, submitting, rules, freeDelivery]);
 
   // ── Success screen ────────────────────────────────────────────────────────
 
@@ -372,6 +377,13 @@ export default function CheckoutPage({
               );
             })}
           </div>
+
+          {(terms || nudge) && (
+            <div className="px-4 py-2.5 border-t border-border text-xs text-muted-foreground space-y-0.5">
+              {terms && <p>{terms}</p>}
+              {nudge && <p className="font-medium text-foreground">{nudge}</p>}
+            </div>
+          )}
 
           <PriceBreakdown breakdown={breakdown} className="rounded-none border-0 border-t bg-muted/20" />
         </section>

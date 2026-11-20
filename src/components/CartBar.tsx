@@ -6,9 +6,11 @@ interface CartBarProps {
   itemCount: number;
   totalPrice: number;
   onCheckout: () => void;
+  terms?: string | null;
+  nudge?: string | null;
 }
 
-export function CartBar({ itemCount, totalPrice, onCheckout }: CartBarProps) {
+export function CartBar({ itemCount, totalPrice, onCheckout, terms, nudge }: CartBarProps) {
   const t = useT();
 
   return (
@@ -23,6 +25,12 @@ export function CartBar({ itemCount, totalPrice, onCheckout }: CartBarProps) {
           className="fixed inset-x-0 bottom-[72px] z-40 px-4"
         >
           <div className="max-w-lg mx-auto">
+            {(terms || nudge) && (
+              <div className="mb-1.5 rounded-xl bg-card border border-border px-3 py-1.5 text-xs text-muted-foreground space-y-0.5">
+                {terms && <p>{terms}</p>}
+                {nudge && <p className="font-medium text-foreground">{nudge}</p>}
+              </div>
+            )}
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={onCheckout}

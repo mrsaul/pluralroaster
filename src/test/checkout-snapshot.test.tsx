@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import CheckoutPage from "@/pages/CheckoutPage";
 import { computeOrderBreakdown, cartToCoffeeLines } from "@/lib/pricing";
 import type { CartItem, Product } from "@/lib/store";
+import { flatRules } from "@/lib/tierRules";
 
 vi.mock("@/components/DeliveryDatePicker", () => ({
   DeliveryDatePicker: ({ selected }: { selected: string | null }) => (
@@ -32,7 +33,7 @@ describe("CheckoutPage snapshot", () => {
         totalKg={20}
         onBack={() => {}}
         onConfirm={onConfirm}
-        discountPercent={10}
+        rules={flatRules(10)}
         freeDelivery={false}
         initialDeliveryDate="2026-12-01"
       />,
