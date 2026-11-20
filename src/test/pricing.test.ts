@@ -151,7 +151,7 @@ describe("buildPlainTextSummary breakdown", () => {
     };
     // Intl.NumberFormat("fr-FR") emits non-breaking spaces; compare with plain ones.
     const text = buildPlainTextSummary(data).replace(/[\u00a0\u202f]/g, " ");
-    expect(text).toContain("Remise −10 %");
+    expect(text).toContain("Remise café au kg −10 %");
     expect(text).toContain("Livraison à vélo : 12,00 €");
     expect(text).toContain("Total TTC : 811,98 €");
   });

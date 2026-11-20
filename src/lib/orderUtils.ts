@@ -1,7 +1,8 @@
 // src/lib/orderUtils.ts
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import type { OrderBreakdown } from "@/lib/pricing";
+import { breakdownDiscounts, type OrderBreakdown } from "@/lib/pricing";
+import { fr as frStrings } from "@/i18n";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -174,8 +175,9 @@ export function buildPlainTextSummary(data: OrderReceiptData): string {
   lines.push("");
   const b = data.breakdown;
   if (b) {
-    if (b.coffee.discountPercent > 0) {
-      lines.push(`Remise −${formatVatRate(b.coffee.discountPercent)} % : −${fmtEur(b.coffee.discountHT)}`);
+    for (const d of breakdownDiscounts(b)) {
+      const label = d.kind === "bag" ? frStrings.breakdown.discountBag : frStrings.breakdown.discountKg;
+      lines.push(`${label(formatFrNumber(d.percent))} : −${fmtEur(d.discountHT)}`);
     }
     if (b.delivery) {
       lines.push(

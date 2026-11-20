@@ -205,7 +205,7 @@ describe("OrderReceiptPage breakdown", () => {
     localStorage.setItem("plural_order_receipt", JSON.stringify(receipt(b)));
     render(<OrderReceiptPage />);
     expect(await screen.findByText("2,25 kg · prix public")).toBeInTheDocument();
-    expect(screen.getByText("Votre remise −12,5 %")).toBeInTheDocument();
+    expect(screen.getByText("Remise café au kg −12,5 %")).toBeInTheDocument();
     expect(screen.getByText("Votre prix café")).toBeInTheDocument();
     expect(screen.getByText("Loberz · jusqu'à 10 kg")).toBeInTheDocument();
     expect(screen.getByText("Plural paie 50 %")).toBeInTheDocument();

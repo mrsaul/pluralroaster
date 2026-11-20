@@ -293,3 +293,11 @@ export function recalcOrderFromItems(input: {
     lineRates: breakdown.coffee.lineRates,
   };
 }
+
+/** Discount lines to display; falls back to the single flat line for breakdowns saved before `discounts` existed. */
+export function breakdownDiscounts(b: OrderBreakdown): OrderBreakdown["coffee"]["discounts"] {
+  if (b.coffee.discounts) return b.coffee.discounts;
+  return b.coffee.discountPercent > 0
+    ? [{ kind: "kg", percent: b.coffee.discountPercent, discountHT: b.coffee.discountHT }]
+    : [];
+}

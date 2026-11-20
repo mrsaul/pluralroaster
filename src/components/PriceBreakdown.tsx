@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useT } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { formatFrNumber, formatVatRate } from "@/lib/orderUtils";
-import type { OrderBreakdown } from "@/lib/pricing";
+import { breakdownDiscounts, type OrderBreakdown } from "@/lib/pricing";
 
 const eur = (n: number) => `€${n.toFixed(2)}`;
 
@@ -54,13 +54,14 @@ export function PriceBreakdown({
       <div>
         <Heading>{t.breakdown.coffee}</Heading>
         <Row label={t.breakdown.publicPrice(formatFrNumber(coffee.kg))} value={eur(coffee.regularHT)} />
-        {coffee.discountPercent > 0 && (
+        {breakdownDiscounts(breakdown).map((d) => (
           <Row
+            key={d.kind}
             green
-            label={t.breakdown.yourDiscount(formatFrNumber(coffee.discountPercent))}
-            value={`−${eur(coffee.discountHT)}`}
+            label={(d.kind === "bag" ? t.breakdown.discountBag : t.breakdown.discountKg)(formatFrNumber(d.percent))}
+            value={`−${eur(d.discountHT)}`}
           />
-        )}
+        ))}
         <Row strong label={t.breakdown.yourCoffee} value={eur(coffee.netHT)} />
       </div>
 

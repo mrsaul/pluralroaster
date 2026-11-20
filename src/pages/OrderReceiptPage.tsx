@@ -10,7 +10,7 @@ import {
   inferGrind,
   GRIND_LABEL,
 } from "@/lib/orderUtils";
-import type { OrderBreakdown } from "@/lib/pricing";
+import { breakdownDiscounts, type OrderBreakdown } from "@/lib/pricing";
 import { fr as frStrings } from "@/i18n";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -47,12 +47,12 @@ function BreakdownRows({ breakdown: b }: { breakdown: OrderBreakdown }) {
         <span>{t.publicPrice(formatFrNumber(b.coffee.kg))}</span>
         <span>{fmtEur(b.coffee.regularHT)}</span>
       </div>
-      {b.coffee.discountPercent > 0 && (
-        <div style={greenStyle}>
-          <span>{t.yourDiscount(formatFrNumber(b.coffee.discountPercent))}</span>
-          <span>−{fmtEur(b.coffee.discountHT)}</span>
+      {breakdownDiscounts(b).map((d) => (
+        <div key={d.kind} style={greenStyle}>
+          <span>{(d.kind === "bag" ? t.discountBag : t.discountKg)(formatFrNumber(d.percent))}</span>
+          <span>−{fmtEur(d.discountHT)}</span>
         </div>
-      )}
+      ))}
       <div style={netStyle}>
         <span>{t.yourCoffee}</span>
         <span>{fmtEur(b.coffee.netHT)}</span>

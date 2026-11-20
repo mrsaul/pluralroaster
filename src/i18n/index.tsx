@@ -246,7 +246,8 @@ export const fr = {
   breakdown: {
     coffee:        "Café",
     publicPrice:   (kg: string) => `${kg} kg · prix public`,
-    yourDiscount:  (d: string) => `Votre remise −${d} %`,
+    discountKg:    (d: string) => `Remise café au kg −${d} %`,
+    discountBag:   (d: string) => `Remise sachets −${d} %`,
     yourCoffee:    "Votre prix café",
     delivery:      "Livraison à vélo",
     loberz:        (band: string) => `Loberz · ${band}`,
@@ -423,7 +424,8 @@ const en: typeof fr = {
   breakdown: {
     coffee:        "Coffee",
     publicPrice:   (kg: string) => `${kg} kg · list price`,
-    yourDiscount:  (d: string) => `Your discount −${d} %`,
+    discountKg:    (d: string) => `Bulk coffee discount −${d} %`,
+    discountBag:   (d: string) => `Bags discount −${d} %`,
     yourCoffee:    "Your coffee price",
     delivery:      "Bike delivery",
     loberz:        (band: string) => `Loberz · ${band}`,
