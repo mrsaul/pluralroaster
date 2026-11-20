@@ -25,7 +25,7 @@ import type { ClientSnapshot } from "@/lib/clientSnapshot";
 import { buildOrderRpcArgs } from "@/lib/orderRpcArgs";
 import { tierRulesFromRow, describeRules, type TierRules } from "@/lib/tierRules";
 import { clientTermsAndNudge } from "@/lib/pricing";
-import { mapPersistedOrder, type PersistedOrderRow } from "@/lib/persistedOrder";
+import { mapPersistedOrder, refreshReorderPrices, type PersistedOrderRow } from "@/lib/persistedOrder";
 import { OTP_FLOW_KEY } from "./LoginPage";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -461,9 +461,24 @@ const Index = () => {
     setPendingReorder(order);
   }, []);
 
-  const confirmReorder = useCallback(() => {
+  const confirmReorder = useCallback(async () => {
     if (!pendingReorder) return;
-    cart.hydrateCart(pendingReorder.items);
+    // Bags come back at today's catalogue price; any failure keeps the stored prices.
+    let items = pendingReorder.items;
+    const bagProductIds = [...new Set(items.filter((i) => i.sizeKg).map((i) => i.product.id))];
+    if (bagProductIds.length > 0) {
+      try {
+        const { data } = await supabase
+          .from("product_variants")
+          .select("product_id, size_kg, price, is_active")
+          .in("product_id", bagProductIds)
+          .eq("is_active", true);
+        if (data) items = refreshReorderPrices(items, data as { product_id: string; size_kg: number; price: number; is_active: boolean }[]);
+      } catch {
+        /* keep stored prices */
+      }
+    }
+    cart.hydrateCart(items);
     setReorderedFromId(pendingReorder.id);
     setPendingReorder(null);
     setView("checkout");

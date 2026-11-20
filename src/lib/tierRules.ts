@@ -57,7 +57,7 @@ export function parseTierRules(raw: unknown): TierRules | null {
   if (kg === null || bag === null) return null;
   const threshold = num(r.thresholdKg as NumLike);
   const above = num(r.kgAbove as NumLike);
-  const hasStep = threshold !== null && above !== null;
+  const hasStep = threshold !== null && threshold > 0 && above !== null;
   return { kg, bag, thresholdKg: hasStep ? threshold : null, kgAbove: hasStep ? above : null };
 }
 

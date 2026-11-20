@@ -1,4 +1,4 @@
-import type { Order, Product } from "@/lib/store";
+import type { CartItem, Order, Product } from "@/lib/store";
 import { DEFAULT_COFFEE_VAT_RATE } from "@/lib/orderUtils";
 import { isBagSize, parseTierRules } from "@/lib/tierRules";
 import { round2 } from "@/lib/pricing";
@@ -112,3 +112,19 @@ export const mapPersistedOrder = (order: PersistedOrderRow): Order => {
     }),
   };
 };
+
+export type ReorderVariant = { product_id: string; size_kg: number; price: number; is_active: boolean };
+
+/**
+ * Bag lines come back at the current catalogue price of their active variant
+ * (matched by product and size); no active variant keeps the stored price.
+ * Kg lines are returned as is.
+ */
+export const refreshReorderPrices = (items: CartItem[], variants: ReorderVariant[]): CartItem[] =>
+  items.map((item) => {
+    if (!item.sizeKg) return item;
+    const match = variants.find(
+      (v) => v.is_active && v.product_id === item.product.id && Number(v.size_kg) === item.sizeKg,
+    );
+    return match ? { ...item, unitPrice: round2(Number(match.price)) } : item;
+  });

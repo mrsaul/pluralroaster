@@ -28,6 +28,6 @@ export function buildOrderRpcArgs(input: {
     ...totals,
     p_items,
     ...(tier ? { p_pricing_rules: tier.rules } : {}),
-    ...(tier && totals.p_discount_percent != null ? { p_pricing_tier_name: tier.name } : {}),
+    ...(tier ? { p_pricing_tier_name: tier.name } : {}),
   };
 }

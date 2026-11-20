@@ -80,6 +80,53 @@ BEGIN
     RAISE EXCEPTION 'p_discount_percent must be between 0 and 100, got %', p_discount_percent;
   END IF;
 
+  -- p_pricing_rules: frozen rule set. Every cast runs only after a jsonb_typeof
+  -- check, so a malformed value raises a clear error, never a cast error.
+  IF p_pricing_rules IS NOT NULL THEN
+    IF jsonb_typeof(p_pricing_rules) <> 'object' THEN
+      RAISE EXCEPTION 'p_pricing_rules must be a JSON object';
+    END IF;
+    IF jsonb_typeof(p_pricing_rules->'kg') IS DISTINCT FROM 'number'
+       OR (p_pricing_rules->>'kg')::numeric < 0 OR (p_pricing_rules->>'kg')::numeric > 100 THEN
+      RAISE EXCEPTION 'p_pricing_rules.kg must be a number between 0 and 100';
+    END IF;
+    IF jsonb_typeof(p_pricing_rules->'bag') IS DISTINCT FROM 'number'
+       OR (p_pricing_rules->>'bag')::numeric < 0 OR (p_pricing_rules->>'bag')::numeric > 100 THEN
+      RAISE EXCEPTION 'p_pricing_rules.bag must be a number between 0 and 100';
+    END IF;
+    -- thresholdKg and kgAbove: both null/absent, or both numbers.
+    IF (coalesce(jsonb_typeof(p_pricing_rules->'thresholdKg'), 'null') = 'null')
+       <> (coalesce(jsonb_typeof(p_pricing_rules->'kgAbove'), 'null') = 'null') THEN
+      RAISE EXCEPTION 'p_pricing_rules.thresholdKg and kgAbove must be both set or both null';
+    END IF;
+    IF coalesce(jsonb_typeof(p_pricing_rules->'thresholdKg'), 'null') <> 'null' THEN
+      IF jsonb_typeof(p_pricing_rules->'thresholdKg') <> 'number'
+         OR jsonb_typeof(p_pricing_rules->'kgAbove') <> 'number' THEN
+        RAISE EXCEPTION 'p_pricing_rules.thresholdKg and kgAbove must be numbers';
+      END IF;
+      IF (p_pricing_rules->>'thresholdKg')::numeric <= 0 THEN
+        RAISE EXCEPTION 'p_pricing_rules.thresholdKg must be greater than 0';
+      END IF;
+      IF (p_pricing_rules->>'kgAbove')::numeric < 0 OR (p_pricing_rules->>'kgAbove')::numeric > 100 THEN
+        RAISE EXCEPTION 'p_pricing_rules.kgAbove must be between 0 and 100';
+      END IF;
+    END IF;
+  END IF;
+
+  -- Per-line rates: validated up front, before any INSERT. A missing key or JSON
+  -- null stays NULL (old clients); anything else must be a number in 0-100.
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    IF jsonb_typeof(v_item->'line_discount_percent') IS NOT NULL
+       AND jsonb_typeof(v_item->'line_discount_percent') <> 'null' THEN
+      IF jsonb_typeof(v_item->'line_discount_percent') <> 'number'
+         OR (v_item->>'line_discount_percent')::numeric < 0
+         OR (v_item->>'line_discount_percent')::numeric > 100 THEN
+        RAISE EXCEPTION 'line_discount_percent must be a number between 0 and 100, got %', v_item->'line_discount_percent';
+      END IF;
+    END IF;
+  END LOOP;
+
   IF p_delivery IS NOT NULL THEN
     SELECT id INTO v_loberz_id FROM products WHERE sku = '0001' LIMIT 1;
     IF v_loberz_id IS NULL THEN
@@ -219,3 +266,12 @@ GRANT EXECUTE ON FUNCTION public.create_order_with_items(
 --      -- line_discount_percent = 25; a call without p_pricing_rules / line_discount_percent
 --      -- stores NULL for both
 --      rollback;
+-- 6. Bad inputs raise and insert nothing (each inside its own begin ... rollback, same
+--    role setup as 5, same other arguments):
+--      a) per-line rate: p_items line with "line_discount_percent":150 (also -1, "abc")
+--         -> ERROR line_discount_percent must be a number between 0 and 100
+--      b) rules: p_pricing_rules => '{"kg":150,"bag":10}'::jsonb
+--         -> ERROR p_pricing_rules.kg must be a number between 0 and 100
+--         also '{"kg":5,"bag":5,"thresholdKg":20}' (kgAbove missing) and
+--         '{"kg":5,"bag":5,"thresholdKg":0,"kgAbove":10}' -> ERROR
+--      then: select count(*) from orders where id = ...; -- nothing was inserted

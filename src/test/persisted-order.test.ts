@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapPersistedOrder, type PersistedOrderRow } from "@/lib/persistedOrder";
+import { mapPersistedOrder, refreshReorderPrices, type PersistedOrderRow } from "@/lib/persistedOrder";
 import { orderToBreakdown } from "@/lib/pricing";
 
 const product = {
@@ -47,5 +47,24 @@ describe("mapPersistedOrder bags", () => {
     const withRules = orderToBreakdown({ ...legacy, pricingRules: { kg: 0, bag: 0, thresholdKg: null, kgAbove: null } });
     expect(flat.coffee.discountHT).toBeGreaterThan(0);
     expect(withRules.coffee.discountHT).toBe(0);
+  });
+});
+
+describe("refreshReorderPrices", () => {
+  const order = () => mapPersistedOrder(baseRow());
+  it("an active variant price wins for bag lines", () => {
+    const out = refreshReorderPrices(order().items, [{ product_id: "p1", size_kg: 0.25, price: 10.2, is_active: true }]);
+    expect(out[0].unitPrice).toBe(10.2);
+  });
+  it("missing or inactive variant keeps the stored price", () => {
+    expect(refreshReorderPrices(order().items, [])[0].unitPrice).toBe(9.5);
+    expect(
+      refreshReorderPrices(order().items, [{ product_id: "p1", size_kg: 0.25, price: 10.2, is_active: false }])[0].unitPrice,
+    ).toBe(9.5);
+  });
+  it("kg lines are untouched", () => {
+    const items = order().items;
+    const out = refreshReorderPrices(items, [{ product_id: "p1", size_kg: 0.25, price: 10.2, is_active: true }]);
+    expect(out[1]).toBe(items[1]);
   });
 });

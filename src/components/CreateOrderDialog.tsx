@@ -22,7 +22,7 @@ import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 import { DEFAULT_COFFEE_VAT_RATE, withOrderItemDefaults } from "@/lib/orderUtils";
 import { adminCoffeeLines, adminOrderItemRows, adminLinesToSnapshotItems, isBagVariant, lineGrossHT, linePricePerKg, lineQuantityKg, productRowName, type AdminLine } from "@/lib/adminOrderLines";
 import { buildClientSnapshot } from "@/lib/clientSnapshot";
-import { tierRulesFromRow, type TierRulesRow } from "@/lib/tierRules";
+import { tierRulesFromRow, describeRules, type TierRulesRow } from "@/lib/tierRules";
 import { LOBERZ_PRODUCT_NAME, LOBERZ_SKU, computeOrderBreakdown, deliveryRowFor } from "@/lib/pricing";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 
@@ -173,6 +173,10 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const selectedClient = clients.find((c) => c.company_id === selectedCompanyId);
   const freeDelivery = selectedClient?.free_delivery === true;
   const rules = useMemo(() => tierRulesFromRow(clientTier), [clientTier]);
+  const tierSummary = useMemo(() => {
+    const d = describeRules(rules);
+    return d ? d.charAt(0).toUpperCase() + d.slice(1) : "Aucune remise";
+  }, [rules]);
   const breakdown = useMemo(() => computeOrderBreakdown({
     coffeeLines: adminCoffeeLines(lineItems.map((i) => ({
       line: toAdminLine(i),
@@ -401,7 +405,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
             {clientTier && (
               <div className="mt-1.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
                 <span className="font-medium text-foreground">{clientTier.name}</span>
-                {clientTier.product_discount_percent > 0 && <span>{clientTier.product_discount_percent}% off products</span>}
+                <span>{tierSummary}</span>
               </div>
             )}
           </div>

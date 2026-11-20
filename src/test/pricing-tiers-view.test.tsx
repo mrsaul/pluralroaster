@@ -102,6 +102,17 @@ describe("Tarifs form", () => {
     expect(writes).toHaveLength(0);
   });
 
+  it("rejects a volume step that is not above the kg rate", async () => {
+    const dialog = await openCreate();
+    type(within(dialog).getByPlaceholderText("ex. Palier VIP"), "X");
+    type(within(dialog).getByLabelText("Remise café au kg (%)"), "10");
+    type(within(dialog).getByLabelText("À partir de (kg)"), "20");
+    type(within(dialog).getByLabelText("Remise au kg au-delà (%)"), "10");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Créer le palier" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("La remise au-delà doit être supérieure à la remise café au kg");
+    expect(writes).toHaveLength(0);
+  });
+
   it("keeps the tier's rates when restoring a draft saved before the rules existed", async () => {
     localStorage.setItem("draft:pricing-tier-edit:t3:__anon__", JSON.stringify({
       savedAt: "2026-11-01T10:00:00Z",

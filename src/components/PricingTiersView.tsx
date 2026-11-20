@@ -169,6 +169,10 @@ export function PricingTiersView() {
       setStepError(NO_STEP_ERROR);
       return;
     }
+    if (above !== null && above <= kg) {
+      setStepError("La remise au-delà doit être supérieure à la remise café au kg");
+      return;
+    }
     setStepError(null);
     setRateError(null);
     setSaving(true);

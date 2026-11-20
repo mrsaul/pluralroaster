@@ -1704,7 +1704,7 @@ async function handleCreateInvoice(
 
     if (hasItem) {
       // ── Service item (delivery) ─────────────────────────────────────────────
-      if (product.kind === 'service') {
+      if (item.kind === 'service' || product.kind === 'service') {
         const numericSellsyId = Number(product.sellsy_id);
         if (!Number.isFinite(numericSellsyId)) {
           console.error(`[invoice] service item skipped: non-numeric sellsy_id="${product.sellsy_id}", falling back to free-form`);

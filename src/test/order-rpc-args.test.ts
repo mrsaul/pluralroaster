@@ -40,10 +40,10 @@ describe("buildOrderRpcArgs", () => {
     expect("p_pricing_rules" in a).toBe(false);
     expect("p_pricing_tier_name" in a).toBe(false);
   });
-  it("sends no tier name when this order has no discount", () => {
+  it("still sends the tier name when this order has no discount", () => {
     const zero: TierRules = { kg: 0, bag: 0, thresholdKg: null, kgAbove: null };
     const a = buildOrderRpcArgs({ items, snapshot: snap(items, zero), tier: { name: "T", rules: zero } });
-    expect("p_pricing_tier_name" in a).toBe(false);
+    expect(a.p_pricing_tier_name).toBe("T");
     expect(a.p_pricing_rules).toEqual(zero);
   });
   it("throws when rates and items are misaligned", () => {

@@ -17,8 +17,9 @@ describe("volume step", () => {
     });
     expect(b.coffee.lineRates).toEqual([5, 5]);
     expect(b.coffee.discounts).toEqual([
-      { kind: "kg", percent: 5, discountHT: expect.any(Number) },
-      { kind: "bag", percent: 5, discountHT: expect.any(Number) },
+      // Rounded per line like Sellsy: unit 26.50 -> 25.18, x 19.75 = 497.31 vs 523.38
+      { kind: "kg", percent: 5, discountHT: 26.07 },
+      { kind: "bag", percent: 5, discountHT: 1.9 },
     ]);
   });
   it("AMULETTE at the step is inclusive", () => {
@@ -118,5 +119,12 @@ describe("parsing", () => {
     expect(parseTierRules("x")).toBeNull();
     expect(parseTierRules(null)).toBeNull();
     expect(parseTierRules({ kg: 5, bag: 5, thresholdKg: 20, kgAbove: 10 })).toEqual(AMULETTE);
+  });
+});
+
+describe("parseTierRules threshold", () => {
+  it("drops a non-positive threshold like tierRulesFromRow", () => {
+    expect(parseTierRules({ kg: 5, bag: 5, thresholdKg: 0, kgAbove: 10 })).toEqual({ kg: 5, bag: 5, thresholdKg: null, kgAbove: null });
+    expect(parseTierRules({ kg: 5, bag: 5, thresholdKg: -3, kgAbove: 10 })).toEqual({ kg: 5, bag: 5, thresholdKg: null, kgAbove: null });
   });
 });
