@@ -20,8 +20,9 @@ import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 import { DEFAULT_COFFEE_VAT_RATE, withOrderItemDefaults } from "@/lib/orderUtils";
-import { adminLinesToSnapshotItems, isBagVariant, lineGrossHT, linePricePerKg, lineQuantityKg, productRowName, type AdminLine } from "@/lib/adminOrderLines";
+import { adminCoffeeLines, adminOrderItemRows, adminLinesToSnapshotItems, isBagVariant, lineGrossHT, linePricePerKg, lineQuantityKg, productRowName, type AdminLine } from "@/lib/adminOrderLines";
 import { buildClientSnapshot } from "@/lib/clientSnapshot";
+import { tierRulesFromRow, type TierRulesRow } from "@/lib/tierRules";
 import { LOBERZ_PRODUCT_NAME, LOBERZ_SKU, computeOrderBreakdown, deliveryRowFor } from "@/lib/pricing";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 
@@ -68,7 +69,7 @@ type BagVariant = { id: string; product_id: string; size_label: string; size_kg:
 const lineKey = (i: LineItem) => `${i.product.id}::${i.bag?.sizeLabel ?? "kg"}`;
 const toAdminLine = (i: LineItem): AdminLine => ({ productId: i.product.id, quantity: i.quantity, pricePerKg: i.price_per_kg, bag: i.bag });
 
-type ClientTier = {
+type ClientTier = TierRulesRow & {
   name: string;
   product_discount_percent: number;
 };
@@ -171,15 +172,15 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const activeProducts = useMemo(() => products.filter((p) => p.is_active && p.kind !== "service"), [products]);
   const selectedClient = clients.find((c) => c.company_id === selectedCompanyId);
   const freeDelivery = selectedClient?.free_delivery === true;
+  const rules = useMemo(() => tierRulesFromRow(clientTier), [clientTier]);
   const breakdown = useMemo(() => computeOrderBreakdown({
-    coffeeLines: lineItems.map((i) => ({
-      pricePerKg: linePricePerKg(toAdminLine(i)),
-      quantityKg: lineQuantityKg(toAdminLine(i)),
+    coffeeLines: adminCoffeeLines(lineItems.map((i) => ({
+      line: toAdminLine(i),
       vatRate: i.product.vat_rate ?? DEFAULT_COFFEE_VAT_RATE,
-    })),
-    discountPercent: clientTier?.product_discount_percent ?? 0,
+    }))),
+    rules,
     delivery: { kind: "auto", free: freeDelivery },
-  }), [lineItems, clientTier, freeDelivery]);
+  }), [lineItems, rules, freeDelivery]);
 
   const bagsFor = useCallback(
     (productId: string) => bagVariants.filter((v) => v.product_id === productId),
@@ -244,7 +245,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     if (client?.pricing_tier_id) {
       const { data } = await supabase
         .from("pricing_tiers")
-        .select("name, product_discount_percent")
+        .select("name, product_discount_percent, kg_discount_percent, bag_discount_percent, volume_threshold_kg, volume_kg_discount_percent")
         .eq("id", client.pricing_tier_id)
         .single();
       if (data) setForm(p => ({ ...p, clientTier: data as ClientTier }));
@@ -276,7 +277,8 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
       // The snapshot is write-once, so it goes in the same insert as the order (id generated here)
       const orderId = crypto.randomUUID();
       const deliveryYmd = format(deliveryDate, "yyyy-MM-dd");
-      const discountPercent = clientTier?.product_discount_percent ?? 0;
+      // The order is frozen with the rule set and the kg rate it was placed at
+      const discountPercent = breakdown.coffee.discountPercent;
       const clientSnapshot = buildClientSnapshot({
         items: adminLinesToSnapshotItems(lineItems.map((i) => ({ name: productRowName(i.product), line: toAdminLine(i) }))),
         breakdown,
@@ -297,12 +299,13 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
         status: "received",
         invoicing_status: "not_sent",
         discount_percent: discountPercent,
+        pricing_rules: rules,
         pricing_tier_name: clientTier?.name ?? null,
       } as any).select("id").single();
 
       if (orderErr || !order) throw orderErr || new Error("Impossible de créer la commande");
 
-      const items = lineItems.map((i) => {
+      const baseItems = lineItems.map((i) => {
         const line = toAdminLine(i);
         return {
           order_id: order.id,
@@ -316,6 +319,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           product_variant_id: i.bag?.variantId ?? null,
         };
       });
+      const items = adminOrderItemRows(breakdown.coffee.lineRates, baseItems);
 
       const deliveryItem = deliveryRow && loberzId
         ? [{
@@ -354,7 +358,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     } finally {
       setSaving(false);
     }
-  }, [selectedCompanyId, selectedClient, deliveryDate, lineItems, breakdown, clientTier, notes, toast, clearDraft, onOpenChange, onCreated]);
+  }, [selectedCompanyId, selectedClient, deliveryDate, lineItems, breakdown, rules, clientTier, notes, toast, clearDraft, onOpenChange, onCreated]);
 
   const getClientLabel = (c: SimpleClient) => {
     const name = c.client_data_mode === "custom" && c.custom_company_name

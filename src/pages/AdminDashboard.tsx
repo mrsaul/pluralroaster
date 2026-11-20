@@ -42,9 +42,11 @@ import { normalizeSize } from "@/lib/orderUtils";
 import {
   LOBERZ_PRODUCT_NAME,
   LOBERZ_SKU,
+  coffeeRateChanges,
   recalcOrderFromItems,
   storedOrderBreakdown,
 } from "@/lib/pricing";
+import { orderRulesFor, parseTierRules, type TierRules } from "@/lib/tierRules";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 import { ClientReceiptCompareButton } from "@/components/ClientReceiptCompare";
 import { cn } from "@/lib/utils";
@@ -141,6 +143,8 @@ type AdminOrder = {
   total_price: number;
   /** Tier discount on coffee (percent). */
   discount_percent: number;
+  /** Rule set frozen at placement; null for orders placed before tier rules. */
+  pricing_rules: TierRules | null;
   free_delivery: boolean;
   status: OrderStatus;
   sellsy_id: string | null;
@@ -462,7 +466,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .from("orders")
         .select(`
           id, user_id, company_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes, client_name, discount_percent, client_snapshot,
+          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync, notes, client_name, discount_percent, pricing_rules, client_snapshot,
           order_items ( ${ADMIN_ORDER_ITEM_COLUMNS} ),
           companies ( name, email, free_delivery )
         `)
@@ -517,6 +521,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           total_kg: Number(o.total_kg),
           total_price: Number(o.total_price),
           discount_percent: Number(o.discount_percent ?? 0),
+          pricing_rules: parseTierRules(o.pricing_rules),
           // Same resolution as recalcOrder: the order's company, else the client's contact company
           free_delivery: o.companies ? o.companies.free_delivery === true : contact?.freeDelivery === true,
           status: normalizeOrderStatus(o.status),
@@ -725,7 +730,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const recalcOrder = useCallback(async (orderId: string): Promise<{ items: AdminOrderItem[]; totalKg: number; totalPrice: number }> => {
     const { data: order, error: orderError } = await (supabase as any)
       .from("orders")
-      .select("discount_percent, company_id, user_id, companies ( free_delivery )")
+      .select("discount_percent, pricing_rules, company_id, user_id, companies ( free_delivery )")
       .eq("id", orderId)
       .single();
     if (orderError) throw orderError;
@@ -744,11 +749,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
 
     const items = await loadOrderItems(orderId);
-    const { deliveryRow, totalKg, totalPrice } = recalcOrderFromItems({
+    // The order's own frozen rules, never the client's current tier
+    const rules = orderRulesFor(order.pricing_rules, Number(order.discount_percent ?? 0));
+    const { deliveryRow, totalKg, totalPrice, breakdown, lineRates } = recalcOrderFromItems({
       items,
-      discountPercent: Number(order.discount_percent ?? 0),
+      rules,
       free,
     });
+
+    for (const change of coffeeRateChanges(items, lineRates)) {
+      const { error } = await supabase.from("order_items").update({ line_discount_percent: change.rate } as any).eq("id", change.id);
+      if (error) throw error;
+    }
 
     const serviceRows = items.filter((i) => i.kind === "service");
     const [keepRow, ...extraRows] = deliveryRow ? serviceRows : [];
@@ -779,7 +791,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
 
     const { error: totalsError } = await supabase
-      .from("orders").update({ total_kg: totalKg, total_price: totalPrice }).eq("id", orderId);
+      .from("orders").update({ total_kg: totalKg, total_price: totalPrice, discount_percent: breakdown.coffee.discountPercent } as any).eq("id", orderId);
     if (totalsError) throw totalsError;
 
     return { items: await loadOrderItems(orderId), totalKg, totalPrice };
@@ -2267,7 +2279,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             // The Loberz service row is shown in the breakdown, not in the item list
             const detailItems = selectedOrder.items.filter((i) => i.kind !== "service");
             const hasDeliveryRow = selectedOrder.items.some((i) => i.kind === "service");
-            const breakdown = storedOrderBreakdown(selectedOrder.items, selectedOrder.discount_percent);
+            const breakdown = storedOrderBreakdown(selectedOrder.items, selectedOrder.pricing_rules ?? selectedOrder.discount_percent);
             return (
             <div className="space-y-5">
               {/* Info grid */}
@@ -2328,6 +2340,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   snapshotRaw={selectedOrder.client_snapshot}
                   items={selectedOrder.items}
                   discountPercent={selectedOrder.discount_percent}
+                  rules={selectedOrder.pricing_rules}
                 />
               </div>
 
@@ -2583,7 +2596,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               // The Loberz service row is shown in the breakdown, not in the item list
               const detailItems = selectedOrder.items.filter((i) => i.kind !== "service");
               const hasDeliveryRow = selectedOrder.items.some((i) => i.kind === "service");
-              const breakdown = storedOrderBreakdown(selectedOrder.items, selectedOrder.discount_percent);
+              const breakdown = storedOrderBreakdown(selectedOrder.items, selectedOrder.pricing_rules ?? selectedOrder.discount_percent);
               return (
               <div className="space-y-5">
                 {/* Info grid */}
@@ -2644,6 +2657,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     snapshotRaw={selectedOrder.client_snapshot}
                     items={selectedOrder.items}
                     discountPercent={selectedOrder.discount_percent}
+                  rules={selectedOrder.pricing_rules}
                   />
                 </div>
 

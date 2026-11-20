@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PriceBreakdown } from "@/components/PriceBreakdown";
 import { formatFrNumber } from "@/lib/orderUtils";
+import type { TierRules } from "@/lib/tierRules";
 import { storedOrderBreakdown, type OrderBreakdown } from "@/lib/pricing";
 import {
   diffReceipts,
@@ -102,15 +103,18 @@ export function ClientReceiptCompare({
   snapshotRaw,
   items,
   discountPercent,
+  rules,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   snapshotRaw: unknown;
   items: ReceiptStoredItem[];
   discountPercent: number;
+  /** The order's frozen pricing_rules; preferred over the flat discountPercent. */
+  rules?: TierRules | null;
 }) {
   const snapshot = useMemo(() => parseClientSnapshot(snapshotRaw), [snapshotRaw]);
-  const currentBreakdown = useMemo(() => storedOrderBreakdown(items, discountPercent), [items, discountPercent]);
+  const currentBreakdown = useMemo(() => storedOrderBreakdown(items, rules ?? discountPercent), [items, discountPercent, rules]);
   const currentLines = useMemo(() => storedLines(items), [items]);
   const diff = useMemo(
     () => (snapshot ? diffReceipts(snapshot, items, currentBreakdown) : null),

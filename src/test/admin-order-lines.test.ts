@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lineQuantityKg, linePricePerKg, lineGrossHT, isBagVariant, adminLinesToSnapshotItems, productRowName, type AdminLine } from "@/lib/adminOrderLines";
+import { adminCoffeeLines, adminOrderItemRows, lineQuantityKg, linePricePerKg, lineGrossHT, isBagVariant, adminLinesToSnapshotItems, productRowName, type AdminLine } from "@/lib/adminOrderLines";
 import { computeOrderBreakdown } from "@/lib/pricing";
 
 const bag250: AdminLine = { productId: "bresil", quantity: 1, pricePerKg: 28, bag: { sizeLabel: "250g", sizeKg: 0.25, unitPrice: 9.5, variantId: "v250" } };
@@ -48,5 +48,24 @@ describe("admin order lines", () => {
     expect(productRowName({ name: "A", custom_name: "B", data_source_mode: "custom" })).toBe("B");
     expect(productRowName({ name: "A", custom_name: "B", data_source_mode: "sellsy" })).toBe("A");
     expect(productRowName({ name: "A", custom_name: null, data_source_mode: "custom" })).toBe("A");
+  });
+});
+
+describe("admin order pricing rows", () => {
+  const rules = { kg: 5, bag: 5, thresholdKg: 20, kgAbove: 10 };
+  const rows = [
+    { name: "Cauca", vatRate: 5.5, line: { ...kg, quantity: 22 } },
+    { name: "Brésil", vatRate: 5.5, line: { ...bag250, quantity: 4 } },
+  ];
+  it("bag lines are flagged isBag", () => {
+    expect(adminCoffeeLines(rows).map((l) => l.isBag)).toEqual([false, true]);
+  });
+  it("rows carry line_discount_percent per coffee row, kg rate on the kg line", () => {
+    const b = computeOrderBreakdown({ coffeeLines: adminCoffeeLines(rows), rules, delivery: { kind: "none" } });
+    expect(b.coffee.discountPercent).toBe(10);
+    expect(adminOrderItemRows(b.coffee.lineRates, [{ a: 1 }, { a: 2 }])).toEqual([
+      { a: 1, line_discount_percent: 10 },
+      { a: 2, line_discount_percent: 5 },
+    ]);
   });
 });

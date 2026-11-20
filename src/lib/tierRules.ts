@@ -99,3 +99,8 @@ export function formatNudge(n: NonNullable<ReturnType<typeof volumeNudge>>): str
     ? `Remise ${pct(n.percent)} atteinte`
     : `Plus que ${formatFrNumber(n.kg)} kg pour passer à ${pct(n.percent)}`;
 }
+
+/** The rule set an existing order is priced with: its frozen pricing_rules, else its flat discount (old orders). */
+export function orderRulesFor(rawRules: unknown, discountPercent: number): TierRules {
+  return parseTierRules(rawRules) ?? flatRules(discountPercent);
+}

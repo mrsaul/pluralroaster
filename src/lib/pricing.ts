@@ -299,6 +299,23 @@ export function recalcOrderFromItems(input: {
   };
 }
 
+/** Coffee rows (input order, service rows skipped) whose stored line_discount_percent differs from the recomputed rate. */
+export function coffeeRateChanges<T extends StoredOrderItem & { id: string }>(
+  items: T[],
+  lineRates: number[],
+): { id: string; rate: number }[] {
+  const changes: { id: string; rate: number }[] = [];
+  items
+    .filter((i) => i.kind !== "service")
+    .forEach((i, idx) => {
+      const rate = lineRates[idx];
+      if (rate !== undefined && (i.line_discount_percent == null || Number(i.line_discount_percent) !== rate)) {
+        changes.push({ id: i.id, rate });
+      }
+    });
+  return changes;
+}
+
 /** Discount lines to display; falls back to the single flat line for breakdowns saved before `discounts` existed. */
 export function breakdownDiscounts(b: OrderBreakdown): OrderBreakdown["coffee"]["discounts"] {
   if (b.coffee.discounts) return b.coffee.discounts;

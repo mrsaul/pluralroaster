@@ -1,4 +1,6 @@
 import type { OrderReceiptData } from "@/lib/orderUtils";
+import { isBagSize } from "@/lib/tierRules";
+import type { PricedCoffeeLine } from "@/lib/pricing";
 
 /** A line in the admin "Nouvelle commande" form: sold by the kg, or as bags of a Sellsy variant. */
 export type AdminLine = {
@@ -46,4 +48,22 @@ export function adminLinesToSnapshotItems(
     pricePerKg: linePricePerKg(line),
     kind: "coffee" as const,
   }));
+}
+
+/** Coffee lines for pricing; sub-kilo bag lines are flagged so they get the bag rate. */
+export function adminCoffeeLines(rows: { line: AdminLine; vatRate: number }[]): PricedCoffeeLine[] {
+  return rows.map(({ line, vatRate }) => ({
+    pricePerKg: linePricePerKg(line),
+    quantityKg: lineQuantityKg(line),
+    vatRate,
+    isBag: isBagSize(line.bag?.sizeKg),
+  }));
+}
+
+/** Adds each coffee row's charged rate (breakdown.coffee.lineRates, same order as the rows). */
+export function adminOrderItemRows<T extends object>(
+  lineRates: number[],
+  rows: T[],
+): (T & { line_discount_percent: number })[] {
+  return rows.map((r, i) => ({ ...r, line_discount_percent: lineRates[i] }));
 }
