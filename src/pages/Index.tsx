@@ -21,7 +21,8 @@ const InAppSetPasswordPage = lazy(() => import("./InAppSetPasswordPage"));
 // Kitchen lives in its own lazy chunk — never downloaded by coffee-only users.
 const KitchenApp = lazy(() => import("@/kitchen/KitchenApp"));
 import { supabase } from "@/integrations/supabase/client";
-import { rpcTotalsFromBreakdown, type ClientSnapshot } from "@/lib/clientSnapshot";
+import type { ClientSnapshot } from "@/lib/clientSnapshot";
+import { buildOrderRpcArgs } from "@/lib/orderRpcArgs";
 import { tierRulesFromRow, describeRules, type TierRules } from "@/lib/tierRules";
 import { clientTermsAndNudge } from "@/lib/pricing";
 import { mapPersistedOrder, type PersistedOrderRow } from "@/lib/persistedOrder";
@@ -413,21 +414,8 @@ const Index = () => {
       throw new Error("Votre session a expiré. Veuillez vous reconnecter.");
     }
 
-    // Totals come from the breakdown the client saw (stored in the snapshot), never recomputed here
-    const totals = rpcTotalsFromBreakdown(snapshot.breakdown);
-
-    const coffeeItems = cart.items.map((item, idx) => ({
-      product_id: item.product.id,
-      product_name: item.product.name,
-      product_sku: item.product.sku ?? null,
-      price_per_kg: item.unitPrice != null && item.sizeKg
-        ? item.unitPrice / item.sizeKg
-        : item.product.pricePerKg,
-      quantity: item.sizeKg ? item.sizeKg * item.quantity : item.quantity,
-      size_label: item.sizeLabel ?? null,
-      size_kg: item.sizeKg ?? null,
-      line_discount_percent: snapshot.breakdown.coffee.lineRates[idx] ?? 0,
-    }));
+    // Items and totals all come from the breakdown the client saw (stored in the snapshot), never recomputed here
+    const orderArgs = buildOrderRpcArgs({ items: cart.items, snapshot, tier: clientTier });
 
     const { data: rpcResult, error: rpcError } = await (supabase as any).rpc("create_order_with_items", {
       p_user_id:            user.id,
@@ -436,11 +424,8 @@ const Index = () => {
       p_status:             "received",
       p_confirmed_at:       new Date().toISOString(),
       p_notes:              notes ?? null,
-      p_items:              coffeeItems,
       p_reordered_from:     reorderedFromId ?? null,
-      ...totals,
-      ...(clientTier ? { p_pricing_rules: clientTier.rules } : {}),
-      ...(totals.p_discount_percent != null && clientTier ? { p_pricing_tier_name: clientTier.name } : {}),
+      ...orderArgs,
       p_client_snapshot:    snapshot,
     });
 

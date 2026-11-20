@@ -26,7 +26,6 @@ interface CheckoutPageProps {
   clientName?: string;
   /** The client's tier rules; omit for a client without a tier */
   rules?: TierRules;
-  /** Tier name is shown nowhere here; terms and nudge come from the rules */
   /** Company ships free (Plural absorbs the whole Loberz delivery) */
   freeDelivery: boolean;
   /** Remove a specific line item from the draft order */
@@ -41,6 +40,8 @@ interface CheckoutPageProps {
     newUnitPrice?: number,
   ) => void;
 }
+
+const NO_RULES = flatRules(0);
 
 type Step = "review" | "success" | "error";
 
@@ -97,7 +98,7 @@ export default function CheckoutPage({
   const [confirmedSnapshot, setConfirmedSnapshot] = useState<ClientSnapshot | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const rules = rulesProp ?? flatRules(0);
+  const rules = rulesProp ?? NO_RULES;
   const breakdown = breakdownFor(items, rules, freeDelivery);
   const { terms, nudge } = clientTermsAndNudge(rulesProp, items);
 

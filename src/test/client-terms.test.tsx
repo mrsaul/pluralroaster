@@ -32,6 +32,8 @@ describe("client terms and nudge at checkout", () => {
     const onConfirm = renderCheckout(22, AMULETTE);
     expect(screen.getByText("Vos conditions : café au kg −5 % · dès 20 kg −10 % · sachets −5 %")).toBeInTheDocument();
     expect(screen.getByText("Remise −10 % atteinte")).toBeInTheDocument();
+    expect(screen.getByText("Remise café au kg −10 %")).toBeInTheDocument();
+    expect(screen.getByText("Remise sachets −5 %")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
     await waitFor(() => expect(onConfirm).toHaveBeenCalled());
     expect(onConfirm.mock.calls[0][2].breakdown.coffee.lineRates).toEqual([10, 5]);
