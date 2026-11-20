@@ -136,3 +136,14 @@ describe("admin edits with tier rules", () => {
     ]);
   });
 });
+
+describe("old order emptied then refilled", () => {
+  it("keeps the stored discount when no coffee is left, and the next line gets it", () => {
+    const rules = orderRulesFor(null, 10);
+    const emptied = recalcOrderFromItems({ items: [], rules, free: false, storedDiscountPercent: 10 });
+    expect(emptied.discountPercent).toBe(10);
+    const refilled = recalcOrderFromItems({ items: [kgLine(5)], rules: orderRulesFor(null, emptied.discountPercent), free: false, storedDiscountPercent: emptied.discountPercent });
+    expect(refilled.lineRates).toEqual([10]);
+    expect(refilled.discountPercent).toBe(10);
+  });
+});

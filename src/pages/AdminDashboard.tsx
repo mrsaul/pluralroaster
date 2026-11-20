@@ -727,7 +727,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
    * coffee weight (created for legacy orders, removed when no coffee is left), total_kg =
    * coffee kg, total_price = total HT incl. delivery. Returns the stored items after the write.
    */
-  const recalcOrder = useCallback(async (orderId: string): Promise<{ items: AdminOrderItem[]; totalKg: number; totalPrice: number }> => {
+  const recalcOrder = useCallback(async (orderId: string): Promise<{ items: AdminOrderItem[]; totalKg: number; totalPrice: number; discountPercent: number }> => {
     const { data: order, error: orderError } = await (supabase as any)
       .from("orders")
       .select("discount_percent, pricing_rules, company_id, user_id, companies ( free_delivery )")
@@ -751,9 +751,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const items = await loadOrderItems(orderId);
     // The order's own frozen rules, never the client's current tier
     const rules = orderRulesFor(order.pricing_rules, Number(order.discount_percent ?? 0));
-    const { deliveryRow, totalKg, totalPrice, breakdown, lineRates } = recalcOrderFromItems({
+    const { deliveryRow, totalKg, totalPrice, discountPercent, lineRates } = recalcOrderFromItems({
       items,
       rules,
+      storedDiscountPercent: Number(order.discount_percent ?? 0),
       free,
     });
 
@@ -791,15 +792,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
 
     const { error: totalsError } = await supabase
-      .from("orders").update({ total_kg: totalKg, total_price: totalPrice, discount_percent: breakdown.coffee.discountPercent } as any).eq("id", orderId);
+      .from("orders").update({ total_kg: totalKg, total_price: totalPrice, discount_percent: discountPercent } as any).eq("id", orderId);
     if (totalsError) throw totalsError;
 
-    return { items: await loadOrderItems(orderId), totalKg, totalPrice };
+    return { items: await loadOrderItems(orderId), totalKg, totalPrice, discountPercent };
   }, []);
 
   /** Mirror a stored order (items + totals) into both the list and the open detail. */
-  const applyStoredOrder = useCallback((orderId: string, stored: { items: AdminOrderItem[]; totalKg: number; totalPrice: number }) => {
-    const apply = <T extends AdminOrder>(o: T): T => ({ ...o, items: stored.items, total_kg: stored.totalKg, total_price: stored.totalPrice });
+  const applyStoredOrder = useCallback((orderId: string, stored: { items: AdminOrderItem[]; totalKg: number; totalPrice: number; discountPercent?: number }) => {
+    const apply = <T extends AdminOrder>(o: T): T => ({ ...o, items: stored.items, total_kg: stored.totalKg, total_price: stored.totalPrice, ...(stored.discountPercent !== undefined ? { discount_percent: stored.discountPercent } : {}) });
     setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? apply(o) : o)));
     setSelectedOrder((prev) => (prev && prev.id === orderId ? apply(prev) : prev));
   }, []);
@@ -2657,7 +2658,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     snapshotRaw={selectedOrder.client_snapshot}
                     items={selectedOrder.items}
                     discountPercent={selectedOrder.discount_percent}
-                  rules={selectedOrder.pricing_rules}
+                    rules={selectedOrder.pricing_rules}
                   />
                 </div>
 

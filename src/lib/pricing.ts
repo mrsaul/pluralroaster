@@ -276,8 +276,12 @@ export function recalcOrderFromItems(input: {
   items: StoredOrderItem[];
   rules?: TierRules;
   discountPercent?: number;
+  /** orders.discount_percent as stored; kept when no coffee row is left to carry a rate. */
+  storedDiscountPercent?: number;
   free: boolean;
 }): {
+  /** Value to write to orders.discount_percent. */
+  discountPercent: number;
   breakdown: OrderBreakdown;
   deliveryRow: ReturnType<typeof deliveryRowFor>;
   totalKg: number;
@@ -290,8 +294,10 @@ export function recalcOrderFromItems(input: {
     discountPercent: input.discountPercent,
     delivery: { kind: "auto", free: input.free },
   });
+  const hasCoffee = input.items.some((i) => i.kind !== "service");
   return {
     breakdown,
+    discountPercent: hasCoffee ? breakdown.coffee.discountPercent : (input.storedDiscountPercent ?? 0),
     deliveryRow: deliveryRowFor(breakdown),
     totalKg: breakdown.coffee.kg,
     totalPrice: breakdown.totalHT,
