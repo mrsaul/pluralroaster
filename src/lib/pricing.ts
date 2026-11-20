@@ -207,6 +207,7 @@ export function orderToBreakdown(order: Order): OrderBreakdown {
   return computeOrderBreakdown({
     coffeeLines: order.coffeeLines,
     discountPercent: order.discountPercent,
+    ...(order.pricingRules ? { rules: order.pricingRules } : {}),
     delivery: order.delivery ? { kind: "stored", ...order.delivery } : { kind: "none" },
   });
 }

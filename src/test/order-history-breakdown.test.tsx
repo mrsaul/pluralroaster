@@ -30,6 +30,7 @@ const baseOrder: Order = {
   status: "delivered",
   createdAt: "2026-03-14",
   discountPercent: 10,
+  pricingRules: null,
   coffeeLines: [{ pricePerKg: 28, quantityKg: 30, vatRate: 5.5 }],
   delivery: null,
 };
