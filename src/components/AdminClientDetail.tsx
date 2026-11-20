@@ -16,6 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { describeRules, tierRulesFromRow } from "@/lib/tierRules";
 import { format, parseISO } from "date-fns";
 import { ORDER_STATUS_LABEL, normalizeOrderStatus } from "@/lib/orderStatuses";
 import { fr } from "date-fns/locale";
@@ -50,8 +51,16 @@ type PricingTierOption = {
   id: string;
   name: string;
   product_discount_percent: number;
-  delivery_discount_percent: number;
+  kg_discount_percent?: number | null;
+  bag_discount_percent?: number | null;
+  volume_threshold_kg?: number | null;
+  volume_kg_discount_percent?: number | null;
 };
+
+function tierSummaryText(t: PricingTierOption): string {
+  const text = describeRules(tierRulesFromRow(t));
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "Aucune remise";
+}
 
 type ClientOrderItem = {
   id: string;
@@ -157,7 +166,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   useEffect(() => {
     if (!open) return;
     setSellsyClientId(client?.sellsy_client_id ?? "");
-    supabase.from("pricing_tiers").select("id, name, product_discount_percent, delivery_discount_percent").eq("is_active", true).order("name")
+    supabase.from("pricing_tiers").select("id, name, product_discount_percent, kg_discount_percent, bag_discount_percent, volume_threshold_kg, volume_kg_discount_percent").eq("is_active", true).order("name")
       .then(({ data }) => setTierOptions((data ?? []) as PricingTierOption[]));
   }, [open, client?.id]);
 
@@ -512,7 +521,6 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                         )}
                       >
                         {t.name}
-                        {t.product_discount_percent > 0 && ` (${t.product_discount_percent}%)`}
                       </button>
                     ))}
                   </div>
@@ -521,11 +529,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                     if (!sel) return null;
                     return (
                       <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                        {sel.product_discount_percent > 0 && <span>-{sel.product_discount_percent} % sur le café</span>}
-                        {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
-                        {sel.delivery_discount_percent > 0 && (
-                          <span>{sel.delivery_discount_percent === 100 ? "Livraison offerte" : `-${sel.delivery_discount_percent} % sur la livraison`}</span>
-                        )}
+                        {tierSummaryText(sel)}
                       </div>
                     );
                   })()}

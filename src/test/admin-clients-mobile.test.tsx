@@ -141,4 +141,18 @@ describe("Client window on phones", () => {
     expect(save.parentElement!.className).toMatch(/\bsticky\b/);
     expect(save.parentElement!.className).toMatch(/\bbottom-0\b/);
   });
+
+  it("describes the selected tier with its rules and never mentions delivery", async () => {
+    tableRows.pricing_tiers = [{
+      id: "t1", name: "AMULETTE", product_discount_percent: 5, delivery_discount_percent: 100,
+      kg_discount_percent: 5, bag_discount_percent: 5, volume_threshold_kg: 20, volume_kg_discount_percent: 10,
+    }];
+    render(<AdminClientDetail client={client({ pricing_tier_id: "t1", pricing_tier: "AMULETTE" })} open onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    const chip = await screen.findByRole("button", { name: "AMULETTE" });
+    expect(chip).toBeInTheDocument();
+    expect(screen.getByText("Café au kg −5 % · dès 20 kg −10 % · sachets −5 %")).toBeInTheDocument();
+    const info = screen.getByText("Café au kg −5 % · dès 20 kg −10 % · sachets −5 %").parentElement!;
+    expect(within(info).queryByText(/livraison/i)).toBeNull();
+    expect(screen.queryByText(/Livraison offerte|sur la livraison/)).toBeNull();
+  });
 });

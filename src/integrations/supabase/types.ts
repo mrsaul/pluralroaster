@@ -1053,6 +1053,10 @@ export type Database = {
         Row: {
           created_at: string
           delivery_discount_percent: number
+          kg_discount_percent: number
+          bag_discount_percent: number
+          volume_threshold_kg: number | null
+          volume_kg_discount_percent: number | null
           description: string | null
           id: string
           is_active: boolean
@@ -1063,6 +1067,10 @@ export type Database = {
         Insert: {
           created_at?: string
           delivery_discount_percent?: number
+          kg_discount_percent?: number
+          bag_discount_percent?: number
+          volume_threshold_kg?: number | null
+          volume_kg_discount_percent?: number | null
           description?: string | null
           id?: string
           is_active?: boolean
@@ -1073,6 +1081,10 @@ export type Database = {
         Update: {
           created_at?: string
           delivery_discount_percent?: number
+          kg_discount_percent?: number
+          bag_discount_percent?: number
+          volume_threshold_kg?: number | null
+          volume_kg_discount_percent?: number | null
           description?: string | null
           id?: string
           is_active?: boolean

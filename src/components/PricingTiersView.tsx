@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2, Bike, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { describeRules, tierRulesFromRow } from "@/lib/tierRules";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 import {
@@ -27,6 +27,10 @@ export type PricingTier = {
   description: string | null;
   product_discount_percent: number;
   delivery_discount_percent: number;
+  kg_discount_percent?: number | null;
+  bag_discount_percent?: number | null;
+  volume_threshold_kg?: number | null;
+  volume_kg_discount_percent?: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -35,14 +39,30 @@ export type PricingTier = {
 type TierFormData = {
   name: string;
   description: string;
-  productDiscount: number;
-  deliveryDiscount: number;
+  /** Percent fields are kept as text so the step fields can be empty. */
+  kgDiscount: string;
+  bagDiscount: string;
+  thresholdKg: string;
+  kgAbove: string;
   isActive: boolean;
 };
 
 const TIER_FORM_DEFAULT: TierFormData = {
-  name: "", description: "", productDiscount: 0, deliveryDiscount: 0, isActive: true,
+  name: "", description: "", kgDiscount: "0", bagDiscount: "0", thresholdKg: "", kgAbove: "", isActive: true,
 };
+
+const parseNum = (v: string | undefined): number | null => {
+  if (v === undefined || v.trim() === "") return null;
+  const n = Number(v.replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const tierSummary = (tier: PricingTier): string => {
+  const text = describeRules(tierRulesFromRow(tier));
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "Aucune remise";
+};
+
+const NO_STEP_ERROR = "Le seuil (kg) et la remise au-delà vont ensemble : renseignez les deux, ou laissez-les vides.";
 
 export function PricingTiersView() {
   const { toast } = useToast();
@@ -56,7 +76,16 @@ export function PricingTiersView() {
   // Dynamic draft key: per-tier for edits, fixed for create
   const draftKey = editTier ? `pricing-tier-edit:${editTier.id}` : "pricing-tier-create";
   const draftDefault = editTier
-    ? { name: editTier.name, description: editTier.description ?? "", productDiscount: editTier.product_discount_percent, deliveryDiscount: editTier.delivery_discount_percent, isActive: editTier.is_active }
+    ? (() => {
+        const r = tierRulesFromRow(editTier);
+        return {
+          name: editTier.name, description: editTier.description ?? "",
+          kgDiscount: String(r.kg), bagDiscount: String(r.bag),
+          thresholdKg: r.thresholdKg != null ? String(r.thresholdKg) : "",
+          kgAbove: r.kgAbove != null ? String(r.kgAbove) : "",
+          isActive: editTier.is_active,
+        };
+      })()
     : TIER_FORM_DEFAULT;
 
   const {
@@ -68,11 +97,19 @@ export function PricingTiersView() {
     showBanner: showDraftBanner,
   } = useDraftPersistence<TierFormData>(draftKey, draftDefault);
 
-  const { name, description, productDiscount, deliveryDiscount, isActive } = form;
+  const { name, description, isActive } = form;
+  // Drafts saved before the rules existed lack these keys
+  const kgDiscount = form.kgDiscount ?? "0";
+  const bagDiscount = form.bagDiscount ?? "0";
+  const thresholdKg = form.thresholdKg ?? "";
+  const kgAbove = form.kgAbove ?? "";
+  const [stepError, setStepError] = useState<string | null>(null);
   const setName = (v: string) => setForm(p => ({ ...p, name: v }));
   const setDescription = (v: string) => setForm(p => ({ ...p, description: v }));
-  const setProductDiscount = (v: number) => setForm(p => ({ ...p, productDiscount: v }));
-  const setDeliveryDiscount = (v: number) => setForm(p => ({ ...p, deliveryDiscount: v }));
+  const setField = (k: "kgDiscount" | "bagDiscount" | "thresholdKg" | "kgAbove", v: string) => {
+    setStepError(null);
+    setForm(p => ({ ...p, [k]: v }));
+  };
   const setIsActive = (v: boolean) => setForm(p => ({ ...p, isActive: v }));
 
   const loadTiers = useCallback(async () => {
@@ -93,7 +130,7 @@ export function PricingTiersView() {
 
   useEffect(() => { void loadTiers(); }, [loadTiers]);
 
-  const resetForm = () => discardDraft();
+  const resetForm = () => { setStepError(null); discardDraft(); };
 
   const openEdit = (tier: PricingTier) => {
     // Setting editTier changes the draftKey, which triggers hook re-init
@@ -111,13 +148,32 @@ export function PricingTiersView() {
       toast({ title: "Le nom est obligatoire", variant: "destructive" });
       return;
     }
+    const kg = parseNum(kgDiscount) ?? 0;
+    const bag = parseNum(bagDiscount) ?? 0;
+    const threshold = parseNum(thresholdKg);
+    const above = parseNum(kgAbove);
+    const inPercent = (n: number) => Number.isFinite(n) && n >= 0 && n <= 100;
+    if (!inPercent(kg) || !inPercent(bag) || (above !== null && !inPercent(above))) {
+      setStepError("Les remises doivent être comprises entre 0 et 100 %.");
+      return;
+    }
+    if ((threshold === null) !== (above === null) || (threshold !== null && !(threshold > 0))) {
+      setStepError(NO_STEP_ERROR);
+      return;
+    }
+    setStepError(null);
     setSaving(true);
     try {
+      // product_discount_percent mirrors the kg rate for older app versions;
+      // delivery_discount_percent is left untouched (no effect on pricing).
       const payload = {
         name: name.trim(),
         description: description.trim() || null,
-        product_discount_percent: productDiscount,
-        delivery_discount_percent: deliveryDiscount,
+        kg_discount_percent: kg,
+        bag_discount_percent: bag,
+        volume_threshold_kg: threshold,
+        volume_kg_discount_percent: above,
+        product_discount_percent: kg,
         is_active: isActive,
       };
 
@@ -193,19 +249,7 @@ export function PricingTiersView() {
                     </Badge>
                   </div>
                   {tier.description && <p className="text-xs text-muted-foreground break-words">{tier.description}</p>}
-                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    {tier.product_discount_percent > 0 && (
-                      <Badge variant="secondary" className="gap-1">
-                        -{tier.product_discount_percent} % café
-                      </Badge>
-                    )}
-                    {tier.delivery_discount_percent > 0 && (
-                      <Badge variant="secondary" className="gap-1">
-                        <Bike className="w-3 h-3" />
-                        {tier.delivery_discount_percent === 100 ? "Livraison offerte" : `-${tier.delivery_discount_percent} % livraison`}
-                      </Badge>
-                    )}
-                  </div>
+                  <p className="text-xs text-foreground break-words pt-0.5">{tierSummary(tier)}</p>
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <button
@@ -235,8 +279,7 @@ export function PricingTiersView() {
             <TableRow className="bg-muted/50 hover:bg-muted/50">
               <TableHead>Nom</TableHead>
               <TableHead>Description</TableHead>
-              <TableHead className="text-center">Remise produits</TableHead>
-              <TableHead className="text-center">Remise livraison</TableHead>
+              <TableHead>Remises</TableHead>
               <TableHead className="text-center">Statut</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -244,11 +287,11 @@ export function PricingTiersView() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Chargement…</TableCell>
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Chargement…</TableCell>
               </TableRow>
             ) : tiers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   Aucun palier tarifaire. Créez-en un pour commencer.
                 </TableCell>
               </TableRow>
@@ -257,25 +300,7 @@ export function PricingTiersView() {
                 <TableRow key={tier.id} className="hover:bg-muted/30">
                   <TableCell className="font-medium text-foreground">{tier.name}</TableCell>
                   <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{tier.description ?? "—"}</TableCell>
-                  <TableCell className="text-center">
-                    {tier.product_discount_percent > 0 ? (
-                      <Badge variant="secondary" className="gap-1">
-                        -{tier.product_discount_percent} % café
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {tier.delivery_discount_percent > 0 ? (
-                      <Badge variant="secondary" className="gap-1">
-                        <Bike className="w-3 h-3" />
-                        {tier.delivery_discount_percent === 100 ? "Offerte" : `-${tier.delivery_discount_percent} %`}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    )}
-                  </TableCell>
+                  <TableCell className="text-sm text-foreground">{tierSummary(tier)}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant={tier.is_active ? "default" : "secondary"} className="text-[10px]">
                       {tier.is_active ? "Actif" : "Inactif"}
@@ -327,56 +352,37 @@ export function PricingTiersView() {
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Description</label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. -30 % sur tous les produits + livraison offerte" rows={2} />
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. Restaurants partenaires" rows={2} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Remise produits (%)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={productDiscount}
-                  onChange={(e) => setProductDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
-                />
+                <label htmlFor="tier-kg" className="text-sm font-medium text-foreground mb-1.5 block">Remise café au kg (%)</label>
+                <Input id="tier-kg" type="number" min={0} max={100} step="any" value={kgDiscount} onChange={(e) => setField("kgDiscount", e.target.value)} />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Remise livraison (%)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={deliveryDiscount}
-                  onChange={(e) => setDeliveryDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">100 % = livraison offerte</p>
+                <label htmlFor="tier-bag" className="text-sm font-medium text-foreground mb-1.5 block">Remise sachets (%)</label>
+                <Input id="tier-bag" type="number" min={0} max={100} step="any" value={bagDiscount} onChange={(e) => setField("bagDiscount", e.target.value)} />
+                <p className="text-[11px] text-muted-foreground mt-1">Sachets de 150 g et 250 g</p>
               </div>
+            </div>
+            <div className="space-y-2 rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Palier de volume (optionnel) : une remise plus forte sur le café au kg dès un certain volume par commande.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="tier-threshold" className="text-sm font-medium text-foreground mb-1.5 block">À partir de (kg)</label>
+                  <Input id="tier-threshold" type="number" min={0} step="any" value={thresholdKg} onChange={(e) => setField("thresholdKg", e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="tier-above" className="text-sm font-medium text-foreground mb-1.5 block">Remise au kg au-delà (%)</label>
+                  <Input id="tier-above" type="number" min={0} max={100} step="any" value={kgAbove} onChange={(e) => setField("kgAbove", e.target.value)} />
+                </div>
+              </div>
+              {stepError && <p role="alert" className="text-xs text-destructive">{stepError}</p>}
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={isActive} onCheckedChange={setIsActive} />
               <label className="text-sm text-foreground">Actif</label>
             </div>
-
-            {/* Preview */}
-            {(productDiscount > 0 || deliveryDiscount > 0) && (
-              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1">
-                <p className="text-xs font-medium text-foreground">Aperçu (sur une commande de 100 €) :</p>
-                <div className="text-sm text-muted-foreground space-y-0.5">
-                  <p>Subtotal: €100.00</p>
-                  {productDiscount > 0 && (
-                    <p className="text-primary">Discount ({productDiscount}%): −€{(100 * productDiscount / 100).toFixed(2)}</p>
-                  )}
-                  {deliveryDiscount > 0 && (
-                    <p className="text-primary">
-                      Livraison : {deliveryDiscount === 100 ? "offerte" : `-${deliveryDiscount} %`}
-                    </p>
-                  )}
-                  <p className="font-medium text-foreground">
-                    Total: €{(100 - 100 * productDiscount / 100).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => { setShowCreate(false); setEditTier(null); resetForm(); }}>Annuler</Button>

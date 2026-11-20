@@ -6,8 +6,10 @@ import type { StockListItem } from "@/services/stock";
 
 // ── Data stubs ────────────────────────────────────────────────────────────────
 const tiers = [
-  { id: "t1", name: "100 kilos", description: "Gros volumes", product_discount_percent: 10, delivery_discount_percent: 0, is_active: true },
-  { id: "t2", name: "30 kilos", description: null, product_discount_percent: 5, delivery_discount_percent: 100, is_active: false },
+  { id: "t1", name: "100 kilos", description: "Gros volumes", product_discount_percent: 10, delivery_discount_percent: 0,
+    kg_discount_percent: 10, bag_discount_percent: 0, volume_threshold_kg: null, volume_kg_discount_percent: null, is_active: true },
+  { id: "t2", name: "30 kilos", description: null, product_discount_percent: 5, delivery_discount_percent: 100,
+    kg_discount_percent: 5, bag_discount_percent: 5, volume_threshold_kg: 20, volume_kg_discount_percent: 10, is_active: false },
 ];
 const users = [
   { userId: "u1", email: "camille@amulette.example", fullName: "Camille Dupont", role: "user", status: "active",
@@ -107,8 +109,9 @@ describe("Tarifs on phones", () => {
     const cards = within(list).getAllByRole("listitem");
     expect(cards).toHaveLength(2);
     expect(within(cards[0]).getByText("100 kilos")).toBeInTheDocument();
-    expect(within(cards[0]).getByText(/-10 % café/)).toBeInTheDocument();
-    expect(within(cards[1]).getByText(/Livraison offerte/)).toBeInTheDocument();
+    expect(within(cards[0]).getByText("Café au kg −10 %")).toBeInTheDocument();
+    expect(within(cards[1]).getByText("Café au kg −5 % · dès 20 kg −10 % · sachets −5 %")).toBeInTheDocument();
+    expect(within(list).queryByText(/livraison/i)).toBeNull();
     expect(within(cards[1]).getByText("Inactif")).toBeInTheDocument();
     expect(within(cards[0]).getByRole("button", { name: "Modifier 100 kilos" })).toBeInTheDocument();
     expect(within(cards[0]).getByRole("button", { name: "Supprimer 100 kilos" })).toBeInTheDocument();
