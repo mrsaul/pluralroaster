@@ -1693,6 +1693,10 @@ async function handleCreateInvoice(
   //   `tax_id` must be a NUMBER when present
   const orderDiscountPct = Number((order as any).discount_percent ?? 0);
   console.log(`[invoice] order discount: ${orderDiscountPct}%`);
+  // Coffee lines carry the rate they were charged (tier rules); older orders have
+  // null and fall back to the order's discount. Service rows never use this.
+  const coffeeLinePct = (it: any): number =>
+    it.line_discount_percent != null ? Number(it.line_discount_percent) : orderDiscountPct;
   console.log(`[invoice] building rows for ${orderItems.length} order items`);
   const items: JsonRecord[] = orderItems.map((item: any) => {
     const product = item.products ?? {};
@@ -1754,9 +1758,10 @@ async function handleCreateInvoice(
       }
 
       const baseUnitAmount = Number(item.price_per_kg ?? 0);
+      const linePct = coffeeLinePct(item);
       const discountedUnitAmount =
-        orderDiscountPct > 0
-          ? discountedUnit(baseUnitAmount, orderDiscountPct)
+        linePct > 0
+          ? discountedUnit(baseUnitAmount, linePct)
           : baseUnitAmount;
 
       const row: JsonRecord = {
@@ -1767,15 +1772,15 @@ async function handleCreateInvoice(
           ? String(baseUnitAmount)
           : String(discountedUnitAmount),
         quantity: String(item.quantity ?? 1),
-        ...(SELLSY_DISCOUNT_MODE === 'field' && orderDiscountPct > 0
-          ? { discount: orderDiscountPct, discount_type: 'percent' }
+        ...(SELLSY_DISCOUNT_MODE === 'field' && linePct > 0
+          ? { discount: linePct, discount_type: 'percent' }
           : {}),
       };
       // tax_id must be a number (integer) when present, not a string
       if (product.sellsy_tax_id) {
         row.tax_id = Number(product.sellsy_tax_id);
       }
-      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} declination_id=${declinationId} qty=${row.quantity} unit=${row.unit_amount} discount=${orderDiscountPct > 0 ? `${orderDiscountPct}% (${SELLSY_DISCOUNT_MODE})` : 'none'}`);
+      console.log(`[invoice] catalog row: product_sellsy_id=${product.sellsy_id} declination_id=${declinationId} qty=${row.quantity} unit=${row.unit_amount} discount=${linePct > 0 ? `${linePct}% (${SELLSY_DISCOUNT_MODE})` : 'none'}`);
       return row;
     }
 
@@ -1783,8 +1788,8 @@ async function handleCreateInvoice(
     // Coffee gets the tier discount (same rounding as the app); service rows never do.
     const singleBase = Number(item.price_per_kg ?? 0);
     const singleIsService = item.kind === "service" || product.kind === "service";
-    const singleUnit = !singleIsService && orderDiscountPct > 0
-      ? discountedUnit(singleBase, orderDiscountPct)
+    const singleUnit = !singleIsService && coffeeLinePct(item) > 0
+      ? discountedUnit(singleBase, coffeeLinePct(item))
       : singleBase;
     console.log(`[invoice] single row: "${item.product_name}" qty=${item.quantity} unit=${singleUnit}`);
     return {

@@ -106,12 +106,13 @@ function itemVatRate(product: ItemProduct): number {
   return product?.kind === "service" ? DEFAULT_SERVICE_VAT_RATE : DEFAULT_COFFEE_VAT_RATE;
 }
 /** Pure VAT-math input for an order_items row (services are the Loberz delivery: net price, 20 %). */
-function toVatItem(item: { kind?: string | null; quantity: number; price_per_kg: number; products: ItemProduct }): VatItem {
+function toVatItem(item: { kind?: string | null; quantity: number; price_per_kg: number; line_discount_percent?: number | null; products: ItemProduct }): VatItem {
   return {
     kind: item.kind ?? item.products?.kind ?? null,
     quantity: Number(item.quantity),
     price_per_kg: Number(item.price_per_kg),
     vat_rate: item.products?.sellsy_tax_rate ?? null,
+    line_discount_percent: item.line_discount_percent ?? null,
   };
 }
 function frRate(rate: number): string { return rate.toLocaleString("fr-FR", { maximumFractionDigits: 2 }); }
@@ -122,6 +123,7 @@ type OrderItem = {
   product_name: string | null;
   product_sku: string | null;
   price_per_kg: number;
+  line_discount_percent?: number | null;
   quantity: number;
   size_label: string | null;
   products: ItemProduct;
@@ -155,7 +157,7 @@ type YearSummaryOrder = {
   total_price: number;
   discount_percent: number | null;
   invoicing_status: string;
-  order_items: Pick<OrderItem, "kind" | "price_per_kg" | "quantity" | "products">[];
+  order_items: Pick<OrderItem, "kind" | "price_per_kg" | "line_discount_percent" | "quantity" | "products">[];
   companies: { id: string; name: string | null } | null;
 };
 function emptyCells(n: number): string[] { return Array(n).fill(""); }
@@ -174,7 +176,7 @@ async function fetchOrdersForMonth(
     .select(`
       id, user_id, company_id, delivery_date, total_price, discount_percent, status,
       sellsy_id, sellsy_invoice_id, invoicing_status, notes,
-      order_items ( kind, product_name, product_sku, price_per_kg, quantity, size_label, products ( sellsy_tax_rate, kind ) ),
+      order_items ( kind, product_name, product_sku, price_per_kg, line_discount_percent, quantity, size_label, products ( sellsy_tax_rate, kind ) ),
       companies ( id, name, email )
     `)
     .in("status", ["received", "approved", "packaging", "ready_for_delivery", "delivered"])
@@ -241,7 +243,7 @@ async function fetchAllOrdersForYear(
 ): Promise<YearSummaryOrder[]> {
   const { data, error } = await (db as any)
     .from("orders")
-    .select(`id, user_id, company_id, delivery_date, total_price, discount_percent, invoicing_status, order_items ( kind, price_per_kg, quantity, products ( sellsy_tax_rate, kind ) ), companies ( id, name )`)
+    .select(`id, user_id, company_id, delivery_date, total_price, discount_percent, invoicing_status, order_items ( kind, price_per_kg, line_discount_percent, quantity, products ( sellsy_tax_rate, kind ) ), companies ( id, name )`)
     .in("status", ["received", "approved", "packaging", "ready_for_delivery", "delivered"])
     .gte("delivery_date", `${year}-01-01`)
     .lte("delivery_date", `${year}-12-31`);

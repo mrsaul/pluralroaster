@@ -24,6 +24,7 @@ type OrderItem = {
   quantity: number;
   price_per_kg: number;
   kind?: string | null;
+  line_discount_percent?: number | null;
   products?: { sellsy_tax_rate: number | null } | null;
 };
 
@@ -57,6 +58,7 @@ function toVatItem(item: OrderItem): VatItem {
     quantity: Number(item.quantity),
     price_per_kg: Number(item.price_per_kg),
     vat_rate: item.products?.sellsy_tax_rate ?? null,
+    line_discount_percent: item.line_discount_percent ?? null,
   };
 }
 
@@ -83,9 +85,10 @@ function orderTable(items: OrderItem[], discountPercent: number): string {
       const total = lineNetHT(toVatItem(item), discountPercent).toFixed(2);
       const service = isServiceItem(item);
       const qtyCell = service ? "1" : `${Number(item.quantity).toFixed(2)} kg`;
+      const linePct = item.line_discount_percent != null ? Number(item.line_discount_percent) : discountPercent;
       const unitCell = service
         ? "—"
-        : `€${Number(item.price_per_kg).toFixed(2)}/kg${discountPercent > 0 ? ` (-${fmtRate(discountPercent)}%)` : ""}`;
+        : `€${Number(item.price_per_kg).toFixed(2)}/kg${linePct > 0 ? ` (-${fmtRate(linePct)}%)` : ""}`;
       return `
         <tr>
           <td style="padding:6px 12px;border-bottom:1px solid #eee">${item.product_name}</td>
@@ -158,7 +161,7 @@ Deno.serve(async (req: Request) => {
     const db = createClient(supabaseUrl, serviceKey);
 
     const [{ data: itemsRaw }, { data: profileRaw }, { data: companyRaw }] = await Promise.all([
-      db.from("order_items").select("product_name,product_sku,quantity,price_per_kg,kind,products(sellsy_tax_rate)").eq("order_id", orderId),
+      db.from("order_items").select("product_name,product_sku,quantity,price_per_kg,kind,line_discount_percent,products(sellsy_tax_rate)").eq("order_id", orderId),
       userId
         ? db.from("profiles").select("id,full_name,email").eq("id", userId).single()
         : Promise.resolve({ data: null }),
