@@ -101,4 +101,35 @@ describe("Tarifs form", () => {
     expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
     expect(writes).toHaveLength(0);
   });
+
+  it("keeps the tier's rates when restoring a draft saved before the rules existed", async () => {
+    localStorage.setItem("draft:pricing-tier-edit:t3:__anon__", JSON.stringify({
+      savedAt: "2026-11-01T10:00:00Z",
+      data: { name: "Ancien", description: "", productDiscount: "10", deliveryDiscount: 0, isActive: true },
+    }));
+    tiers.push({ id: "t3", name: "Ancien", description: null, product_discount_percent: 10, delivery_discount_percent: 0,
+      kg_discount_percent: null, bag_discount_percent: null, volume_threshold_kg: null, volume_kg_discount_percent: null, is_active: true } as any);
+    try {
+      render(<PricingTiersView />);
+      await screen.findByRole("list", { name: "Paliers tarifaires" });
+      fireEvent.click(screen.getAllByRole("button", { name: "Modifier Ancien" })[0]);
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+      await waitFor(() => expect(writes).toHaveLength(1));
+      expect(writes[0].payload).toMatchObject({ kg_discount_percent: 10, bag_discount_percent: 10, product_discount_percent: 10 });
+    } finally {
+      tiers.pop();
+    }
+  });
+
+  it("shows a rate range error next to the rate fields, not in the step box", async () => {
+    const dialog = await openCreate();
+    type(within(dialog).getByPlaceholderText("ex. Palier VIP"), "X");
+    type(within(dialog).getByLabelText("Remise café au kg (%)"), "150");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Créer le palier" }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent(/0 et 100/);
+    expect(alert.closest("[data-step-box]")).toBeNull();
+    expect(writes).toHaveLength(0);
+  });
 });

@@ -98,16 +98,20 @@ export function PricingTiersView() {
   } = useDraftPersistence<TierFormData>(draftKey, draftDefault);
 
   const { name, description, isActive } = form;
-  // Drafts saved before the rules existed lack these keys
-  const kgDiscount = form.kgDiscount ?? "0";
-  const bagDiscount = form.bagDiscount ?? "0";
+  // Drafts saved before the rules existed lack these keys: fall back to the
+  // draft's old single rate, else the tier's current rates (never to 0).
+  const legacyRate = (form as { productDiscount?: number | string }).productDiscount;
+  const kgDiscount = form.kgDiscount ?? (legacyRate !== undefined ? String(legacyRate) : draftDefault.kgDiscount);
+  const bagDiscount = form.bagDiscount ?? (legacyRate !== undefined ? String(legacyRate) : draftDefault.bagDiscount);
   const thresholdKg = form.thresholdKg ?? "";
   const kgAbove = form.kgAbove ?? "";
   const [stepError, setStepError] = useState<string | null>(null);
+  const [rateError, setRateError] = useState<string | null>(null);
   const setName = (v: string) => setForm(p => ({ ...p, name: v }));
   const setDescription = (v: string) => setForm(p => ({ ...p, description: v }));
   const setField = (k: "kgDiscount" | "bagDiscount" | "thresholdKg" | "kgAbove", v: string) => {
     setStepError(null);
+    setRateError(null);
     setForm(p => ({ ...p, [k]: v }));
   };
   const setIsActive = (v: boolean) => setForm(p => ({ ...p, isActive: v }));
@@ -130,7 +134,7 @@ export function PricingTiersView() {
 
   useEffect(() => { void loadTiers(); }, [loadTiers]);
 
-  const resetForm = () => { setStepError(null); discardDraft(); };
+  const resetForm = () => { setStepError(null); setRateError(null); discardDraft(); };
 
   const openEdit = (tier: PricingTier) => {
     // Setting editTier changes the draftKey, which triggers hook re-init
@@ -153,7 +157,11 @@ export function PricingTiersView() {
     const threshold = parseNum(thresholdKg);
     const above = parseNum(kgAbove);
     const inPercent = (n: number) => Number.isFinite(n) && n >= 0 && n <= 100;
-    if (!inPercent(kg) || !inPercent(bag) || (above !== null && !inPercent(above))) {
+    if (!inPercent(kg) || !inPercent(bag)) {
+      setRateError("Les remises doivent être comprises entre 0 et 100 %.");
+      return;
+    }
+    if (above !== null && !inPercent(above)) {
       setStepError("Les remises doivent être comprises entre 0 et 100 %.");
       return;
     }
@@ -162,6 +170,7 @@ export function PricingTiersView() {
       return;
     }
     setStepError(null);
+    setRateError(null);
     setSaving(true);
     try {
       // product_discount_percent mirrors the kg rate for older app versions;
@@ -365,7 +374,8 @@ export function PricingTiersView() {
                 <p className="text-[11px] text-muted-foreground mt-1">Sachets de 150 g et 250 g</p>
               </div>
             </div>
-            <div className="space-y-2 rounded-lg border border-border p-3">
+            {rateError && <p role="alert" className="text-xs text-destructive -mt-2">{rateError}</p>}
+            <div data-step-box className="space-y-2 rounded-lg border border-border p-3">
               <p className="text-xs text-muted-foreground">Palier de volume (optionnel) : une remise plus forte sur le café au kg dès un certain volume par commande.</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
