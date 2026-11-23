@@ -83,7 +83,6 @@ type OrderDraftForm = {
   deliveryDateStr: string | null;
   notes: string;
   lineItems: LineItem[];
-  clientTier: ClientTier | null;
 };
 
 const ORDER_DRAFT_DEFAULT: OrderDraftForm = {
@@ -91,8 +90,23 @@ const ORDER_DRAFT_DEFAULT: OrderDraftForm = {
   deliveryDateStr: null,
   notes: "",
   lineItems: [],
-  clientTier: null,
 };
+
+/** The client's tier as it is now. Never kept in the draft: a saved draft must not freeze old rates. */
+async function fetchCompanyTier(companyId: string): Promise<ClientTier | null> {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("pricing_tiers(name, product_discount_percent, kg_discount_percent, bag_discount_percent, volume_threshold_kg, volume_kg_discount_percent)")
+    .eq("id", companyId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Client introuvable");
+  return (data as unknown as { pricing_tiers: ClientTier | null }).pricing_tiers ?? null;
+}
+
+const tierKey = (t: ClientTier | null) => t
+  ? JSON.stringify([t.name, t.kg_discount_percent, t.bag_discount_percent, t.product_discount_percent, t.volume_threshold_kg, t.volume_kg_discount_percent])
+  : "";
 
 interface CreateOrderDialogProps {
   open: boolean;
@@ -133,7 +147,30 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     showBanner: showDraftBanner,
   } = useDraftPersistence<OrderDraftForm>("create-order", ORDER_DRAFT_DEFAULT);
 
-  const { selectedCompanyId, deliveryDateStr, notes, lineItems, clientTier } = form;
+  const { selectedCompanyId, deliveryDateStr, notes, lineItems } = form;
+  const [clientTier, setClientTier] = useState<ClientTier | null>(null);
+  const [tierStatus, setTierStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+
+  // Always price with the client's current tier, including when a saved draft is restored
+  useEffect(() => {
+    setClientTier(null);
+    if (!open || !selectedCompanyId) { setTierStatus("idle"); return; }
+    let cancelled = false;
+    setTierStatus("loading");
+    fetchCompanyTier(selectedCompanyId)
+      .then((tier) => {
+        if (cancelled) return;
+        setClientTier(tier);
+        setTierStatus("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("[CreateOrderDialog] tier load failed:", err);
+        setTierStatus("error");
+        toast({ title: "Impossible de charger le palier du client", description: "Le total affiché peut être faux.", variant: "destructive" });
+      });
+    return () => { cancelled = true; };
+  }, [open, selectedCompanyId, toast]);
 
   // Derived dirty flag: form has meaningful content
   const isDirty = selectedCompanyId !== "" || deliveryDateStr !== null || lineItems.length > 0 || notes !== "";
@@ -242,19 +279,9 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
   const resetForm = useCallback(() => { discardDraft(); }, [discardDraft]);
 
-  // Load tier when client changes
-  const handleClientChange = useCallback(async (companyId: string) => {
-    setForm(p => ({ ...p, selectedCompanyId: companyId, clientTier: null }));
-    const client = clients.find((c) => c.company_id === companyId);
-    if (client?.pricing_tier_id) {
-      const { data } = await supabase
-        .from("pricing_tiers")
-        .select("name, product_discount_percent, kg_discount_percent, bag_discount_percent, volume_threshold_kg, volume_kg_discount_percent")
-        .eq("id", client.pricing_tier_id)
-        .single();
-      if (data) setForm(p => ({ ...p, clientTier: data as ClientTier }));
-    }
-  }, [clients, setForm]);
+  const handleClientChange = useCallback((companyId: string) => {
+    setForm(p => ({ ...p, selectedCompanyId: companyId }));
+  }, [setForm]);
 
   const handleSave = useCallback(async () => {
     if (!selectedCompanyId) { toast({ title: "Choisissez un client", variant: "destructive" }); return; }
@@ -267,6 +294,15 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
     setSaving(true);
     try {
+      // The total on screen must be the one saved: stop if the tier moved since it was loaded
+      const currentTier = await fetchCompanyTier(selectedCompanyId);
+      if (tierKey(currentTier) !== tierKey(clientTier)) {
+        setClientTier(currentTier);
+        setTierStatus("ready");
+        toast({ title: "Le palier du client a changé", description: "Vérifiez le nouveau total, puis validez à nouveau.", variant: "destructive" });
+        return;
+      }
+
       // Look up the Loberz product before creating anything, so a missing product leaves no orphan order
       let loberzId: string | null = null;
       if (deliveryRow) {
@@ -394,7 +430,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           {/* Client */}
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Client</label>
-            <Select value={selectedCompanyId} onValueChange={handleClientChange}>
+            <Select value={selectedCompanyId} onValueChange={handleClientChange} disabled={saving}>
               <SelectTrigger><SelectValue placeholder="Choisir un client…" /></SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
@@ -407,6 +443,9 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
                 <span className="font-medium text-foreground">{clientTier.name}</span>
                 <span>{tierSummary}</span>
               </div>
+            )}
+            {tierStatus === "error" && (
+              <p role="alert" className="mt-1.5 text-xs text-destructive">Palier non chargé : le total affiché peut être faux.</p>
             )}
           </div>
 
@@ -562,7 +601,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
             <Button variant="outline" size="sm" onClick={() => { resetForm(); onOpenChange(false); }} disabled={saving}>
               Annuler
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
+            <Button size="sm" onClick={handleSave} disabled={saving || tierStatus === "loading"} className="gap-2">
               {saving ? "Creating…" : (
                 <>
                   <Plus className="w-4 h-4" /> Create Order
