@@ -31,6 +31,79 @@ BEGIN
   IF v IS DISTINCT FROM 0 THEN RAISE EXCEPTION 'FAIL: setup service stock row 0 got %', v; END IF;
 END $$;
 
+-- ── switch-over: orders the OLD rule deducted but no longer delivered ───────
+-- Order 5: ready_for_delivery with an order_delivered −4 row (delivered, then
+-- moved back before release). Order 6: approved, unpacked, same history.
+-- Inserted with stock_deducted_at null (INSERT does not fire the trigger), as
+-- they would be before the migration; A's 10 kg already reflect the old deduction.
+INSERT INTO public.orders (id, user_id, delivery_date, status) VALUES
+  ('f5a0c000-0000-4000-8000-000000000005', NULL, current_date, 'ready_for_delivery'),
+  ('f5a0c000-0000-4000-8000-000000000006', NULL, current_date, 'approved');
+INSERT INTO public.order_items (order_id, product_id, product_name, quantity, kind) VALUES
+  ('f5a0c000-0000-4000-8000-000000000005', 'f5a0c000-0000-4000-8000-0000000000a1', 'Test Stock A', 4, 'coffee'),
+  ('f5a0c000-0000-4000-8000-000000000006', 'f5a0c000-0000-4000-8000-0000000000a1', 'Test Stock A', 4, 'coffee');
+INSERT INTO public.roasted_stock_history (
+  stock_id, previous_quantity_kg, new_quantity_kg, delta_kg, change_type, order_id, note)
+SELECT s.id, 14, 10, -4, 'order_delivered', o.id, 'old rule'
+FROM public.roasted_stock s
+CROSS JOIN (VALUES ('f5a0c000-0000-4000-8000-000000000005'::uuid),
+                   ('f5a0c000-0000-4000-8000-000000000006'::uuid)) AS o(id)
+WHERE s.product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+
+SELECT public.stock_at_bagging_switch_over();
+
+DO $$
+DECLARE v numeric; n int; d5 timestamptz; d6 timestamptz;
+BEGIN
+  SELECT quantity_kg INTO v FROM public.roasted_stock
+  WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+  IF v IS DISTINCT FROM 10 THEN RAISE EXCEPTION 'FAIL: switch-over old-delivered A stock got %', v; END IF;
+  SELECT count(*) INTO n FROM public.roasted_stock_history
+  WHERE order_id IN ('f5a0c000-0000-4000-8000-000000000005', 'f5a0c000-0000-4000-8000-000000000006')
+    AND change_type <> 'order_delivered';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: switch-over old-delivered new history rows got %', n; END IF;
+  SELECT stock_deducted_at INTO d5 FROM public.orders WHERE id = 'f5a0c000-0000-4000-8000-000000000005';
+  SELECT stock_deducted_at INTO d6 FROM public.orders WHERE id = 'f5a0c000-0000-4000-8000-000000000006';
+  IF d5 IS NULL OR d6 IS NULL THEN
+    RAISE EXCEPTION 'FAIL: switch-over old-delivered stock_deducted_at got % / %', d5, d6;
+  END IF;
+END $$;
+
+-- Order 6: an unrelated edit changes nothing; bagging does not deduct again;
+-- unbagging gives +4 back once.
+UPDATE public.orders SET notes = 'edited' WHERE id = 'f5a0c000-0000-4000-8000-000000000006';
+UPDATE public.orders SET is_packed = true WHERE id = 'f5a0c000-0000-4000-8000-000000000006';
+
+DO $$
+DECLARE v numeric; n int;
+BEGIN
+  SELECT quantity_kg INTO v FROM public.roasted_stock
+  WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+  IF v IS DISTINCT FROM 10 THEN RAISE EXCEPTION 'FAIL: old-delivered edit + bag A stock got %', v; END IF;
+  SELECT count(*) INTO n FROM public.roasted_stock_history
+  WHERE order_id = 'f5a0c000-0000-4000-8000-000000000006' AND change_type <> 'order_delivered';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: old-delivered edit + bag history rows got %', n; END IF;
+END $$;
+
+UPDATE public.orders SET is_packed = false WHERE id = 'f5a0c000-0000-4000-8000-000000000006';
+
+DO $$
+DECLARE v numeric; n int; d numeric;
+BEGIN
+  SELECT quantity_kg INTO v FROM public.roasted_stock
+  WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+  IF v IS DISTINCT FROM 14 THEN RAISE EXCEPTION 'FAIL: old-delivered unbag A stock got %', v; END IF;
+  SELECT count(*), max(delta_kg) INTO n, d FROM public.roasted_stock_history
+  WHERE order_id = 'f5a0c000-0000-4000-8000-000000000006' AND change_type = 'order_unpacked';
+  IF n <> 1 OR d IS DISTINCT FROM 4 THEN
+    RAISE EXCEPTION 'FAIL: old-delivered unbag order_unpacked rows got % (delta %)', n, d;
+  END IF;
+END $$;
+
+-- Back to 10 kg for the cases below.
+UPDATE public.roasted_stock SET quantity_kg = 10
+WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+
 -- Order 1: 4 kg A, 3 kg B, 1 service line.
 INSERT INTO public.orders (id, user_id, delivery_date, status)
 VALUES ('f5a0c000-0000-4000-8000-000000000001', NULL, current_date, 'approved');
@@ -406,6 +479,12 @@ BEGIN
   SELECT count(*) INTO n FROM public.orders
   WHERE status = 'delivered' AND stock_deducted_at IS NULL;
   IF n <> 0 THEN RAISE EXCEPTION 'FAIL: switch-over delivered orders without stock_deducted_at got %', n; END IF;
+
+  SELECT count(*) INTO n FROM public.orders
+  WHERE status <> 'delivered'
+    AND public.order_is_bagged(status, is_packed)
+    AND stock_deducted_at IS NULL;
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: switch-over bagged open orders without stock_deducted_at got %', n; END IF;
 END $$;
 
 SELECT 'ALL STOCK TESTS PASSED' AS result;

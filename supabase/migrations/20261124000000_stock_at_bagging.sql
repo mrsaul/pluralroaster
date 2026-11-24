@@ -8,15 +8,17 @@
 -- 2. products.green_percent + roasting_settings.default_green_percent: green
 --    coffee to weigh = roasted × (1 + % / 100). Null on a product = default.
 -- 3. roasted_stock_history.change_type gains order_packed / order_unpacked / roasted.
--- 4. Trigger: BEFORE UPDATE on orders deducts on bagging / restores on unbagging
---    and sets NEW.stock_deducted_at itself (no second UPDATE, so no recursion).
+-- 4. Trigger: BEFORE UPDATE on orders deducts on bagging / restores on the
+--    bagged -> not bagged transition, and sets NEW.stock_deducted_at itself
+--    (no second UPDATE, so no recursion).
 --    BEFORE DELETE restores, except for delivered orders (history.order_id is
 --    ON DELETE SET NULL, so an AFTER trigger could no longer find this order's rows).
 --    Replaces trg_decrease_stock_on_delivery / decrease_stock_on_delivery().
 -- 5. RPCs: add_roasted_stock, set_green_percent, set_default_green_percent
 --    (admin or roaster, same check as update_stock_with_history).
--- 6. Switch-over: delivered orders are marked deducted without touching stock
---    (the old trigger already subtracted them); open bagged orders are deducted
+-- 6. Switch-over (stock_at_bagging_switch_over()): orders the old trigger
+--    already subtracted (delivered, or order_delivered history netting negative)
+--    are marked deducted without touching stock; open bagged orders are deducted
 --    once through the new trigger.
 
 -- ── 1. Columns and settings ─────────────────────────────────────────────────
@@ -226,7 +228,12 @@ BEGIN
       PERFORM public.deduct_order_stock(NEW.id);
       NEW.stock_deducted_at := now();
     END IF;
-  ELSIF OLD.stock_deducted_at IS NOT NULL THEN
+  ELSIF OLD.stock_deducted_at IS NOT NULL
+        AND public.order_is_bagged(OLD.status, OLD.is_packed) THEN
+    -- Restore on the bagged -> not bagged transition only. An order marked
+    -- deducted at switch-over while not bagged (old delivery, moved back) keeps
+    -- its deduction through unrelated edits; it is given back when it is next
+    -- bagged and unbagged, or deleted.
     PERFORM public.restore_order_stock(NEW.id);
     NEW.stock_deducted_at := NULL;
   END IF;
@@ -374,12 +381,30 @@ GRANT EXECUTE ON FUNCTION public.set_default_green_percent(numeric) TO authentic
 DROP TRIGGER IF EXISTS trg_decrease_stock_on_delivery ON public.orders;
 DROP FUNCTION IF EXISTS public.decrease_stock_on_delivery();
 
--- Delivered orders: already subtracted by the old trigger. Mark them deducted
--- without touching stock, before the new trigger exists. updated_at is kept as
--- is (the backfill is bookkeeping, not an edit of the order).
-DO $$
+DROP TRIGGER IF EXISTS trg_orders_stock_on_bagging ON public.orders;
+CREATE TRIGGER trg_orders_stock_on_bagging
+  BEFORE UPDATE OR DELETE ON public.orders
+  FOR EACH ROW
+  EXECUTE FUNCTION public.orders_stock_on_bagging();
+
+-- The switch-over, as a function so the test can run it again over its own
+-- fixtures. Idempotent: it only touches orders with stock_deducted_at null.
+-- 1. Orders the old rule already took out of stock: every delivered order, plus
+--    any order whose order_delivered history nets negative (delivered, then
+--    moved back before release; the old rule never gave it back). Marked
+--    deducted WITHOUT touching stock, with the stock trigger and the updated_at
+--    trigger off for that one statement (bookkeeping, not an edit).
+-- 2. Open orders bagged under the old rule but never deducted: deducted once
+--    through the trigger (the no-op SET fires it), with a NOTICE each.
+-- Not SECURITY DEFINER: only the table owner (migrations, tests) can run it.
+CREATE OR REPLACE FUNCTION public.stock_at_bagging_switch_over()
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 DECLARE
   v_has_updated_at_trigger boolean;
+  o record;
 BEGIN
   SELECT EXISTS (
     SELECT 1 FROM pg_trigger
@@ -388,33 +413,27 @@ BEGIN
       AND NOT tgisinternal
   ) INTO v_has_updated_at_trigger;
 
+  ALTER TABLE public.orders DISABLE TRIGGER trg_orders_stock_on_bagging;
   IF v_has_updated_at_trigger THEN
-    EXECUTE 'ALTER TABLE public.orders DISABLE TRIGGER update_orders_updated_at';
+    ALTER TABLE public.orders DISABLE TRIGGER update_orders_updated_at;
   END IF;
 
-  UPDATE public.orders
-  SET stock_deducted_at = updated_at
-  WHERE status = 'delivered'
-    AND stock_deducted_at IS NULL;
+  UPDATE public.orders ord
+  SET stock_deducted_at = ord.updated_at
+  WHERE ord.stock_deducted_at IS NULL
+    AND (ord.status = 'delivered'
+         OR ord.id IN (SELECT h.order_id
+                     FROM roasted_stock_history h
+                     WHERE h.change_type = 'order_delivered'
+                       AND h.order_id IS NOT NULL
+                     GROUP BY h.order_id
+                     HAVING sum(h.delta_kg) < 0));
 
+  ALTER TABLE public.orders ENABLE TRIGGER trg_orders_stock_on_bagging;
   IF v_has_updated_at_trigger THEN
-    EXECUTE 'ALTER TABLE public.orders ENABLE TRIGGER update_orders_updated_at';
+    ALTER TABLE public.orders ENABLE TRIGGER update_orders_updated_at;
   END IF;
-END $$;
 
-DROP TRIGGER IF EXISTS trg_orders_stock_on_bagging ON public.orders;
-CREATE TRIGGER trg_orders_stock_on_bagging
-  BEFORE UPDATE OR DELETE ON public.orders
-  FOR EACH ROW
-  EXECUTE FUNCTION public.orders_stock_on_bagging();
-
--- Open orders already bagged (packed or ready for delivery, not delivered):
--- under the old rule their coffee was never subtracted. Deduct once, through the
--- trigger (the no-op SET fires it; it sees bagged + not yet deducted).
-DO $$
-DECLARE
-  o record;
-BEGIN
   FOR o IN
     SELECT id
     FROM public.orders
@@ -426,4 +445,9 @@ BEGIN
     RAISE NOTICE 'stock deducted at switch-over for order %', o.id;
     UPDATE public.orders SET stock_deducted_at = NULL WHERE id = o.id;
   END LOOP;
-END $$;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.stock_at_bagging_switch_over() FROM PUBLIC, anon, authenticated;
+
+SELECT public.stock_at_bagging_switch_over();
