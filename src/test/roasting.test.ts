@@ -83,4 +83,13 @@ describe("roasting", () => {
     expect(parsePercentInput("-1")).toBeNull();
     expect(parsePercentInput("")).toBeNull();
   });
+
+  it("parseKgInput / parsePercentInput reject anything but plain decimals", () => {
+    for (const raw of ["1e3", "0x10", "12.5.3", "Infinity", "1,000.5"]) {
+      expect(parseKgInput(raw)).toBeNull();
+      expect(parsePercentInput(raw)).toBeNull();
+    }
+    expect(parseKgInput("12.5")).toBe(12.5);
+    expect(parsePercentInput(" 7,25 ")).toBe(7.25);
+  });
 });

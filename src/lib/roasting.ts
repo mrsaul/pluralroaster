@@ -21,9 +21,12 @@ export function greenKg(roastedKg: number, percent: number): number {
   return round2(roastedKg * (1 + percent / 100));
 }
 
+/** Plain decimal only ("12" or "12.5"): no sign, exponent, hex, Infinity or thousands. */
+const DECIMAL_RE = /^\d+(\.\d+)?$/;
+
 function parseNumber(raw: string): number | null {
   const s = raw.trim().replace(",", ".");
-  if (s === "") return null;
+  if (!DECIMAL_RE.test(s)) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
