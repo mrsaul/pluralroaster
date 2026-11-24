@@ -10,8 +10,8 @@
 -- 3. roasted_stock_history.change_type gains order_packed / order_unpacked / roasted.
 -- 4. Trigger: BEFORE UPDATE on orders deducts on bagging / restores on unbagging
 --    and sets NEW.stock_deducted_at itself (no second UPDATE, so no recursion).
---    BEFORE DELETE restores (history.order_id is ON DELETE SET NULL, so an AFTER
---    trigger could no longer find this order's rows).
+--    BEFORE DELETE restores, except for delivered orders (history.order_id is
+--    ON DELETE SET NULL, so an AFTER trigger could no longer find this order's rows).
 --    Replaces trg_decrease_stock_on_delivery / decrease_stock_on_delivery().
 -- 5. RPCs: add_roasted_stock, set_green_percent, set_default_green_percent
 --    (admin or roaster, same check as update_stock_with_history).
@@ -152,8 +152,11 @@ END;
 $$;
 
 -- Put back exactly what this order still has out of stock: per stock row, the
--- net of its order_packed and order_unpacked history rows (recorded deltas, not
--- order quantities, so the clamp never inflates stock).
+-- net of its order_packed, order_unpacked and order_delivered history rows
+-- (recorded deltas, not order quantities, so the clamp never inflates stock).
+-- order_delivered covers orders delivered under the old rule and moved back:
+-- they get their delivered kilos back once (old rows recorded the unclamped
+-- quantity).
 CREATE OR REPLACE FUNCTION public.restore_order_stock(p_order_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -168,7 +171,7 @@ BEGIN
     SELECT h.stock_id, sum(h.delta_kg) AS net
     FROM roasted_stock_history h
     WHERE h.order_id = p_order_id
-      AND h.change_type IN ('order_packed', 'order_unpacked')
+      AND h.change_type IN ('order_packed', 'order_unpacked', 'order_delivered')
     GROUP BY h.stock_id
     HAVING sum(h.delta_kg) < 0
     ORDER BY h.stock_id
@@ -208,7 +211,8 @@ SET search_path = public
 AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    IF OLD.stock_deducted_at IS NOT NULL THEN
+    -- A delivered order's coffee has left the roastery: deleting it gives nothing back.
+    IF OLD.stock_deducted_at IS NOT NULL AND OLD.status IS DISTINCT FROM 'delivered' THEN
       PERFORM public.restore_order_stock(OLD.id);
     END IF;
     RETURN OLD;

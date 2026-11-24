@@ -224,6 +224,66 @@ BEGIN
   END IF;
 END $$;
 
+-- ── delivered under the OLD rule, moved back → kilos back once; re-bag → −4 once
+-- Simulate the old delivery trigger: order inserted delivered and already marked
+-- deducted (the new trigger does not fire on INSERT, as with the backfill),
+-- A 10 → 6 with an order_delivered −4 history row.
+INSERT INTO public.orders (id, user_id, delivery_date, status, stock_deducted_at)
+VALUES ('f5a0c000-0000-4000-8000-000000000004', NULL, current_date, 'delivered', now());
+INSERT INTO public.order_items (order_id, product_id, product_name, quantity, kind) VALUES
+  ('f5a0c000-0000-4000-8000-000000000004', 'f5a0c000-0000-4000-8000-0000000000a1', 'Test Stock A', 4, 'coffee');
+UPDATE public.roasted_stock SET quantity_kg = 6
+WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+INSERT INTO public.roasted_stock_history (
+  stock_id, previous_quantity_kg, new_quantity_kg, delta_kg, change_type, order_id, note)
+SELECT id, 10, 6, -4, 'order_delivered', 'f5a0c000-0000-4000-8000-000000000004', 'old rule'
+FROM public.roasted_stock WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+
+UPDATE public.orders SET status = 'approved', is_packed = false
+WHERE id = 'f5a0c000-0000-4000-8000-000000000004';
+
+DO $$
+DECLARE v numeric; n int; d timestamptz;
+BEGIN
+  SELECT quantity_kg INTO v FROM public.roasted_stock
+  WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+  IF v IS DISTINCT FROM 10 THEN RAISE EXCEPTION 'FAIL: old delivered moved back A stock got %', v; END IF;
+  SELECT count(*), max(delta_kg) INTO n, v FROM public.roasted_stock_history
+  WHERE order_id = 'f5a0c000-0000-4000-8000-000000000004' AND change_type = 'order_unpacked';
+  IF n <> 1 OR v IS DISTINCT FROM 4 THEN
+    RAISE EXCEPTION 'FAIL: old delivered moved back order_unpacked rows got % (delta %)', n, v;
+  END IF;
+  SELECT stock_deducted_at INTO d FROM public.orders WHERE id = 'f5a0c000-0000-4000-8000-000000000004';
+  IF d IS NOT NULL THEN RAISE EXCEPTION 'FAIL: old delivered moved back stock_deducted_at got %', d; END IF;
+END $$;
+
+UPDATE public.orders SET is_packed = true WHERE id = 'f5a0c000-0000-4000-8000-000000000004';
+
+DO $$
+DECLARE v numeric; n int;
+BEGIN
+  SELECT quantity_kg INTO v FROM public.roasted_stock
+  WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+  IF v IS DISTINCT FROM 6 THEN RAISE EXCEPTION 'FAIL: old delivered re-bagged A stock got %', v; END IF;
+  SELECT count(*), min(delta_kg) INTO n, v FROM public.roasted_stock_history
+  WHERE order_id = 'f5a0c000-0000-4000-8000-000000000004' AND change_type = 'order_packed';
+  IF n <> 1 OR v IS DISTINCT FROM -4 THEN
+    RAISE EXCEPTION 'FAIL: old delivered re-bagged order_packed rows got % (delta %)', n, v;
+  END IF;
+END $$;
+
+-- ── delete a delivered order → stock unchanged ──────────────────────────────
+UPDATE public.orders SET status = 'delivered' WHERE id = 'f5a0c000-0000-4000-8000-000000000004';
+DELETE FROM public.orders WHERE id = 'f5a0c000-0000-4000-8000-000000000004';
+
+DO $$
+DECLARE v numeric;
+BEGIN
+  SELECT quantity_kg INTO v FROM public.roasted_stock
+  WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+  IF v IS DISTINCT FROM 6 THEN RAISE EXCEPTION 'FAIL: delete delivered order A stock got %', v; END IF;
+END $$;
+
 -- ── RPCs ────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE v numeric;
