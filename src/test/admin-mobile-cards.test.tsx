@@ -55,6 +55,12 @@ vi.mock("@/hooks/useStock", () => ({
 vi.mock("@/hooks/useRoasting", () => ({
   useRoastingInputs: () => ({ data: { stockKg: {}, productPercent: {}, defaultPercent: 15, productNames: {} }, isLoading: false, error: null }),
   useOpenRoastingLines: () => ({ data: [], isLoading: false, error: null }),
+  useRoastingNeeds: () => ({
+    needs: [],
+    inputs: { stockKg: {}, productPercent: {}, defaultPercent: 15, productNames: {} },
+    error: null,
+    isLoading: false,
+  }),
   useAddRoastedStock: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useSetGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useSetDefaultGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),

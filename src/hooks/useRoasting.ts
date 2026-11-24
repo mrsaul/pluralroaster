@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
+import { computeRoastingNeeds, type RoastingNeed } from "@/lib/roasting";
 import {
   getRoastingInputs,
   getOpenRoastingLines,
@@ -22,6 +24,23 @@ export function useOpenRoastingLines() {
     queryFn: getOpenRoastingLines,
     refetchOnWindowFocus: true,
   });
+}
+
+/** Roasting needs, with product names preferring the catalogue over order lines. */
+export function useRoastingNeeds() {
+  const inputsQ = useRoastingInputs();
+  const linesQ = useOpenRoastingLines();
+  const inputs = inputsQ.data;
+  const lines = linesQ.data;
+  const needs = useMemo<RoastingNeed[] | null>(() => {
+    if (!inputs || !lines) return null;
+    return computeRoastingNeeds(
+      lines.map((l) => ({ ...l, productName: inputs.productNames?.[l.productId] ?? l.productName })),
+      inputs,
+    );
+  }, [inputs, lines]);
+  const error = (inputsQ.error ?? linesQ.error) as Error | null;
+  return { needs, inputs, error, isLoading: !needs && !error };
 }
 
 export function useAddRoastedStock() {

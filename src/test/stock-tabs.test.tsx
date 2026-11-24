@@ -18,26 +18,35 @@ let lines: RoastingLine[] = [];
 let linesError: Error | null = null;
 let history: Partial<StockHistoryRow>[] = [];
 
-vi.mock("@/hooks/useRoasting", () => ({
-  useRoastingInputs: () => ({
-    data: {
-      stockKg: { br: 70 },
-      productPercent: { br: 17 },
-      defaultPercent: 15,
-      productNames: { gh: "Colombie – Golden Huila", br: "Brésil" },
+vi.mock("@/hooks/useRoasting", async () => {
+  const { computeRoastingNeeds } = await vi.importActual<typeof import("@/lib/roasting")>("@/lib/roasting");
+  const inputs = {
+    stockKg: { br: 70 },
+    productPercent: { br: 17 },
+    defaultPercent: 15,
+    productNames: { gh: "Colombie – Golden Huila", br: "Brésil" } as Record<string, string>,
+  };
+  return {
+    useRoastingInputs: () => ({ data: inputs, isLoading: false, error: null }),
+    useOpenRoastingLines: () => ({
+      data: linesError ? undefined : lines,
+      isLoading: false,
+      error: linesError,
+    }),
+    // Same shape as the real hook (tested in use-roasting-needs.test.tsx)
+    useRoastingNeeds: () => {
+      if (linesError) return { needs: null, inputs, error: linesError, isLoading: false };
+      const needs = computeRoastingNeeds(
+        lines.map((l) => ({ ...l, productName: inputs.productNames[l.productId] ?? l.productName })),
+        inputs,
+      );
+      return { needs, inputs, error: null, isLoading: false };
     },
-    isLoading: false,
-    error: null,
-  }),
-  useOpenRoastingLines: () => ({
-    data: linesError ? undefined : lines,
-    isLoading: false,
-    error: linesError,
-  }),
-  useAddRoastedStock: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useSetGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useSetDefaultGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-}));
+    useAddRoastedStock: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+    useSetGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+    useSetDefaultGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  };
+});
 
 const stock: StockListItem[] = [
   { id: "s1", product_id: "gh", quantity_kg: 3.5, low_stock_threshold_kg: 5, last_updated_by: null,

@@ -1,6 +1,7 @@
 import { useUrlState } from "@/hooks/useUrlState";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RoastingNeedsTab, useRoastingNeeds } from "@/components/stock/RoastingNeedsTab";
+import { RoastingNeedsTab } from "@/components/stock/RoastingNeedsTab";
+import { useRoastingNeeds } from "@/hooks/useRoasting";
 import { StockListTab } from "@/components/stock/StockListTab";
 
 export function StockView() {
