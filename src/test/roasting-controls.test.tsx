@@ -92,7 +92,7 @@ describe("PercentChip", () => {
     const chip = screen.getByRole("button", { name: "Modifier le pourcentage par défaut" });
     expect(chip).toHaveTextContent("Par défaut 15 % ✎");
     click(chip);
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("textbox", { name: "Pourcentage de perte" });
     typeInto(input, "12");
     click(screen.getByRole("button", { name: "Enregistrer" }));
     expect(defMutate).toHaveBeenCalledWith({ percent: 12 });
@@ -101,7 +101,7 @@ describe("PercentChip", () => {
   it("rejects 51", async () => {
     render(<PercentChip scope="default" percent={15} />);
     click(screen.getByRole("button", { name: "Modifier le pourcentage par défaut" }));
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("textbox", { name: "Pourcentage de perte" });
     typeInto(input, "51");
     expect(screen.getByText("Entre 0 et 50 %")).toBeInTheDocument();
     click(screen.getByRole("button", { name: "Enregistrer" }));
@@ -125,7 +125,7 @@ describe("PercentChip", () => {
     expect(chip.className).not.toContain("border-brand-orange-700");
     click(chip);
     expect(screen.queryByRole("button", { name: "Revenir au défaut" })).not.toBeInTheDocument();
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("textbox", { name: "Pourcentage de perte" });
     typeInto(input, "17,5");
     click(screen.getByRole("button", { name: "Enregistrer" }));
     expect(setMutate).toHaveBeenCalledWith({ productId: "p1", percent: 17.5 });

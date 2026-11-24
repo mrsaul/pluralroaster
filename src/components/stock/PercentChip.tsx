@@ -66,6 +66,7 @@ export function PercentChip(props: Props) {
       <PopoverContent className="w-64 space-y-3">
         <Input
           inputMode="decimal"
+          aria-label="Pourcentage de perte"
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           className="min-h-[44px]"
