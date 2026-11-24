@@ -1367,7 +1367,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       total_kg: o.total_kg,
       status: o.status,
       is_roasted: o.is_roasted,
-      items: o.items.map((i) => ({ product_id: i.product_id, product_name: i.product_name, quantity: i.quantity })),
+      is_packed: o.is_packed,
+      items: o.items.map((i) => ({ product_id: i.product_id, product_name: i.product_name, quantity: i.quantity, kind: i.kind === "service" ? "service" as const : "coffee" as const })),
     })),
     [adminOrders],
   );

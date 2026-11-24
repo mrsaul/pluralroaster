@@ -5,7 +5,6 @@ import { Flame, ChevronDown, ChevronRight, Clock3, Package, Check, AlertCircle }
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -15,6 +14,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { type OrderStatus } from "@/lib/orderStatuses";
+import { PercentChip } from "@/components/stock/PercentChip";
+import { RoastedSheet } from "@/components/stock/RoastedSheet";
+import { computeRoastingNeeds, isOpenForRoasting, type RoastingLine, type RoastingNeed } from "@/lib/roasting";
+import { useRoastingInputs } from "@/hooks/useRoasting";
 
 /* ─── Types ─── */
 
@@ -22,6 +25,7 @@ export interface RoasterOrderItem {
   product_id: string;
   product_name: string;
   quantity: number;
+  kind: "coffee" | "service";
 }
 
 export interface RoasterOrder {
@@ -31,15 +35,25 @@ export interface RoasterOrder {
   total_kg: number;
   status: OrderStatus;
   is_roasted: boolean;
+  is_packed: boolean;
   items: RoasterOrderItem[];
 }
 
 interface RoasterViewProps {
   orders: RoasterOrder[];
+  /** Moves an approved order into packaging (never touches stock). */
   onMarkRoasted: (orderId: string, value: boolean) => void;
 }
 
 type DateFilter = "all" | "today" | "tomorrow" | "this_week";
+
+interface OrderEntry {
+  orderId: string;
+  clientName: string;
+  quantity: number;
+  deliveryDate: string;
+  status: OrderStatus;
+}
 
 /* ─── Helpers ─── */
 
@@ -56,18 +70,20 @@ const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-muted text-muted-foreground border-border",
 };
 
-const RELEVANT_STATUSES: OrderStatus[] = ["approved", "packaging"];
+const PRIORITY_LABELS: Record<string, string> = { urgent: "Urgent", normal: "Normal", low: "Faible" };
 
 /* ─── Component ─── */
 
 export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [roastedKgInput, setRoastedKgInput] = useState<Record<string, string>>({});
+  const [sheetNeed, setSheetNeed] = useState<RoastingNeed | null>(null);
+  const inputsQ = useRoastingInputs();
+  const inputs = inputsQ.data;
 
-  // Filter orders to relevant statuses
+  // Orders still to roast (received/approved/packaging, not packed), then the date filter
   const relevantOrders = useMemo(() => {
-    let filtered = orders.filter((o) => RELEVANT_STATUSES.includes(o.status));
+    let filtered = orders.filter((o) => isOpenForRoasting(o));
 
     if (dateFilter !== "all") {
       const now = new Date();
@@ -86,81 +102,58 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
     return filtered;
   }, [orders, dateFilter]);
 
-  // Aggregate by product
+  // Same arithmetic as the Stock "À torréfier" tab
   const productGroups = useMemo(() => {
-    const map = new Map<string, {
-      productId: string;
-      productName: string;
-      totalKg: number;
-      roastedKg: number;
-      orderCount: number;
-      earliestDelivery: string;
-      priority: "urgent" | "normal" | "low";
-      orders: {
-        orderId: string;
-        clientName: string;
-        quantity: number;
-        deliveryDate: string;
-        status: OrderStatus;
-        isRoasted: boolean;
-      }[];
-    }>();
-
+    if (!inputs) return null;
+    const lines: RoastingLine[] = [];
+    const entries = new Map<string, OrderEntry[]>();
     for (const order of relevantOrders) {
       for (const item of order.items) {
-        const existing = map.get(item.product_id);
-        const orderEntry = {
+        if (item.kind === "service") continue;
+        lines.push({
+          orderId: order.id,
+          productId: item.product_id,
+          productName: inputs.productNames?.[item.product_id] ?? item.product_name,
+          quantityKg: item.quantity,
+          kind: "coffee",
+          deliveryDate: order.delivery_date,
+        });
+        const list = entries.get(item.product_id) ?? [];
+        list.push({
           orderId: order.id,
           clientName: order.client_name || "Client inconnu",
           quantity: item.quantity,
           deliveryDate: order.delivery_date,
           status: order.status,
-          isRoasted: order.is_roasted,
-        };
-
-        if (existing) {
-          existing.totalKg += item.quantity;
-          if (order.is_roasted) existing.roastedKg += item.quantity;
-          existing.orderCount += 1;
-          if (order.delivery_date < existing.earliestDelivery) {
-            existing.earliestDelivery = order.delivery_date;
-          }
-          existing.orders.push(orderEntry);
-        } else {
-          map.set(item.product_id, {
-            productId: item.product_id,
-            productName: item.product_name,
-            totalKg: item.quantity,
-            roastedKg: order.is_roasted ? item.quantity : 0,
-            orderCount: 1,
-            earliestDelivery: order.delivery_date,
-            priority: "low",
-            orders: [orderEntry],
-          });
-        }
+        });
+        entries.set(item.product_id, list);
       }
     }
+    const needs = computeRoastingNeeds(lines, inputs, { includeCovered: true });
+    return needs
+      .map((need) => ({ need, priority: getPriority(need.earliestDelivery), orders: entries.get(need.productId) ?? [] }))
+      .sort((a, b) => {
+        const pOrder = { urgent: 0, normal: 1, low: 2 };
+        if (pOrder[a.priority] !== pOrder[b.priority]) return pOrder[a.priority] - pOrder[b.priority];
+        return a.need.earliestDelivery.localeCompare(b.need.earliestDelivery);
+      });
+  }, [relevantOrders, inputs]);
 
-    // Set priority based on earliest delivery
-    const groups = Array.from(map.values()).map((g) => ({
-      ...g,
-      priority: getPriority(g.earliestDelivery),
-    }));
-
-    // Sort: urgent first, then by earliest delivery
-    groups.sort((a, b) => {
-      const pOrder = { urgent: 0, normal: 1, low: 2 };
-      if (pOrder[a.priority] !== pOrder[b.priority]) return pOrder[a.priority] - pOrder[b.priority];
-      return a.earliestDelivery.localeCompare(b.earliestDelivery);
-    });
-
-    return groups;
-  }, [relevantOrders]);
+  if (inputsQ.error) {
+    return (
+      <p className="text-sm text-destructive">
+        Impossible de calculer le torréfié : {(inputsQ.error as Error).message}
+      </p>
+    );
+  }
+  if (!productGroups) {
+    return <p className="text-sm text-muted-foreground">Calcul en cours…</p>;
+  }
 
   // Summary stats
-  const totalKgToRoast = productGroups.reduce((s, g) => s + g.totalKg, 0);
-  const totalRoastedKg = productGroups.reduce((s, g) => s + g.roastedKg, 0);
-  const urgentCount = productGroups.filter((g) => g.priority === "urgent").length;
+  const totalToRoastKg = productGroups.reduce((s, g) => s + g.need.toRoastKg, 0);
+  const totalGreenKg = productGroups.reduce((s, g) => s + g.need.greenKg, 0);
+  const urgentCount = productGroups.filter((g) => g.priority === "urgent" && g.need.toRoastKg > 0).length;
 
   const formatDeliveryLabel = (dateStr: string) => {
     try {
@@ -187,18 +180,14 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
   return (
     <section className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Total à torréfier</p>
-          <p className="text-2xl font-medium tabular-nums text-foreground">{totalKgToRoast.toFixed(0)} kg</p>
+          <p className="text-xs text-muted-foreground mb-2">À torréfier</p>
+          <p className="text-2xl font-medium tabular-nums text-foreground">{totalToRoastKg.toFixed(2)} kg</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Torréfié</p>
-          <p className="text-2xl font-medium tabular-nums text-success">{totalRoastedKg.toFixed(0)} kg</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Restant</p>
-          <p className="text-2xl font-medium tabular-nums text-foreground">{(totalKgToRoast - totalRoastedKg).toFixed(0)} kg</p>
+          <p className="text-xs text-muted-foreground mb-2">Vert à peser</p>
+          <p className="text-2xl font-medium tabular-nums text-foreground">{totalGreenKg.toFixed(2)} kg</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
           <p className="text-xs text-muted-foreground mb-2">Cafés urgents</p>
@@ -234,73 +223,90 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
         </div>
       ) : (
         <div className="space-y-2">
-          {productGroups.map((group) => {
-            const isExpanded = expandedProduct === group.productId;
-            const remainingKg = group.totalKg - group.roastedKg;
-            const progressPct = group.totalKg > 0 ? (group.roastedKg / group.totalKg) * 100 : 0;
-            const batchSuggestion = suggestBatches(remainingKg);
+          {productGroups.map(({ need, priority, orders: groupOrders }) => {
+            const isExpanded = expandedProduct === need.productId;
+            const batchSuggestion = suggestBatches(need.toRoastKg);
+            const approvedOrders = groupOrders.filter((o) => o.status === "approved");
 
             return (
-              <div key={group.productId} className="bg-card border border-border rounded-lg overflow-hidden">
+              <div key={need.productId} className="bg-card border border-border rounded-lg overflow-hidden">
                 {/* Product row */}
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
-                  onClick={() => toggleExpand(group.productId)}
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  )}
+                <div className="flex items-center gap-3 p-4">
+                  <button
+                    type="button"
+                    className="flex-1 min-w-0 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
+                    onClick={() => toggleExpand(need.productId)}
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    )}
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm text-foreground truncate">{group.productName}</span>
-                      <Badge variant="outline" className={cn("text-[10px]", PRIORITY_STYLES[group.priority])}>
-                        {group.priority === "urgent" && <AlertCircle className="w-3 h-3 mr-0.5" />}
-                        {group.priority.charAt(0).toUpperCase() + group.priority.slice(1)}
-                      </Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm text-foreground truncate">{need.productName}</span>
+                        <Badge variant="outline" className={cn("text-[10px]", PRIORITY_STYLES[priority])}>
+                          {priority === "urgent" && <AlertCircle className="w-3 h-3 mr-0.5" />}
+                          {PRIORITY_LABELS[priority]}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Package className="w-3 h-3" /> {groupOrders.length} commande{groupOrders.length !== 1 ? "s" : ""}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock3 className="w-3 h-3" /> {formatDeliveryLabel(need.earliestDelivery)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Package className="w-3 h-3" /> {group.orderCount} order{group.orderCount !== 1 ? "s" : ""}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock3 className="w-3 h-3" /> {formatDeliveryLabel(group.earliestDelivery)}
-                      </span>
-                    </div>
-                  </div>
+                  </button>
 
-                  <div className="text-right shrink-0">
-                    <p className="text-lg font-semibold tabular-nums text-foreground">{group.totalKg.toFixed(0)} kg</p>
-                    {group.roastedKg > 0 && (
-                      <p className="text-xs text-success">{group.roastedKg.toFixed(0)} kg torréfiés</p>
+                  <div className="text-right shrink-0 space-y-1">
+                    {need.toRoastKg > 0 ? (
+                      <>
+                        <p className="text-lg font-semibold tabular-nums text-foreground">{need.toRoastKg.toFixed(2)} kg</p>
+                        <p className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
+                          <PercentChip
+                            scope="product"
+                            productId={need.productId}
+                            productName={need.productName}
+                            percent={need.percent}
+                            isCustom={need.percentIsCustom}
+                          />
+                          <span>Vert <span className="tabular-nums">{need.greenKg.toFixed(2)} kg</span></span>
+                        </p>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          aria-label={`Torréfié ${need.productName}`}
+                          onClick={() => setSheetNeed(need)}
+                        >
+                          Torréfié ✓
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="text-sm font-medium text-success flex items-center justify-end gap-1">
+                        <Check className="w-3.5 h-3.5" /> Couvert par le stock
+                      </p>
                     )}
                   </div>
-                </button>
-
-                {/* Progress bar */}
-                {group.roastedKg > 0 && (
-                  <div className="px-4 pb-2">
-                    <Progress value={progressPct} className="h-1.5" />
-                  </div>
-                )}
+                </div>
 
                 {/* Expanded breakdown */}
                 {isExpanded && (
                   <div className="border-t border-border">
                     {/* Batching insight */}
-                    {batchSuggestion && remainingKg > 0 && (
+                    {batchSuggestion && need.toRoastKg > 0 && (
                       <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center gap-2 text-xs text-muted-foreground">
                         <Flame className="w-3 h-3 text-warning" />
-                        <span>Suggest: {batchSuggestion}</span>
+                        <span>Suggestion : {batchSuggestion}</span>
                       </div>
                     )}
 
                     {/* Order breakdown */}
                     <div className="divide-y divide-border">
-                      {group.orders.map((o) => (
+                      {groupOrders.map((o) => (
                         <div key={o.orderId} className="flex items-center gap-3 px-4 py-3">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{o.clientName}</p>
@@ -308,69 +314,57 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                               <span>{o.quantity} kg</span>
                               <span>·</span>
                               <span>{formatDeliveryLabel(o.deliveryDate)}</span>
-                              <span>·</span>
-                              <span className="capitalize">{o.status.replace(/_/g, " ")}</span>
                             </div>
                           </div>
-                          <Button
-                            variant={o.isRoasted ? "secondary" : "outline"}
-                            size="sm"
-                            className="gap-1.5 shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onMarkRoasted(o.orderId, !o.isRoasted);
-                            }}
-                          >
-                            {o.isRoasted ? (
-                              <><Check className="w-3.5 h-3.5 text-success" /> Torréfié</>
-                            ) : (
-                              <><Flame className="w-3.5 h-3.5" /> Marquer torréfié</>
-                            )}
-                          </Button>
+                          {o.status === "approved" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5 shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkRoasted(o.orderId, true);
+                              }}
+                            >
+                              <Flame className="w-3.5 h-3.5" /> Passer en conditionnement
+                            </Button>
+                          ) : o.status === "packaging" ? (
+                            <Badge variant="secondary" className="shrink-0">En conditionnement</Badge>
+                          ) : (
+                            <Badge variant="outline" className="shrink-0">À valider</Badge>
+                          )}
                         </div>
                       ))}
                     </div>
 
-                    {/* Summary footer */}
-                    <div className="px-4 py-3 bg-muted/20 border-t border-border flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        {group.roastedKg.toFixed(0)} / {group.totalKg.toFixed(0)} kg torréfiés
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {remainingKg > 0 ? (
-                          <>
-                            <span className="font-medium text-foreground">{remainingKg.toFixed(0)} kg remaining</span>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="default" className="gap-1.5 h-7 text-xs">
-                                  <Flame className="w-3 h-3" /> Mark All Roasted
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Tout marquer comme torréfié ?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This will mark {group.orders.filter((o) => !o.isRoasted).length} order{group.orders.filter((o) => !o.isRoasted).length !== 1 ? "s" : ""} of <span className="font-medium">{group.productName}</span> ({remainingKg.toFixed(0)} kg) as roasted.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => {
-                                    group.orders.filter((o) => !o.isRoasted).forEach((o) => onMarkRoasted(o.orderId, true));
-                                  }}>
-                                    Confirmer
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </>
-                        ) : (
-                          <span className="font-medium text-success flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5" /> All roasted
-                          </span>
-                        )}
+                    {/* Bulk footer */}
+                    {approvedOrders.length > 0 && (
+                      <div className="px-4 py-3 bg-muted/20 border-t border-border flex items-center justify-end">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="default" className="gap-1.5 h-7 text-xs">
+                              <Flame className="w-3 h-3" /> Tout passer en conditionnement
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Tout passer en conditionnement ?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {approvedOrders.length} commande{approvedOrders.length !== 1 ? "s" : ""} de {need.productName} passeront en conditionnement. Le stock ne change pas.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => {
+                                approvedOrders.forEach((o) => onMarkRoasted(o.orderId, true));
+                              }}>
+                                Confirmer
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -378,6 +372,8 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
           })}
         </div>
       )}
+
+      <RoastedSheet need={sheetNeed} onClose={() => setSheetNeed(null)} />
     </section>
   );
 }

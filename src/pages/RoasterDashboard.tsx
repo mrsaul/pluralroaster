@@ -23,8 +23,8 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, delivery_date, total_kg, status, is_roasted,
-          order_items ( product_id, product_name, quantity )
+          id, delivery_date, total_kg, status, is_roasted, is_packed,
+          order_items ( product_id, product_name, quantity, kind )
         `)
         .order("delivery_date", { ascending: true });
       if (error) throw error;
@@ -36,10 +36,12 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
           total_kg: Number(o.total_kg),
           status: normalizeOrderStatus(o.status),
           is_roasted: Boolean(o.is_roasted),
+          is_packed: Boolean(o.is_packed),
           items: (o.order_items ?? []).map((i: any) => ({
             product_id: i.product_id,
             product_name: i.product_name,
             quantity: Number(i.quantity),
+            kind: i.kind === "service" ? "service" : "coffee",
           })),
         })),
       );
