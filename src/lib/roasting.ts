@@ -112,3 +112,8 @@ export function computeRoastingNeeds(
     (a, b) => a.earliestDelivery.localeCompare(b.earliestDelivery) || a.productName.localeCompare(b.productName, "fr"),
   );
 }
+
+/** 17 -> "17", 17.5 -> "17,5", 17.256 -> "17,26". */
+export function formatPercent(p: number): string {
+  return String(Math.round(p * 100) / 100).replace(".", ",");
+}
