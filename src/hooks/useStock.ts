@@ -31,6 +31,8 @@ export function useUpdateStock() {
     onSuccess: (_, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["stock"] });
       void queryClient.invalidateQueries({ queryKey: ["stock-history", variables.stockId] });
+      // The "À torréfier" tab nets orders against stock.
+      void queryClient.invalidateQueries({ queryKey: ["roasting-inputs"] });
       toast({ title: `Stock updated — ${variables.productName}` });
     },
 
@@ -54,6 +56,7 @@ export function useInitStock() {
 
     onSuccess: (_, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["stock"] });
+      void queryClient.invalidateQueries({ queryKey: ["roasting-inputs"] });
       toast({ title: `Stock tracking enabled for ${variables.productName}` });
     },
 
