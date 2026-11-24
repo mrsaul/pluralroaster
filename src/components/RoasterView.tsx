@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { format, parseISO, differenceInHours, isToday, isTomorrow, addDays, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO, differenceInHours, isToday, isTomorrow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Flame, ChevronDown, ChevronRight, Clock3, Package, Check, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,14 @@ import {
 import { type OrderStatus } from "@/lib/orderStatuses";
 import { PercentChip } from "@/components/stock/PercentChip";
 import { RoastedSheet } from "@/components/stock/RoastedSheet";
-import { computeRoastingNeeds, isOpenForRoasting, type RoastingLine, type RoastingNeed } from "@/lib/roasting";
+import {
+  computeRoastingNeeds,
+  filterOrdersUpTo,
+  isOpenForRoasting,
+  type DeliveryFilter,
+  type RoastingLine,
+  type RoastingNeed,
+} from "@/lib/roasting";
 import { useRoastingInputs } from "@/hooks/useRoasting";
 
 /* ─── Types ─── */
@@ -44,8 +51,6 @@ interface RoasterViewProps {
   /** Moves an approved order into packaging (never touches stock). */
   onMarkRoasted: (orderId: string, value: boolean) => void;
 }
-
-type DateFilter = "all" | "today" | "tomorrow" | "this_week";
 
 interface OrderEntry {
   orderId: string;
@@ -76,40 +81,27 @@ const PRIORITY_LABELS: Record<string, string> = { urgent: "Urgent", normal: "Nor
 
 export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DeliveryFilter>("all");
   const [sheetNeed, setSheetNeed] = useState<RoastingNeed | null>(null);
   const inputsQ = useRoastingInputs();
   const inputs = inputsQ.data;
 
-  // Orders still to roast (received/approved/packaging, not packed), then the date filter
-  const relevantOrders = useMemo(() => {
-    let filtered = orders.filter((o) => isOpenForRoasting(o));
-
-    if (dateFilter !== "all") {
-      const now = new Date();
-      filtered = filtered.filter((o) => {
-        const d = parseISO(o.delivery_date);
-        if (dateFilter === "today") return isToday(d);
-        if (dateFilter === "tomorrow") return isTomorrow(d);
-        if (dateFilter === "this_week") {
-          const weekEnd = endOfDay(addDays(startOfDay(now), 7));
-          return d <= weekEnd;
-        }
-        return true;
-      });
-    }
-
-    return filtered;
-  }, [orders, dateFilter]);
+  // Orders still to roast (received/approved/packaging, not packed), due up to
+  // the filter's day (cumulative: overdue orders always count against stock)
+  const relevantOrders = useMemo(
+    () => filterOrdersUpTo(orders.filter((o) => isOpenForRoasting(o)), dateFilter),
+    [orders, dateFilter],
+  );
 
   // Same arithmetic as the Stock "À torréfier" tab
   const productGroups = useMemo(() => {
     if (!inputs) return null;
     const lines: RoastingLine[] = [];
-    const entries = new Map<string, OrderEntry[]>();
+    // product -> order -> one entry per order, kilos of that coffee summed
+    const entries = new Map<string, Map<string, OrderEntry>>();
     for (const order of relevantOrders) {
       for (const item of order.items) {
-        if (item.kind === "service") continue;
+        if (item.kind === "service" || !item.product_id) continue;
         lines.push({
           orderId: order.id,
           productId: item.product_id,
@@ -118,20 +110,25 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
           kind: "coffee",
           deliveryDate: order.delivery_date,
         });
-        const list = entries.get(item.product_id) ?? [];
-        list.push({
-          orderId: order.id,
-          clientName: order.client_name || "Client inconnu",
-          quantity: item.quantity,
-          deliveryDate: order.delivery_date,
-          status: order.status,
-        });
-        entries.set(item.product_id, list);
+        const byOrder = entries.get(item.product_id) ?? new Map<string, OrderEntry>();
+        const existing = byOrder.get(order.id);
+        if (existing) {
+          existing.quantity += item.quantity;
+        } else {
+          byOrder.set(order.id, {
+            orderId: order.id,
+            clientName: order.client_name || "Client inconnu",
+            quantity: item.quantity,
+            deliveryDate: order.delivery_date,
+            status: order.status,
+          });
+        }
+        entries.set(item.product_id, byOrder);
       }
     }
     const needs = computeRoastingNeeds(lines, inputs, { includeCovered: true });
     return needs
-      .map((need) => ({ need, priority: getPriority(need.earliestDelivery), orders: entries.get(need.productId) ?? [] }))
+      .map((need) => ({ need, priority: getPriority(need.earliestDelivery), orders: [...(entries.get(need.productId)?.values() ?? [])] }))
       .sort((a, b) => {
         const pOrder = { urgent: 0, normal: 1, low: 2 };
         if (pOrder[a.priority] !== pOrder[b.priority]) return pOrder[a.priority] - pOrder[b.priority];
@@ -199,14 +196,14 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
 
       {/* Filter bar */}
       <div className="flex gap-3 items-center">
-        <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
-          <SelectTrigger className="w-44">
+        <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DeliveryFilter)}>
+          <SelectTrigger className="w-48">
             <SelectValue placeholder="Date de livraison" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Toutes les dates</SelectItem>
-            <SelectItem value="today">Aujourd'hui</SelectItem>
-            <SelectItem value="tomorrow">Demain</SelectItem>
+            <SelectItem value="today">Jusqu'à aujourd'hui</SelectItem>
+            <SelectItem value="tomorrow">Jusqu'à demain</SelectItem>
             <SelectItem value="this_week">Cette semaine</SelectItem>
           </SelectContent>
         </Select>
@@ -311,7 +308,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{o.clientName}</p>
                             <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                              <span>{o.quantity} kg</span>
+                              <span>{o.quantity.toFixed(2)} kg</span>
                               <span>·</span>
                               <span>{formatDeliveryLabel(o.deliveryDate)}</span>
                             </div>

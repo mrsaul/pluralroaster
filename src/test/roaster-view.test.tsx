@@ -1,3 +1,4 @@
+import { format, addDays } from "date-fns";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +22,11 @@ vi.mock("@/hooks/useRoasting", () => ({
 }));
 
 import { RoasterView } from "@/components/RoasterView";
+
+// Radix Select needs these in jsdom.
+Element.prototype.scrollIntoView ??= vi.fn();
+Element.prototype.hasPointerCapture ??= vi.fn(() => false);
+Element.prototype.releasePointerCapture ??= vi.fn();
 
 const order = (
   id: string,
@@ -95,6 +101,73 @@ describe("RoasterView", () => {
     fireEvent.click(screen.getByText("Colombie – Golden Huila"));
     fireEvent.click(screen.getByRole("button", { name: "Passer en conditionnement" }));
     expect(onMark).toHaveBeenCalledWith("o1", true);
+  });
+
+  it("counts distinct orders per coffee and sums an order's lines of that coffee", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RoasterView
+          orders={[
+            order("o9", "Café Z", "approved", false, [
+              { product_id: "gh", product_name: "Golden Huila", quantity: 2, kind: "coffee" },
+              { product_id: "gh", product_name: "Golden Huila", quantity: 3.5, kind: "coffee" },
+              { product_id: null as unknown as string, product_name: "Ancien café", quantity: 4, kind: "coffee" },
+            ]),
+          ]}
+          onMarkRoasted={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("1 commande")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Colombie – Golden Huila"));
+    expect(screen.getAllByText("Café Z")).toHaveLength(1);
+    expect(screen.getByText("5.50 kg", { selector: "span" })).toBeInTheDocument();
+    expect(screen.queryByText("Ancien café")).not.toBeInTheDocument();
+  });
+
+  it("default filter (Toutes les dates) nets stock against every open order", () => {
+    const day = (n: number) => format(addDays(new Date(), n), "yyyy-MM-dd");
+    const dated = (o: RoasterOrder, d: string): RoasterOrder => ({ ...o, delivery_date: d });
+    inputsState = { data: { ...inputsData, stockKg: { br: 10 } }, error: null, isLoading: false };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RoasterView
+          orders={[
+            dated(order("t1", "Café T", "approved", false, [{ product_id: "br", product_name: "Brésil", quantity: 10, kind: "coffee" }]), day(0)),
+            dated(order("t2", "Café U", "approved", false, [{ product_id: "br", product_name: "Brésil", quantity: 5, kind: "coffee" }]), day(1)),
+          ]}
+          onMarkRoasted={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("combobox")).toHaveTextContent("Toutes les dates");
+    expect(screen.queryByText("Couvert par le stock")).not.toBeInTheDocument();
+    expect(within(card("À torréfier")).getByText("5.00 kg")).toBeInTheDocument();
+  });
+
+  it("Jusqu'à demain counts today's and tomorrow's orders against stock (5.00 kg, not covered)", () => {
+    const day = (n: number) => format(addDays(new Date(), n), "yyyy-MM-dd");
+    const dated = (o: RoasterOrder, d: string): RoasterOrder => ({ ...o, delivery_date: d });
+    inputsState = { data: { ...inputsData, stockKg: { br: 10 } }, error: null, isLoading: false };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RoasterView
+          orders={[
+            dated(order("t0", "Café S", "approved", false, [{ product_id: "br", product_name: "Brésil", quantity: 7, kind: "coffee" }]), day(5)),
+            dated(order("t1", "Café T", "approved", false, [{ product_id: "br", product_name: "Brésil", quantity: 10, kind: "coffee" }]), day(0)),
+            dated(order("t2", "Café U", "approved", false, [{ product_id: "br", product_name: "Brésil", quantity: 5, kind: "coffee" }]), day(1)),
+          ]}
+          onMarkRoasted={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    // All dates: 22 − 10 = 12
+    expect(within(card("À torréfier")).getByText("12.00 kg")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+    fireEvent.click(screen.getByRole("option", { name: "Jusqu'à demain" }));
+    expect(screen.getByRole("combobox")).toHaveTextContent("Jusqu'à demain");
+    expect(screen.queryByText("Couvert par le stock")).not.toBeInTheDocument();
+    expect(within(card("À torréfier")).getByText("5.00 kg")).toBeInTheDocument();
   });
 
   it("shows loading and error states", () => {

@@ -1,3 +1,4 @@
+import { addDays, endOfDay, parseISO, startOfDay } from "date-fns";
 import { round2 } from "@/lib/pricing";
 
 /** Extra green weight (percent) added to roasted kilos to cover roasting loss. */
@@ -14,6 +15,25 @@ export function isBagged(o: PackState): boolean {
 /** Still needs coffee roasted: received/approved/packaging and not yet packed. */
 export function isOpenForRoasting(o: PackState): boolean {
   return !o.is_packed && (o.status === "received" || o.status === "approved" || o.status === "packaging");
+}
+
+/** Delivery-date filter of the roaster view. Cumulative: every option includes overdue orders. */
+export type DeliveryFilter = "all" | "today" | "tomorrow" | "this_week";
+
+/**
+ * Orders delivering up to the end of the filter's day: today, tomorrow, or
+ * today + 7 ("this_week"). Overdue orders are always included, so stock is
+ * netted against everything due by then.
+ */
+export function filterOrdersUpTo<T extends { delivery_date: string }>(
+  orders: T[],
+  filter: DeliveryFilter,
+  now: Date = new Date(),
+): T[] {
+  if (filter === "all") return orders;
+  const days = filter === "today" ? 0 : filter === "tomorrow" ? 1 : 7;
+  const limit = endOfDay(addDays(startOfDay(now), days));
+  return orders.filter((o) => parseISO(o.delivery_date) <= limit);
 }
 
 /** Green kilos to weigh for a roasted quantity. */

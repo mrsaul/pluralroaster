@@ -6,6 +6,7 @@ import {
   parseKgInput,
   parsePercentInput,
   computeRoastingNeeds,
+  filterOrdersUpTo,
   type RoastingLine,
 } from "@/lib/roasting";
 
@@ -91,5 +92,43 @@ describe("roasting", () => {
     }
     expect(parseKgInput("12.5")).toBe(12.5);
     expect(parsePercentInput(" 7,25 ")).toBe(7.25);
+  });
+
+  describe("filterOrdersUpTo (cumulative delivery filter)", () => {
+    const now = new Date(2026, 10, 24, 15, 30); // Tue 24 Nov 2026, afternoon
+    const orders = [
+      { id: "overdue", delivery_date: "2026-11-23" },
+      { id: "today", delivery_date: "2026-11-24" },
+      { id: "tomorrow", delivery_date: "2026-11-25" },
+      { id: "in3", delivery_date: "2026-11-27" },
+      { id: "in7", delivery_date: "2026-12-01" },
+      { id: "in10", delivery_date: "2026-12-04" },
+    ];
+    const ids = (f: Parameters<typeof filterOrdersUpTo>[1]) => filterOrdersUpTo(orders, f, now).map((o) => o.id);
+
+    it("all keeps every order", () => {
+      expect(ids("all")).toEqual(["overdue", "today", "tomorrow", "in3", "in7", "in10"]);
+    });
+    it("today keeps overdue and today", () => {
+      expect(ids("today")).toEqual(["overdue", "today"]);
+    });
+    it("tomorrow keeps overdue, today and tomorrow", () => {
+      expect(ids("tomorrow")).toEqual(["overdue", "today", "tomorrow"]);
+    });
+    it("this_week keeps everything up to the end of today + 7", () => {
+      expect(ids("this_week")).toEqual(["overdue", "today", "tomorrow", "in3", "in7"]);
+    });
+
+    it("stock is netted against the cumulative set (Jusqu'à demain: 10 + 5 − 10 = 5)", () => {
+      const open = [
+        { id: "a", delivery_date: "2026-11-24", kg: 10 },
+        { id: "b", delivery_date: "2026-11-25", kg: 5 },
+      ];
+      const lines = filterOrdersUpTo(open, "tomorrow", now).map((o) =>
+        line({ orderId: o.id, productId: "br", productName: "Brésil", quantityKg: o.kg, deliveryDate: o.delivery_date }),
+      );
+      const [n] = computeRoastingNeeds(lines, { stockKg: { br: 10 }, productPercent: {}, defaultPercent: 15 });
+      expect(n.toRoastKg).toBe(5);
+    });
   });
 });
