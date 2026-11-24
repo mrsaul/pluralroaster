@@ -46,27 +46,28 @@ export type StockHistoryRow = {
 };
 
 // ── getStockList ──────────────────────────────────────────────────────────────
-// Drives from products (LEFT JOIN roasted_stock) so every active product
-// always appears, even if its stock row is somehow missing.
+// Drives from products (LEFT JOIN roasted_stock) so every active coffee
+// always appears, even if its stock row is somehow missing. Inactive coffees
+// still holding roasted stock are listed too, so they can be corrected
+// (Modifier). The active-or-stocked filter runs here, after the fetch.
 
 export async function getStockList(): Promise<StockListItem[]> {
   const { data, error } = await supabase
     .from("products")
     .select(`
-      id, name, custom_name, data_source_mode,
+      id, name, custom_name, data_source_mode, is_active,
       roasted_stock (
         id, quantity_kg, low_stock_threshold_kg,
         last_updated_by, last_updated_at, created_at,
         profiles ( full_name )
       )
     `)
-    .eq("is_active", true)
     .eq("kind", "coffee")
     .order("name", { ascending: true });
 
   if (error) throw error;
 
-  const rows: StockListItem[] = (data ?? []).map((row) => {
+  const rows: StockListItem[] = (data ?? []).flatMap((row) => {
     const productName =
       row.data_source_mode === "custom" && row.custom_name
         ? row.custom_name
@@ -79,10 +80,11 @@ export async function getStockList(): Promise<StockListItem[]> {
       : (row.roasted_stock ?? null);
 
     const qty = rs !== null ? Number(rs.quantity_kg) : null;
+    if (!row.is_active && !(qty !== null && qty > 0)) return [];
     const threshold = rs !== null ? Number(rs.low_stock_threshold_kg) : null;
     const isLow = qty !== null && threshold !== null && qty <= threshold;
 
-    return {
+    return [{
       id: rs?.id ?? null,
       product_id: row.id,
       quantity_kg: qty,
@@ -93,7 +95,7 @@ export async function getStockList(): Promise<StockListItem[]> {
       product_name: productName,
       updater_name: (rs?.profiles as any)?.full_name ?? null,
       is_low: isLow,
-    };
+    }];
   });
 
   // Low-stock first, then alphabetical
