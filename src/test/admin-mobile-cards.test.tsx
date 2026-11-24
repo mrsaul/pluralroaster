@@ -52,6 +52,14 @@ vi.mock("@/hooks/useStock", () => ({
   useInitStock: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
+vi.mock("@/hooks/useRoasting", () => ({
+  useRoastingInputs: () => ({ data: { stockKg: {}, productPercent: {}, defaultPercent: 15, productNames: {} }, isLoading: false, error: null }),
+  useOpenRoastingLines: () => ({ data: [], isLoading: false, error: null }),
+  useAddRoastedStock: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useSetGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useSetDefaultGreenPercent: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+}));
+
 import { AdminProductsList, type ProductListItem } from "@/components/AdminProductsList";
 import { PricingTiersView } from "@/components/PricingTiersView";
 import { StockView } from "@/components/StockView";
@@ -122,6 +130,7 @@ describe("Tarifs on phones", () => {
 describe("Stock on phones", () => {
   it("shows each coffee's stock, threshold and status as a card", () => {
     render(withQuery(<StockView />));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Stock torréfié" }));
     const list = screen.getByRole("list", { name: "Stock" });
     const cards = within(list).getAllByRole("listitem");
     expect(cards).toHaveLength(2);
