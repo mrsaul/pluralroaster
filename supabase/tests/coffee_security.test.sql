@@ -33,12 +33,12 @@ select is(
   (select bool_or(has_function_privilege(r, p.oid, 'execute'))
    from pg_proc p, unnest(array['anon', 'authenticated']) r
    where p.pronamespace = 'public'::regnamespace
-     and p.proname in ('handle_new_user', 'decrease_stock_on_delivery', 'create_stock_row_on_new_product')),
+     and p.proname in ('handle_new_user', 'orders_stock_on_bagging', 'create_stock_row_on_new_product')),
   false, 'trigger functions are not callable by anon/authenticated');
 select is(
   (select count(*)::int from pg_proc p
    where p.pronamespace = 'public'::regnamespace
-     and p.proname in ('decrease_stock_on_delivery', 'create_stock_row_on_new_product')
+     and p.proname in ('orders_stock_on_bagging', 'create_stock_row_on_new_product')
      and 'search_path=public' = any(coalesce(p.proconfig, '{}'))),
   2, 'trigger functions have a fixed search_path');
 select is(has_function_privilege('authenticated', 'public.has_role(uuid,app_role)', 'execute'), true,
@@ -81,7 +81,7 @@ select throws_ok(
   '42501', null, 'no signed-in user: create_order_with_items refused');
 reset role;
 
--- Delivered trigger still decreases stock
+-- Delivered (= bagged) trigger still decreases stock (20261124000000_stock_at_bagging)
 update public.orders set status = 'delivered' where user_id = '00000000-0000-0000-0000-0000000000a1';
 select is((select quantity_kg from public.roasted_stock where product_id = '00000000-0000-0000-0000-0000000000d1'), 8::numeric,
   'delivering an order still decreases stock (trigger)');
