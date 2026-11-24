@@ -6,7 +6,7 @@ import type { RoastingNeed } from "@/lib/roasting";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
       <span className="text-muted-foreground">{label}</span>
       {children}
     </div>
@@ -64,7 +64,7 @@ export function RoastingNeedsTab({
                   <span className="text-2xl font-semibold tabular-nums text-foreground">{n.toRoastKg.toFixed(2)} kg</span>
                 </Row>
                 <Row label="Vert à peser">
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-wrap items-center justify-end gap-2">
                     <PercentChip
                       scope="product"
                       productId={n.productId}
@@ -72,7 +72,7 @@ export function RoastingNeedsTab({
                       percent={n.percent}
                       isCustom={n.percentIsCustom}
                     />
-                    <span className="text-2xl font-semibold tabular-nums text-brand-green-600">{n.greenKg.toFixed(2)} kg</span>
+                    <span className="shrink-0 text-2xl font-semibold tabular-nums text-brand-green-600">{n.greenKg.toFixed(2)} kg</span>
                   </span>
                 </Row>
               </div>
