@@ -34,9 +34,10 @@ describe("stock service", () => {
       },
     ];
 
-    // Mock the chain: supabase.from().select().eq().order()
+    // Mock the chain: supabase.from().select().eq().eq().order()
     const mockOrder = vi.fn().mockResolvedValue({ data: mockData, error: null });
-    const mockEq = vi.fn().mockReturnValue({ order: mockOrder });
+    const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder });
+    const mockEq = vi.fn().mockReturnValue({ eq: mockEq2 });
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
     (supabase.from as any).mockReturnValue({ select: mockSelect });
 
@@ -66,12 +67,26 @@ describe("stock service", () => {
     ];
 
     const mockOrder = vi.fn().mockResolvedValue({ data: mockData, error: null });
-    const mockEq = vi.fn().mockReturnValue({ order: mockOrder });
+    const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder });
+    const mockEq = vi.fn().mockReturnValue({ eq: mockEq2 });
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
     (supabase.from as any).mockReturnValue({ select: mockSelect });
 
     const result = await getStockList();
     expect(result[0].is_low).toBe(true);
+  });
+
+  it("getStockList only requests coffee products", async () => {
+    const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null });
+    const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder });
+    const mockEq = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
+    (supabase.from as any).mockReturnValue({ select: mockSelect });
+
+    await getStockList();
+
+    expect(mockEq).toHaveBeenCalledWith("is_active", true);
+    expect(mockEq2).toHaveBeenCalledWith("kind", "coffee");
   });
 
   it("updateStock should call the atomic RPC", async () => {

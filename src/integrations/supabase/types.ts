@@ -964,6 +964,7 @@ export type Database = {
           total_price: number
           updated_at: string
           user_id: string | null
+          stock_deducted_at: string | null
         }
         Insert: {
           client_name?: string | null
@@ -994,6 +995,7 @@ export type Database = {
           total_price?: number
           updated_at?: string
           user_id?: string | null
+          stock_deducted_at?: string | null
         }
         Update: {
           client_name?: string | null
@@ -1024,6 +1026,7 @@ export type Database = {
           total_price?: number
           updated_at?: string
           user_id?: string | null
+          stock_deducted_at?: string | null
         }
         Relationships: [
           {
@@ -1175,6 +1178,7 @@ export type Database = {
           tags: string[] | null
           tasting_notes: string | null
           updated_at: string
+          green_percent: number | null
         }
         Insert: {
           created_at?: string
@@ -1203,6 +1207,7 @@ export type Database = {
           tags?: string[] | null
           tasting_notes?: string | null
           updated_at?: string
+          green_percent?: number | null
         }
         Update: {
           created_at?: string
@@ -1231,6 +1236,7 @@ export type Database = {
           tags?: string[] | null
           tasting_notes?: string | null
           updated_at?: string
+          green_percent?: number | null
         }
         Relationships: []
       }
@@ -1387,6 +1393,35 @@ export type Database = {
           },
           {
             foreignKeyName: "roasted_stock_history_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roasting_settings: {
+        Row: {
+          default_green_percent: number
+          id: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          default_green_percent?: number
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          default_green_percent?: number
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roasting_settings_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1593,6 +1628,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_roasted_stock: {
+        Args: { p_kg: number; p_note?: string; p_product_id: string }
+        Returns: number
+      }
+      set_default_green_percent: {
+        Args: { p_percent: number }
+        Returns: undefined
+      }
+      set_green_percent: {
+        Args: { p_percent: number; p_product_id: string }
+        Returns: undefined
+      }
       create_order_with_items:
         | {
             Args: {

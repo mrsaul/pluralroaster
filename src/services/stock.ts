@@ -2,6 +2,21 @@ import { supabase } from "@/integrations/supabase/client";
 
 // roasted_stock and roasted_stock_history are now included in auto-generated types.ts.
 
+export type StockChangeType =
+  | "manual_update"
+  | "order_delivered"
+  | "order_packed"
+  | "order_unpacked"
+  | "roasted";
+
+export const STOCK_CHANGE_LABEL: Record<StockChangeType, string> = {
+  manual_update: "Correction manuelle",
+  order_delivered: "Livraison",
+  order_packed: "Conditionné",
+  order_unpacked: "Remis en stock",
+  roasted: "Torréfaction",
+};
+
 export type StockListItem = {
   id: string | null;             // null = product exists but no stock row yet
   product_id: string;
@@ -21,7 +36,7 @@ export type StockHistoryRow = {
   previous_quantity_kg: number;
   new_quantity_kg: number;
   delta_kg: number;
-  change_type: "manual_update" | "order_delivered";
+  change_type: StockChangeType;
   order_id: string | null;
   note: string | null;
   updated_by: string | null;
@@ -46,6 +61,7 @@ export async function getStockList(): Promise<StockListItem[]> {
       )
     `)
     .eq("is_active", true)
+    .eq("kind", "coffee")
     .order("name", { ascending: true });
 
   if (error) throw error;
@@ -150,7 +166,7 @@ export async function getStockHistory(stockId: string): Promise<StockHistoryRow[
     previous_quantity_kg: Number(row.previous_quantity_kg),
     new_quantity_kg: Number(row.new_quantity_kg),
     delta_kg: Number(row.delta_kg),
-    change_type: row.change_type as "manual_update" | "order_delivered",
+    change_type: row.change_type as StockChangeType,
     order_id: row.order_id,
     note: row.note,
     updated_by: row.updated_by,
