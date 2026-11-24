@@ -103,6 +103,8 @@ $$;
 -- Take an order's coffee out of roasted stock. Per product, clamped at 0; the
 -- history row records the delta actually applied (0 when stock was already 0).
 -- Service lines and products without a stock row are skipped.
+-- Rows are locked in stock id order, the same order as restore_order_stock,
+-- so a concurrent bag and unbag can never deadlock.
 CREATE OR REPLACE FUNCTION public.deduct_order_stock(p_order_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -110,24 +112,24 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  r          record;
-  v_stock_id uuid;
-  v_prev     numeric;
-  v_new      numeric;
+  r      record;
+  v_prev numeric;
+  v_new  numeric;
 BEGIN
   FOR r IN
-    SELECT oi.product_id, sum(oi.quantity) AS total_kg
+    SELECT rs.id AS stock_id, sum(oi.quantity) AS total_kg
     FROM order_items oi
     JOIN products p ON p.id = oi.product_id
+    JOIN roasted_stock rs ON rs.product_id = oi.product_id
     WHERE oi.order_id = p_order_id
       AND oi.kind <> 'service'
       AND p.kind <> 'service'
-    GROUP BY oi.product_id
-    ORDER BY oi.product_id  -- stable lock order across concurrent orders
+    GROUP BY rs.id
+    ORDER BY rs.id  -- stable lock order (same as restore_order_stock)
   LOOP
-    SELECT id, quantity_kg INTO v_stock_id, v_prev
+    SELECT quantity_kg INTO v_prev
     FROM roasted_stock
-    WHERE product_id = r.product_id
+    WHERE id = r.stock_id
     FOR UPDATE;
 
     IF NOT FOUND THEN
@@ -140,13 +142,13 @@ BEGIN
     SET quantity_kg     = v_new,
         last_updated_by = NULL,
         last_updated_at = now()
-    WHERE id = v_stock_id;
+    WHERE id = r.stock_id;
 
     INSERT INTO roasted_stock_history (
       stock_id, previous_quantity_kg, new_quantity_kg, delta_kg,
       change_type, order_id, note, updated_by
     ) VALUES (
-      v_stock_id, v_prev, v_new, v_new - v_prev,
+      r.stock_id, v_prev, v_new, v_new - v_prev,
       'order_packed', p_order_id, 'Auto-decreased on order bagging', NULL
     );
   END LOOP;
@@ -154,11 +156,13 @@ END;
 $$;
 
 -- Put back exactly what this order still has out of stock: per stock row, the
--- net of its order_packed, order_unpacked and order_delivered history rows
--- (recorded deltas, not order quantities, so the clamp never inflates stock).
--- order_delivered covers orders delivered under the old rule and moved back:
--- they get their delivered kilos back once (old rows recorded the unclamped
--- quantity).
+-- net change its order_packed, order_unpacked and order_delivered history rows
+-- actually applied (new − previous, not order quantities and not delta_kg, so
+-- the clamp never inflates stock). order_delivered covers orders delivered
+-- under the old rule and moved back: they get their delivered kilos back once.
+-- Old order_delivered rows recorded delta_kg = −quantity even when the stock
+-- was clamped at 0, hence new − previous rather than delta_kg.
+-- Rows are locked in stock id order, the same order as deduct_order_stock.
 CREATE OR REPLACE FUNCTION public.restore_order_stock(p_order_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -170,12 +174,12 @@ DECLARE
   v_prev numeric;
 BEGIN
   FOR r IN
-    SELECT h.stock_id, sum(h.delta_kg) AS net
+    SELECT h.stock_id, sum(h.new_quantity_kg - h.previous_quantity_kg) AS net
     FROM roasted_stock_history h
     WHERE h.order_id = p_order_id
       AND h.change_type IN ('order_packed', 'order_unpacked', 'order_delivered')
     GROUP BY h.stock_id
-    HAVING sum(h.delta_kg) < 0
+    HAVING sum(h.new_quantity_kg - h.previous_quantity_kg) < 0
     ORDER BY h.stock_id
   LOOP
     SELECT quantity_kg INTO v_prev
@@ -265,6 +269,7 @@ DECLARE
   v_stock_id uuid;
   v_prev     numeric;
   v_new      numeric;
+  v_kind     text;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
@@ -275,8 +280,17 @@ BEGIN
     RAISE EXCEPTION 'Not authorized to update stock' USING ERRCODE = '42501';
   END IF;
 
-  IF p_kg IS NULL OR p_kg <= 0 THEN
+  -- NaN sorts above every number in Postgres, so "> 0" alone would let it in.
+  IF p_kg IS NULL OR p_kg = 'NaN'::numeric OR p_kg <= 0 THEN
     RAISE EXCEPTION 'p_kg must be greater than 0, got %', p_kg USING ERRCODE = '22023';
+  END IF;
+
+  SELECT kind INTO v_kind FROM products WHERE id = p_product_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Product not found' USING ERRCODE = 'P0002';
+  END IF;
+  IF v_kind = 'service' THEN
+    RAISE EXCEPTION 'Cannot add roasted stock to a service product' USING ERRCODE = '22023';
   END IF;
 
   INSERT INTO roasted_stock (product_id, quantity_kg, low_stock_threshold_kg)

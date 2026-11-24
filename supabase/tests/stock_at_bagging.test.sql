@@ -357,6 +357,36 @@ BEGIN
   IF v IS DISTINCT FROM 6 THEN RAISE EXCEPTION 'FAIL: delete delivered order A stock got %', v; END IF;
 END $$;
 
+-- ── old clamped delivery moved back → gives back what was applied (+2), not +4
+-- The old trigger recorded delta −4 even when stock only went 2 → 0.
+UPDATE public.roasted_stock SET quantity_kg = 0
+WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+
+INSERT INTO public.orders (id, user_id, delivery_date, status, stock_deducted_at)
+VALUES ('f5a0c000-0000-4000-8000-000000000007', NULL, current_date, 'delivered', now());
+INSERT INTO public.order_items (order_id, product_id, product_name, quantity, kind) VALUES
+  ('f5a0c000-0000-4000-8000-000000000007', 'f5a0c000-0000-4000-8000-0000000000a1', 'Test Stock A', 4, 'coffee');
+INSERT INTO public.roasted_stock_history (
+  stock_id, previous_quantity_kg, new_quantity_kg, delta_kg, change_type, order_id, note)
+SELECT id, 2, 0, -4, 'order_delivered', 'f5a0c000-0000-4000-8000-000000000007', 'old rule, clamped'
+FROM public.roasted_stock WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+
+UPDATE public.orders SET status = 'approved', is_packed = false
+WHERE id = 'f5a0c000-0000-4000-8000-000000000007';
+
+DO $$
+DECLARE v numeric; n int; d numeric;
+BEGIN
+  SELECT quantity_kg INTO v FROM public.roasted_stock
+  WHERE product_id = 'f5a0c000-0000-4000-8000-0000000000a1';
+  IF v IS DISTINCT FROM 2 THEN RAISE EXCEPTION 'FAIL: old clamped delivery moved back A stock got %', v; END IF;
+  SELECT count(*), max(delta_kg) INTO n, d FROM public.roasted_stock_history
+  WHERE order_id = 'f5a0c000-0000-4000-8000-000000000007' AND change_type = 'order_unpacked';
+  IF n <> 1 OR d IS DISTINCT FROM 2 THEN
+    RAISE EXCEPTION 'FAIL: old clamped delivery moved back order_unpacked rows got % (delta %)', n, d;
+  END IF;
+END $$;
+
 -- ── RPCs ────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE v numeric;
@@ -418,6 +448,32 @@ BEGIN
   IF v_state IS DISTINCT FROM '22023' THEN
     RAISE EXCEPTION 'FAIL: add_roasted_stock with 0 raises 22023 got %', v_state;
   END IF;
+
+  -- NaN kg → raises (NaN sorts above every number, so "> 0" alone lets it in).
+  v_state := NULL;
+  BEGIN
+    PERFORM public.add_roasted_stock('f5a0c000-0000-4000-8000-0000000000b1', 'NaN'::numeric);
+  EXCEPTION WHEN others THEN
+    v_state := SQLSTATE;
+  END;
+  IF v_state IS DISTINCT FROM '22023' THEN
+    RAISE EXCEPTION 'FAIL: add_roasted_stock with NaN raises 22023 got %', v_state;
+  END IF;
+
+  -- A service product → raises with its own message.
+  v_state := NULL;
+  DECLARE v_msg text;
+  BEGIN
+    BEGIN
+      PERFORM public.add_roasted_stock('f5a0c000-0000-4000-8000-0000000000c1', 5);
+    EXCEPTION WHEN others THEN
+      v_state := SQLSTATE;
+      v_msg := SQLERRM;
+    END;
+    IF v_state IS DISTINCT FROM '22023' OR v_msg NOT LIKE '%service product%' THEN
+      RAISE EXCEPTION 'FAIL: add_roasted_stock on a service raises 22023 service got % (%)', v_state, v_msg;
+    END IF;
+  END;
 
   -- 51 % → raises.
   v_state := NULL;
