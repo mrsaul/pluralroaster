@@ -27,6 +27,7 @@ import { tierRulesFromRow, describeRules, type TierRules } from "@/lib/tierRules
 import { clientTermsAndNudge } from "@/lib/pricing";
 import { mapPersistedOrder, refreshReorderPrices, type PersistedOrderRow } from "@/lib/persistedOrder";
 import { OTP_FLOW_KEY } from "./LoginPage";
+import { staffMustSetPassword } from "@/lib/staffPassword";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -229,6 +230,15 @@ const Index = () => {
         setView(localStorage.getItem(OTP_FLOW_KEY) === "1" ? "reset-password" : "kitchen");
       }
       return;
+    }
+
+    // Staff without a password (invited by email, or signed in with an email
+    // code) choose one once before reaching their dashboard.
+    if (normalizedRole === "admin" || normalizedRole === "roaster" || normalizedRole === "packaging") {
+      if (await staffMustSetPassword(supabase, localStorage.getItem(OTP_FLOW_KEY))) {
+        setView("reset-password");
+        return;
+      }
     }
 
     // Non-client roles always land on their single dedicated view

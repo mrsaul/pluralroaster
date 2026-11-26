@@ -1672,6 +1672,7 @@ export type Database = {
             }
             Returns: Json
           }
+      current_user_has_password: { Args: never; Returns: boolean }
       ensure_current_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
